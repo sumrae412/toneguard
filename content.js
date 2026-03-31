@@ -371,5 +371,15 @@
     });
   }
 
-  init();
+  // Gmail's DOM isn't ready when content script loads via document_idle.
+  // Wait for window.onload to ensure compose elements are available.
+  if (SITE === "gmail") {
+    if (document.readyState === "complete") {
+      init();
+    } else {
+      window.addEventListener("load", init);
+    }
+  } else {
+    init();
+  }
 })();

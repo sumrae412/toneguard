@@ -63,15 +63,22 @@ DO NOT FLAG:
 - Short responses like "sounds good", "thanks!", "got it"
 - Casual tone is fine as long as the message is understandable and coherent
 
+RECIPIENT CONTEXT: If the message includes an @mention or is clearly directed at someone, factor in the relationship dynamic. A message to your boss needs more polish than a message to a close teammate. If conversation context is provided, use it to infer the relationship.
+
+POLISH-ONLY MODE: If the tone is fine but the writing is messy (grammar, clarity, structure), set mode to "polish". This means: fix the writing without changing the voice or intent. Only restructure, don't soften or reframe.
+
 Respond with ONLY valid JSON in this exact format:
 {
   "flagged": true or false,
-  "reasoning": "Brief explanation of what was caught (only if flagged)",
-  "suggestion": "The rewritten message (only if flagged)"
+  "confidence": 0.0 to 1.0 (how confident you are this needs fixing. 0.9+ = definitely needs work, 0.5-0.8 = could be better, below 0.5 = probably fine),
+  "mode": "tone" or "polish" or "both" (what type of fix is needed),
+  "red_flags": ["specific phrase 1", "specific phrase 2"] (the exact phrases in the original that triggered the flag),
+  "reasoning": "Brief explanation of what was caught",
+  "suggestion": "The rewritten message"
 }
 
 If the message is fine, respond with:
-{"flagged": false, "reasoning": "", "suggestion": ""}`;
+{"flagged": false, "confidence": 0.0, "mode": "", "red_flags": [], "reasoning": "", "suggestion": ""}`;
 
 // On install/startup, register content scripts for custom sites
 chrome.runtime.onInstalled.addListener(() => registerCustomSites());
@@ -188,29 +195,47 @@ async function handleAnalyze(text, tabId, context) {
     fullPrompt += `\n\nLEARNED FROM PAST DECISIONS (use these to calibrate):\n${learnedExamples}`;
   }
 
+  const requestBody = JSON.stringify({
+    model: MODEL,
+    max_tokens: 1024,
+    system: fullPrompt,
+    messages: [
+      {
+        role: "user",
+        content: context
+          ? `${context}\n\nMESSAGE TO REVIEW (about to be sent):\n${text}`
+          : `Review this message before sending:\n\n${text}`
+      }
+    ]
+  });
+
+  const requestHeaders = {
+    "Content-Type": "application/json",
+    "x-api-key": apiKey,
+    "anthropic-version": "2023-06-01",
+    "anthropic-dangerous-direct-browser-access": "true"
+  };
+
   try {
-    const response = await fetch(CLAUDE_API_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-        "anthropic-dangerous-direct-browser-access": "true"
-      },
-      body: JSON.stringify({
-        model: MODEL,
-        max_tokens: 1024,
-        system: fullPrompt,
-        messages: [
-          {
-            role: "user",
-            content: context
-              ? `${context}\n\nMESSAGE TO REVIEW (about to be sent):\n${text}`
-              : `Review this message before sending:\n\n${text}`
-          }
-        ]
-      })
-    });
+    // Retry with exponential backoff (max 3 attempts)
+    let response;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      response = await fetch(CLAUDE_API_URL, {
+        method: "POST",
+        headers: requestHeaders,
+        body: requestBody
+      });
+
+      // Don't retry on auth errors or bad requests
+      if (response.status === 401 || response.status === 400) break;
+
+      // Success or non-retryable error
+      if (response.ok || response.status < 500) break;
+
+      // Server error: wait and retry
+      const delay = Math.pow(2, attempt) * 500; // 500ms, 1s, 2s
+      await new Promise((r) => setTimeout(r, delay));
+    }
 
     if (!response.ok) {
       const errBody = await response.text();
@@ -238,6 +263,9 @@ async function handleAnalyze(text, tabId, context) {
           original: text,
           suggestion: result.suggestion,
           reasoning: result.reasoning,
+          confidence: result.confidence || 0,
+          mode: result.mode || "tone",
+          red_flags: result.red_flags || [],
           tabId: tabId
         }
       });

@@ -63,6 +63,51 @@ function showResult(result) {
   suggestionEl.textContent = result.suggestion;
   reasoningEl.textContent = result.reasoning;
 
+  // Badge: show mode
+  const badge = document.getElementById("badge");
+  if (result.mode === "polish") {
+    badge.textContent = "Polish";
+    badge.className = "badge polish";
+  } else if (result.mode === "both") {
+    badge.textContent = "Tone + Polish";
+    badge.className = "badge both";
+  } else {
+    badge.textContent = "Tone";
+    badge.className = "badge";
+  }
+
+  // Confidence bar
+  let barContainer = document.querySelector(".confidence-bar");
+  if (!barContainer) {
+    barContainer = document.createElement("div");
+    barContainer.className = "confidence-bar";
+    const fill = document.createElement("div");
+    fill.className = "confidence-fill";
+    barContainer.appendChild(fill);
+    reasoningEl.after(barContainer);
+  }
+  const fill = barContainer.querySelector(".confidence-fill");
+  const conf = result.confidence || 0;
+  fill.style.width = (conf * 100) + "%";
+  fill.className = "confidence-fill " + (conf >= 0.9 ? "high" : conf >= 0.6 ? "medium" : "low");
+
+  // Red flags
+  const redFlagsEl = document.getElementById("redFlags");
+  const flagsListEl = document.getElementById("flagsList");
+  flagsListEl.textContent = "";
+
+  if (result.red_flags && result.red_flags.length > 0) {
+    redFlagsEl.style.display = "block";
+    for (const flag of result.red_flags) {
+      const chip = document.createElement("span");
+      chip.className = "flag-chip";
+      chip.textContent = flag;
+      flagsListEl.appendChild(chip);
+    }
+  } else {
+    redFlagsEl.style.display = "none";
+  }
+
   loadingEl.style.display = "none";
   emptyEl.style.display = "none";
   contentEl.style.display = "block";

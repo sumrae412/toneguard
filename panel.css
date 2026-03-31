@@ -37,6 +37,56 @@ body {
   color: #E65100;
 }
 
+.badge.polish {
+  background: #E3F2FD;
+  color: #1565C0;
+}
+
+.badge.both {
+  background: #FFF3E0;
+  color: #E65100;
+}
+
+.confidence-bar {
+  height: 3px;
+  border-radius: 2px;
+  background: #e0e0e0;
+  margin-top: 8px;
+  margin-bottom: 16px;
+}
+
+.confidence-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.3s;
+}
+
+.confidence-fill.low { background: #FFB300; }
+.confidence-fill.medium { background: #FF9800; }
+.confidence-fill.high { background: #e53935; }
+
+/* Red flags */
+.red-flags {
+  margin-bottom: 12px;
+}
+
+.flags-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.flag-chip {
+  display: inline-block;
+  padding: 3px 10px;
+  background: #FFEBEE;
+  color: #C62828;
+  border-radius: 12px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 /* Loading state */
 .loading {
   display: flex;
