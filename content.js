@@ -169,8 +169,9 @@
 
     e.preventDefault();
     e.stopImmediatePropagation();
-    // Open panel synchronously during user gesture
-    chrome.runtime.sendMessage({ type: "OPEN_PANEL" });
+    // Try to open panel synchronously during user gesture
+    // Fails silently if gesture context is lost — analysis still runs
+    try { chrome.runtime.sendMessage({ type: "OPEN_PANEL" }); } catch (_) {}
     analyzeAndIntercept(text, editor);
   }
 
@@ -197,8 +198,9 @@
 
     e.preventDefault();
     e.stopImmediatePropagation();
-    // Open panel synchronously during user gesture
-    chrome.runtime.sendMessage({ type: "OPEN_PANEL" });
+    // Try to open panel synchronously during user gesture
+    // Fails silently if gesture context is lost — analysis still runs
+    try { chrome.runtime.sendMessage({ type: "OPEN_PANEL" }); } catch (_) {}
     analyzeAndIntercept(text, editor);
   }
 
@@ -252,6 +254,18 @@
   async function analyzeAndIntercept(text, editor) {
     pendingText = text;
     pendingEditor = editor;
+
+    // Safety timeout: if anything goes wrong, release the send after 10s
+    // so messages never get permanently stuck
+    const safetyTimeout = setTimeout(() => {
+      console.warn("ToneGuard: safety timeout, releasing send");
+      hideCheckingIndicator();
+      if (pendingEditor) {
+        currentPlatform.releaseSend(pendingEditor);
+        pendingEditor = null;
+        pendingText = null;
+      }
+    }, 10000);
 
     // Panel was already opened by the synchronous event handler
     showCheckingIndicator();
