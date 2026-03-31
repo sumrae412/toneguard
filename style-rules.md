@@ -14,6 +14,9 @@ Learned from real examples with Summer. These rules drive both tone detection an
 - One idea per sentence. If you have to read it twice, split it up
 - Put what happened first, then why. Cause and effect in that order
 - Short sentences > long ones. When in doubt, break it apart
+- Lead with the main point. Don't bury the key takeaway at the end
+- Cut hedging and qualifications. "What I mean to say is" → just say it. "I suspect that's where" → "That's where"
+- State commitments clearly and early. "I'll take another look tomorrow" shouldn't be the last thing in a paragraph of backtracking
 
 ### Things to avoid
 - **Em dashes (—)** — reads as AI-generated. Use periods or commas instead
