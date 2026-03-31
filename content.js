@@ -198,6 +198,39 @@
     analyzeAndIntercept(text, editor);
   }
 
+  // Scrape recent conversation messages for context (Slack only)
+  function getConversationContext() {
+    if (SITE !== "slack") return "";
+
+    try {
+      // Slack messages live in elements with role="listitem" or data-qa="message_container"
+      const messageEls = document.querySelectorAll(
+        '[data-qa="message_container"], [role="listitem"] .c-message_kit__text, .p-rich_text_section'
+      );
+
+      if (!messageEls.length) return "";
+
+      // Grab the last 5 messages
+      const messages = [];
+      const els = Array.from(messageEls).slice(-5);
+
+      for (const el of els) {
+        const text = el.innerText?.trim();
+        if (text && text.length > 0) {
+          messages.push(text);
+        }
+      }
+
+      if (messages.length === 0) return "";
+
+      return "RECENT CONVERSATION (for context only):\n" +
+        messages.map((m, i) => `[${i + 1}] ${m}`).join("\n");
+
+    } catch (_) {
+      return ""; // fail silently
+    }
+  }
+
   // Find the editor element near a send button
   function findNearestEditor(sendBtn) {
     // Walk up to find a common parent, then look for the editor
@@ -219,9 +252,11 @@
     showCheckingIndicator();
 
     try {
+      const context = getConversationContext();
       const result = await chrome.runtime.sendMessage({
         type: "ANALYZE",
-        text: text
+        text: text,
+        context: context
       });
 
       hideCheckingIndicator();

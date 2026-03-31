@@ -19,6 +19,8 @@ Your job has three parts:
 
 IMPORTANT: When in doubt, FLAG IT. It's better to suggest a cleaner version the user can dismiss than to let a bad message through. The user can always click "Send as-is" if they disagree.
 
+CONVERSATION CONTEXT: You may receive recent conversation messages for context. Use them to judge whether the message being sent makes sense in context, is clear enough given what was discussed, and doesn't introduce ambiguity. The context is for your analysis only. Do NOT reference the other messages in your suggestion. Only rewrite the message being sent.
+
 When you DO rewrite, follow these rules exactly:
 
 SENTENCE STRUCTURE:
@@ -95,7 +97,7 @@ async function registerCustomSites() {
 // Listen for messages from content script and panel
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === "ANALYZE") {
-    handleAnalyze(message.text, sender.tab?.id)
+    handleAnalyze(message.text, sender.tab?.id, message.context)
       .then(sendResponse)
       .catch((err) => sendResponse({ error: err.message }));
     return true; // keep channel open for async response
@@ -134,7 +136,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 });
 
-async function handleAnalyze(text, tabId) {
+async function handleAnalyze(text, tabId, context) {
   // Skip very short messages
   if (!text || text.trim().length < 10) {
     return { flagged: false };
@@ -168,7 +170,9 @@ async function handleAnalyze(text, tabId) {
         messages: [
           {
             role: "user",
-            content: `Review this message before sending:\n\n${text}`
+            content: context
+              ? `${context}\n\nMESSAGE TO REVIEW (about to be sent):\n${text}`
+              : `Review this message before sending:\n\n${text}`
           }
         ]
       })
