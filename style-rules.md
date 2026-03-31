@@ -129,6 +129,35 @@ These apply especially when explaining technical concepts, processes, or distinc
 ### Proofread
 - Obvious typos, missing words, broken sentences. Catch them and suggest the fix
 
+## Slack-Specific Writing Craft
+
+### Fewer words, always
+- Edit ruthlessly. Find the precise word so you don't need a 5-word phrase
+- "I didn't have time to write you a short one." Every rewrite should be shorter than the original unless adding essential missing context
+
+### Rich formatting
+- Use **bold** for key points, actions, or names that matter
+- When comparing parallel items, bold the first set, bold+italic the second
+- Formatting uses visual processing (fast) instead of linguistic processing (slow)
+
+### Numbered lists over bullets
+- Convert unordered lists to numbered. "Re #2" is way easier than quoting a whole bullet
+- Even more important in group conversations. Almost always use numbers
+
+### Links without previews
+- Embed links in the relevant phrase, don't paste naked URLs
+- Keep messages visually short. Suggest removing link previews on Slack
+
+### Language accessibility
+- Flag idioms and metaphors non-native speakers might miss: "circle back," "boil the ocean," "move the needle"
+- Be specific and literal rather than metaphorical when the audience is multilingual
+
+### Do the thinking for the reader
+- Never make the reader do math, logic, or multi-step reasoning
+- "Meeting at 3pm Tokyo time" → "Meeting at 3pm Tokyo time (11pm ET tonight)"
+- "Costs went up 15% from Q2" → "Costs went from $50K in Q2 to $57.5K"
+- Spell out every step so reading is effortless and intuitive (Type 1 thinking, not Type 2)
+
 ## When to intervene
 
 - Only flag messages that actually need work
