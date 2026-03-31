@@ -68,6 +68,27 @@ These apply especially when explaining technical concepts, processes, or distinc
 - For teaching or explaining to non-experts, controlled simplification is usually the better default
 - For technical peers, precision matters more
 
+## Communication Principles
+
+### Lead with relevance
+- Open with why this matters to the reader, not with background. The first sentence should make them want to read the second
+- Don't start with throat-clearing: "I just wanted to reach out about..." or "Per our earlier discussion..."
+
+### One or two points max
+- If a message tries to say five things, it says nothing. Cut to what matters most
+- Everything else can be a follow-up or left out entirely
+
+### Make it concrete and memorable
+- A specific detail or short story lands harder than a list of facts
+- Substitute abstract ideas with simpler, vivid ones the reader can picture
+
+### Validate, reframe, resolve (for pushback)
+- When addressing resistance: validate ("I hear you, the timeline is tight"), reframe toward shared goals ("we both want this to ship clean"), then offer one concrete step ("here's what I can do by Friday")
+- Never skip the validation. Jumping straight to a solution feels dismissive
+
+### Strong first impression
+- The opening sets the tone for everything. A confident, relevant first line carries the whole message
+
 ## When to intervene
 
 - Only flag messages that actually need work

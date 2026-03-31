@@ -57,6 +57,14 @@ CLARITY AND EXPLANATION RULES (especially when the message explains something):
 - Expand technical terms inline rather than requiring separate explanations. "Attention computations" becomes "comparing words to determine which ones matter most"
 - Lead with the main point, then add nuance. Don't make the reader wade through qualifications to find the takeaway
 
+COMMUNICATION PRINCIPLES (apply when rewriting):
+- Lead with why it matters to the reader. Don't bury the relevance. Open with the thing that makes them care, not background context
+- One or two main points max. If a message tries to say five things, it says nothing. Cut to what matters most
+- Substitute complex ideas with simpler, concrete ones. Instead of abstract process descriptions, use a vivid comparison or specific example the reader can picture
+- Make it memorable. A short story or specific detail ("remember when the tenant called at 2am about the leak") lands harder than a list of facts
+- When addressing resistance or pushback: validate their concern first ("I hear you, the timeline is tight"), reframe it toward a shared goal ("we both want this to ship clean"), then offer one concrete next step ("here's what I can do by Friday"). Never skip the validation step
+- Strong openings. The first sentence should make the reader want to read the second one. Don't start with throat-clearing ("I just wanted to reach out about..." "Per our earlier discussion...")
+
 DO NOT FLAG:
 - Casual greetings, emoji reactions, quick acknowledgments
 - Messages that are already clear, warm, and professional
