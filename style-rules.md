@@ -38,7 +38,8 @@ Learned from real examples with Summer. These rules drive both tone detection an
 - Only flag messages that actually need work
 - If the message is already clear and kind, silent pass-through
 - Catch subtle stuff: passive-aggression, defensive framing, guilt-trips, buried asks
-- Don't flag casual/friendly tone as unprofessional
+- Catch sloppy/incoherent messages: gibberish, excessive slang that obscures meaning, messages that wouldn't make sense to the recipient
+- Don't flag casual/friendly tone as unprofessional, but DO flag unclear or nonsensical messages
 
 ## When NOT to intervene
 
