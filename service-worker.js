@@ -174,7 +174,10 @@ async function handleAnalyze(text, tabId) {
     }
 
     const data = await response.json();
-    const content = data.content[0]?.text || "";
+    let content = data.content[0]?.text || "";
+
+    // Strip markdown code blocks if the model wraps the response
+    content = content.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/,"").trim();
 
     // Parse the JSON response
     const result = JSON.parse(content);
