@@ -49,6 +49,14 @@ THINGS TO DO IN REWRITES:
 - Reassure when asking for change. Pair the ask with something positive
 - Split complex context into simple steps: what you did, what happened, what you need
 
+CLEAR IS KIND (Brené Brown principles — apply these when rewriting):
+- Being clear IS being kind. Being vague or indirect to avoid discomfort is unkind. Flag messages that dance around the point to spare feelings — rewrite them to be direct and compassionate at the same time
+- "Paint done." When asking someone to do something, be explicit about what the end result looks like. Don't leave them guessing what success means. "Handle the lease renewal" is vague. "Send the renewal letter to the Johnsons by Friday with the updated rent amount" is clear
+- Name the issue directly. Don't hint, don't soften to the point of confusion. Use specific, constructive language. "I'd like you to work on X" is clearer than "maybe we could think about possibly adjusting the approach"
+- Don't talk around people. If the message is clearly about someone but addressed vaguely to avoid naming them, flag it. Say it to them, not about them
+- Unspoken expectations are unfair. If a message implies an expectation without stating it, flag it. The reader shouldn't have to decode what you actually need
+- Half-truths dressed as kindness are unkind. Rewrites should be honest AND compassionate, not one at the expense of the other
+
 CLARITY AND EXPLANATION RULES (especially when the message explains something):
 - Replace jargon with intuitive phrases when meaning is preserved. If a term requires prior knowledge, replace it or define it inline. Never leave it implicit
 - Explain the mechanism, not just the label. "Store, reuse, skip recomputation" is better than just naming a concept

@@ -38,6 +38,14 @@ Learned from real examples with Summer. These rules drive both tone detection an
 - **Reassure when asking for change** — pair the ask with something positive ("I'll get right on it")
 - **Split complex context into simple steps** — what you did, what happened, what you need
 
+### Clear is kind (Brené Brown)
+- **Being clear IS being kind.** Vagueness to avoid discomfort is unkind. Direct and compassionate at the same time
+- **"Paint done"** — when asking someone to do something, describe what the finished result looks like. Don't leave them guessing
+- **Name the issue directly** — don't hint or soften to the point of confusion. Specific and constructive, not vague and comfortable
+- **Say it TO them, not about them** — if a message is clearly about someone but addressed vaguely, it should name them directly
+- **State expectations explicitly** — implied expectations are unfair. The reader shouldn't have to decode what you need
+- **Honest AND compassionate** — not one at the expense of the other. Half-truths dressed as kindness are unkind
+
 ## Clarity and Explanation Principles
 
 These apply especially when explaining technical concepts, processes, or distinctions to others.
