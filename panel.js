@@ -1,5 +1,6 @@
 // ToneGuard Side Panel
 // Shows original vs suggested rewrite when a message is flagged.
+// Opens immediately on send, shows loading, then results or "all good."
 
 const loadingEl = document.getElementById("loading");
 const contentEl = document.getElementById("content");
@@ -12,23 +13,39 @@ const sendOriginalBtn = document.getElementById("sendOriginal");
 
 let currentResult = null;
 
-// On panel open, fetch the latest analysis result
+// On panel open, show loading state and check for results
+showLoading();
 loadResult();
 
-// Also listen for new results while panel is open
+// Listen for new results while panel is open
 chrome.storage.session.onChanged.addListener((changes) => {
   if (changes.tg_latest_result) {
-    showResult(changes.tg_latest_result.newValue);
+    handleResult(changes.tg_latest_result.newValue);
   }
 });
 
 async function loadResult() {
   const response = await chrome.runtime.sendMessage({ type: "GET_RESULT" });
   if (response) {
-    showResult(response);
-  } else {
-    showEmpty();
+    handleResult(response);
   }
+  // Otherwise stay in loading state — results will come via storage listener
+}
+
+function handleResult(result) {
+  if (!result) return;
+
+  if (result.passed) {
+    showPassed();
+  } else if (result.original) {
+    showResult(result);
+  }
+}
+
+function showLoading() {
+  loadingEl.style.display = "flex";
+  contentEl.style.display = "none";
+  emptyEl.style.display = "none";
 }
 
 function showResult(result) {
@@ -41,6 +58,22 @@ function showResult(result) {
   loadingEl.style.display = "none";
   emptyEl.style.display = "none";
   contentEl.style.display = "block";
+}
+
+function showPassed() {
+  loadingEl.style.display = "none";
+  contentEl.style.display = "none";
+  emptyEl.style.display = "none";
+
+  const passed = document.createElement("div");
+  passed.style.cssText = "padding: 40px 0; text-align: center; color: #4CAF50; font-size: 14px;";
+  passed.textContent = "Looks good! Message sent.";
+  document.querySelector(".panel").appendChild(passed);
+
+  setTimeout(() => {
+    passed.remove();
+    showEmpty();
+  }, 2000);
 }
 
 function showEmpty() {
@@ -83,7 +116,6 @@ function showSent(message) {
   sent.textContent = message;
   document.querySelector(".panel").appendChild(sent);
 
-  // Reset after a moment
   setTimeout(() => {
     sent.remove();
     showEmpty();

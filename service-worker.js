@@ -96,6 +96,16 @@ async function registerCustomSites() {
 
 // Listen for messages from content script and panel
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.type === "OPEN_PANEL") {
+    // Called synchronously during user gesture (Send click/Enter)
+    // so sidePanel.open() is allowed
+    const tabId = sender.tab?.id;
+    if (tabId) {
+      chrome.sidePanel.open({ tabId });
+    }
+    return false;
+  }
+
   if (message.type === "ANALYZE") {
     handleAnalyze(message.text, sender.tab?.id, message.context)
       .then(sendResponse)
@@ -198,6 +208,7 @@ async function handleAnalyze(text, tabId, context) {
 
     if (result.flagged && tabId) {
       // Store result for the panel to pick up
+      // (panel is already open — it was opened during the user gesture)
       await chrome.storage.session.set({
         tg_latest_result: {
           original: text,
@@ -206,9 +217,6 @@ async function handleAnalyze(text, tabId, context) {
           tabId: tabId
         }
       });
-
-      // Open the side panel
-      await chrome.sidePanel.open({ tabId });
     }
 
     return result;

@@ -249,6 +249,10 @@
     pendingText = text;
     pendingEditor = editor;
 
+    // Open side panel NOW during the user gesture (Chrome requires this)
+    // If the message is clean, we'll close it / show "all good"
+    chrome.runtime.sendMessage({ type: "OPEN_PANEL" });
+
     showCheckingIndicator();
 
     try {
@@ -268,12 +272,14 @@
       }
 
       if (!result.flagged) {
+        // Tell the panel everything is fine
+        await chrome.storage.session.set({ tg_latest_result: { passed: true } });
         currentPlatform.releaseSend(editor);
         return;
       }
 
-      // Flagged. Service worker opens the side panel.
-      // We wait for PANEL_DECISION message.
+      // Flagged. Panel is already open and will pick up the result
+      // via storage.session listener. We wait for PANEL_DECISION message.
 
     } catch (err) {
       console.error("ToneGuard error:", err);
