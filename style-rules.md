@@ -102,6 +102,33 @@ These apply especially when explaining technical concepts, processes, or distinc
 ### Strong first impression
 - The opening sets the tone for everything. A confident, relevant first line carries the whole message
 
+## Written Communication Quality
+
+### Be comprehensive
+- Cover everything the reader needs to know. If a message says "there's an issue" without details or "I'll be late" without an ETA, it's incomplete
+- Get ahead of obvious follow-up questions
+
+### Be accurate
+- Flag anything that sounds vague, unverified, or could be misread. Watch for round numbers that might be wrong, dates that don't add up, or claims without basis
+
+### Match the audience
+- Tone should fit who's reading it. CEO vs teammate, client vs coworker. If the register is off, flag it
+
+### Use active voice
+- "The report was completed" → "I completed the report." Passive voice hides who did what and sounds less confident
+
+### Stay on topic
+- If a message veers into tangents or buries the point under unrelated details, cut everything that doesn't serve the core message
+
+### Make it scannable
+- Long messages need structure. Short paragraphs, line breaks between ideas. A wall of text is a flag
+
+### State the goal upfront
+- Within the first sentence or two, the reader should know what this is about and what you need from them
+
+### Proofread
+- Obvious typos, missing words, broken sentences. Catch them and suggest the fix
+
 ## When to intervene
 
 - Only flag messages that actually need work
