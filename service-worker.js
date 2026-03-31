@@ -91,6 +91,21 @@ WRITTEN COMMUNICATION QUALITY (flag and fix these in any message):
 - State the goal upfront: every message should make clear within the first sentence or two what it's about and what the sender needs. "I'm writing to..." buried in paragraph three is a flag
 - Proofread quality: obvious typos, missing words, or broken sentences should be caught. Suggest the corrected version
 
+HEMINGWAY-STYLE CHECKS (readability and writing strength):
+- Hard-to-read sentences: if a sentence requires re-reading to understand, it's too complex. Split it up or simplify. Aim for a 9th grade reading level or below
+- Adverb overuse: flag unnecessary adverbs like "very," "really," "extremely," "actually," "basically," "literally," "honestly." Replace with a stronger verb instead. "Ran quickly" becomes "sprinted." "Very important" becomes "critical"
+- Weakening qualifiers: flag hedging words that dilute the message: "I think," "sort of," "kind of," "maybe," "perhaps," "slightly," "somewhat," "a little bit." Either commit to the statement or cut it
+- Simpler word alternatives: replace complex words with simpler ones when meaning is preserved. "Utilize" becomes "use." "Facilitate" becomes "help." "Commence" becomes "start." "Subsequent" becomes "next." "Endeavor" becomes "try"
+- Sentence length: sentences over 25 words are a flag. Break them up. Most good sentences in messages are 10-15 words
+
+GRAMMARLY-STYLE CHECKS (correctness, clarity, engagement, delivery):
+- Correctness: catch grammar errors, subject-verb agreement, wrong word usage ("their" vs "there" vs "they're," "affect" vs "effect"), missing articles, comma splices, run-on sentences
+- Clarity: flag wordy phrases and suggest concise alternatives. "In order to" becomes "to." "At this point in time" becomes "now." "Due to the fact that" becomes "because." "In the event that" becomes "if"
+- Engagement: flag flat, monotone writing that doesn't connect. Suggest stronger openings, more specific details, and varied sentence length to create rhythm
+- Delivery: assess whether the overall tone matches the intent. If someone is trying to be firm but sounds aggressive, or trying to be friendly but sounds dismissive, flag the mismatch
+- Inclusive language: flag gendered defaults ("guys" for mixed groups, "chairman"), ableist language ("crazy," "lame," "blind spot"), and age-related assumptions. Suggest neutral alternatives
+- Confidence detection: flag tentative language that undermines authority. "I just wanted to check..." (drop "just"), "I'm no expert but..." (drop the disclaimer), "Does that make sense?" (replace with a clear statement)
+
 SLACK-SPECIFIC WRITING CRAFT (apply these especially in Slack/chat rewrites):
 - Fewer words, always. Edit ruthlessly. Find the precise word so you don't need a 5-word phrase. As Mark Twain said: "I didn't have time to write you a short one." Every rewrite should be shorter than the original unless adding essential missing context
 - Rich formatting: use *bold* for key points, actions, or names that matter. When drawing parallel comparisons, bold the first set and bold+italic the second. Formatting uses visual processing (fast, strong) instead of linguistic processing (slow, weak). Suggest formatting in rewrites when it would help
@@ -123,7 +138,9 @@ Respond with ONLY valid JSON in this exact format:
   "flagged": true or false,
   "confidence": 0.0 to 1.0 (how confident you are this needs fixing),
   "mode": "tone" or "polish" or "both",
+  "readability": 1-16 (estimated grade level of the ORIGINAL message. 9 or below is good, 10-12 is getting complex, 13+ is too hard for casual reading),
   "red_flags": ["specific phrase 1", "specific phrase 2"],
+  "categories": ["adverbs", "passive voice", "wordy", "hedging", "hard to read", "tone", "grammar", "clarity", "inclusive language"] (which checks triggered, include all that apply),
   "reasoning": "Brief explanation of what was caught",
   "suggestion": "The rewritten message (best guess if questions are pending)",
   "has_questions": true or false,
@@ -131,7 +148,7 @@ Respond with ONLY valid JSON in this exact format:
 }
 
 If the message is fine, respond with:
-{"flagged": false, "confidence": 0.0, "mode": "", "red_flags": [], "reasoning": "", "suggestion": "", "has_questions": false, "questions": []}`;
+{"flagged": false, "confidence": 0.0, "mode": "", "readability": 0, "red_flags": [], "categories": [], "reasoning": "", "suggestion": "", "has_questions": false, "questions": []}`;
 
 // On install/startup, register content scripts for custom sites
 chrome.runtime.onInstalled.addListener(() => registerCustomSites());
@@ -355,7 +372,9 @@ async function handleAnalyze(text, tabId, context) {
           reasoning: result.reasoning,
           confidence: result.confidence || 0,
           mode: result.mode || "tone",
+          readability: result.readability || 0,
           red_flags: result.red_flags || [],
+          categories: result.categories || [],
           has_questions: result.has_questions || false,
           questions: result.questions || [],
           tabId: tabId

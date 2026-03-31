@@ -129,6 +129,46 @@ These apply especially when explaining technical concepts, processes, or distinc
 ### Proofread
 - Obvious typos, missing words, broken sentences. Catch them and suggest the fix
 
+## Hemingway-Style Checks
+
+### Hard-to-read sentences
+- If it requires re-reading, it's too complex. Split or simplify. Aim for 9th grade reading level
+
+### Adverb overuse
+- Flag "very," "really," "extremely," "actually," "basically," "literally," "honestly"
+- Replace with a stronger verb: "ran quickly" → "sprinted," "very important" → "critical"
+
+### Weakening qualifiers
+- Flag "I think," "sort of," "kind of," "maybe," "perhaps," "slightly," "somewhat"
+- Either commit to the statement or cut the qualifier
+
+### Simpler word alternatives
+- "Utilize" → "use," "facilitate" → "help," "commence" → "start," "subsequent" → "next"
+
+### Sentence length
+- Over 25 words is a flag. Most good message sentences are 10-15 words
+
+## Grammarly-Style Checks
+
+### Correctness
+- Grammar, subject-verb agreement, wrong word usage (their/there/they're, affect/effect), comma splices, run-ons
+
+### Clarity
+- Wordy phrase replacements: "in order to" → "to," "at this point in time" → "now," "due to the fact that" → "because," "in the event that" → "if"
+
+### Engagement
+- Flag flat, monotone writing. Suggest stronger openings, specific details, varied sentence length
+
+### Delivery
+- Assess whether tone matches intent. Trying to be firm but sounds aggressive? Trying to be friendly but sounds dismissive? Flag the mismatch
+
+### Inclusive language
+- Flag gendered defaults ("guys" for mixed groups), ableist language ("crazy," "lame"), and age assumptions
+- Suggest neutral alternatives
+
+### Confidence
+- Flag tentative language: "I just wanted to..." (drop "just"), "I'm no expert but..." (drop the disclaimer), "Does that make sense?" (replace with a clear statement)
+
 ## Slack-Specific Writing Craft
 
 ### Fewer words, always

@@ -108,6 +108,36 @@ function showResult(result) {
     redFlagsEl.style.display = "none";
   }
 
+  // Readability grade + categories
+  const metaRow = document.getElementById("metaRow");
+  const readabilityEl = document.getElementById("readability");
+  const categoriesEl = document.getElementById("categories");
+
+  if (result.readability || (result.categories && result.categories.length > 0)) {
+    metaRow.style.display = "flex";
+
+    if (result.readability) {
+      const grade = result.readability;
+      readabilityEl.textContent = "Grade " + grade;
+      readabilityEl.className = "readability " + (grade <= 9 ? "good" : grade <= 12 ? "medium" : "hard");
+      readabilityEl.style.display = "inline-block";
+    } else {
+      readabilityEl.style.display = "none";
+    }
+
+    categoriesEl.textContent = "";
+    if (result.categories && result.categories.length > 0) {
+      for (const cat of result.categories) {
+        const chip = document.createElement("span");
+        chip.className = "category-chip";
+        chip.textContent = cat;
+        categoriesEl.appendChild(chip);
+      }
+    }
+  } else {
+    metaRow.style.display = "none";
+  }
+
   // Clarifying questions
   const questionsSection = document.getElementById("questionsSection");
   const questionsList = document.getElementById("questionsList");
