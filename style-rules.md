@@ -28,6 +28,8 @@ Learned from real examples with Summer. These rules drive both tone detection an
 
 ### Things to do
 - **Assume good intent** — frame things as miscommunication, not mistakes
+- **Name the specific thing** — don't say "the channel" or "the thing." Name it. If the reader has to guess what you're referring to, it's too vague
+- **State what you need** — every request should make clear what you want someone to do. "Could someone take a look?" is vague. "Could someone review the audio levels in the SGLang channel?" is clear
 - **Make clear requests** — say what you want going forward, not what went wrong
 - **"Going forward" > "next time"** — forward-looking, not finger-pointing
 - **Reassure when asking for change** — pair the ask with something positive ("I'll get right on it")
