@@ -174,13 +174,17 @@ async function handleAnalyze(text, tabId) {
     }
 
     const data = await response.json();
-    let content = data.content[0]?.text || "";
+    const rawContent = data.content[0]?.text || "";
 
-    // Strip markdown code blocks if the model wraps the response
-    content = content.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/,"").trim();
+    // Extract the JSON object — handles raw JSON, markdown code blocks,
+    // or any wrapper text around the JSON
+    const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      console.error("ToneGuard: no JSON found in response:", rawContent);
+      return { flagged: false };
+    }
 
-    // Parse the JSON response
-    const result = JSON.parse(content);
+    const result = JSON.parse(jsonMatch[0]);
 
     if (result.flagged && tabId) {
       // Store result for the panel to pick up
