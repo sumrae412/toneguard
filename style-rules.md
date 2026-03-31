@@ -38,6 +38,36 @@ Learned from real examples with Summer. These rules drive both tone detection an
 - **Reassure when asking for change** — pair the ask with something positive ("I'll get right on it")
 - **Split complex context into simple steps** — what you did, what happened, what you need
 
+## Clarity and Explanation Principles
+
+These apply especially when explaining technical concepts, processes, or distinctions to others.
+
+### Clarity over terminology
+- Replace jargon with intuitive phrases when the meaning is preserved. "Shared prefixes" → "beginning of a prompt" or "repeated text"
+- If a term requires prior knowledge, either replace it or define it inline in one clause. Never leave it implicit
+
+### Explain the mechanism, not just the label
+- Saying what something *does* (store, reuse, skip recomputation) is more useful than just naming it
+- Anchor explanations in where and how something works, not just that it works
+
+### Precise distinctions matter
+- Don't collapse related-but-different concepts into one idea ("it makes things faster")
+- If two things work differently, say how they differ, even briefly
+
+### Progressive simplification
+- Start with a correct statement, then iteratively remove unnecessary abstraction
+- Replace abstract terms with concrete mental models ("save work," "compare words")
+- Final version should be simple, precise, and teachable
+
+### Inline definitions reduce cognitive load
+- Expand technical terms directly in the sentence rather than requiring separate explanations
+- Example: instead of "attention computations," say "comparing words to determine which ones matter most"
+
+### Tradeoff management
+- Simplicity vs. precision should be chosen based on audience
+- For teaching or explaining to non-experts, controlled simplification is usually the better default
+- For technical peers, precision matters more
+
 ## When to intervene
 
 - Only flag messages that actually need work

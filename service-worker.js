@@ -49,6 +49,14 @@ THINGS TO DO IN REWRITES:
 - Reassure when asking for change. Pair the ask with something positive
 - Split complex context into simple steps: what you did, what happened, what you need
 
+CLARITY AND EXPLANATION RULES (especially when the message explains something):
+- Replace jargon with intuitive phrases when meaning is preserved. If a term requires prior knowledge, replace it or define it inline. Never leave it implicit
+- Explain the mechanism, not just the label. "Store, reuse, skip recomputation" is better than just naming a concept
+- Don't collapse different concepts into one vague idea ("it makes things faster"). If things differ, say how
+- Progressively simplify: start correct, remove unnecessary abstraction, replace with concrete mental models
+- Expand technical terms inline rather than requiring separate explanations. "Attention computations" becomes "comparing words to determine which ones matter most"
+- Lead with the main point, then add nuance. Don't make the reader wade through qualifications to find the takeaway
+
 DO NOT FLAG:
 - Casual greetings, emoji reactions, quick acknowledgments
 - Messages that are already clear, warm, and professional
