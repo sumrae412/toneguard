@@ -108,6 +108,48 @@ function showResult(result) {
     redFlagsEl.style.display = "none";
   }
 
+  // Clarifying questions
+  const questionsSection = document.getElementById("questionsSection");
+  const questionsList = document.getElementById("questionsList");
+  const refiningIndicator = document.getElementById("refiningIndicator");
+  questionsList.textContent = "";
+  refiningIndicator.style.display = "none";
+
+  if (result.has_questions && result.questions && result.questions.length > 0) {
+    questionsSection.style.display = "block";
+    for (const q of result.questions) {
+      const item = document.createElement("div");
+      item.className = "question-item";
+
+      const label = document.createElement("div");
+      label.className = "question-label";
+      label.textContent = q;
+      item.appendChild(label);
+
+      const input = document.createElement("input");
+      input.type = "text";
+      input.className = "question-input";
+      input.placeholder = "Your answer...";
+      input.dataset.question = q;
+      item.appendChild(input);
+
+      questionsList.appendChild(item);
+    }
+
+    // Focus the first input
+    const firstInput = questionsList.querySelector(".question-input");
+    if (firstInput) setTimeout(() => firstInput.focus(), 100);
+  } else {
+    questionsSection.style.display = "none";
+  }
+
+  // Show "Refined" badge if this is a refined result
+  if (result.refined) {
+    const badge = document.getElementById("badge");
+    badge.textContent = "Refined";
+    badge.className = "badge polish";
+  }
+
   loadingEl.style.display = "none";
   emptyEl.style.display = "none";
   contentEl.style.display = "block";
@@ -181,6 +223,38 @@ sendOriginalBtn.addEventListener("click", () => {
   });
 
   showSent("Sent as-is.");
+});
+
+// Submit answers to clarifying questions
+document.getElementById("submitAnswers").addEventListener("click", async () => {
+  if (!currentResult) return;
+
+  const inputs = document.querySelectorAll(".question-input");
+  const answers = [];
+  for (const input of inputs) {
+    const answer = input.value.trim();
+    if (!answer) {
+      input.style.borderColor = "#e53935";
+      input.focus();
+      return; // require all answers
+    }
+    answers.push({ question: input.dataset.question, answer: answer });
+  }
+
+  // Show refining indicator
+  document.getElementById("questionsSection").style.display = "none";
+  document.getElementById("refiningIndicator").style.display = "flex";
+
+  // Send to service worker for refinement
+  chrome.runtime.sendMessage({
+    type: "REFINE",
+    original: currentResult.original,
+    answers: answers,
+    tabId: currentResult.tabId
+  });
+
+  // The refined result will come back via storage.session listener
+  // and showResult will be called again with the refined version
 });
 
 function showSent(message) {

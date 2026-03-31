@@ -101,18 +101,29 @@ RECIPIENT CONTEXT: If the message includes an @mention or is clearly directed at
 
 POLISH-ONLY MODE: If the tone is fine but the writing is messy (grammar, clarity, structure), set mode to "polish". This means: fix the writing without changing the voice or intent. Only restructure, don't soften or reframe.
 
+CLARIFYING QUESTIONS: When a message is unclear, vague, or missing critical context that you need to write a good rewrite, include clarifying questions. These are short, specific questions that help you understand what the user actually means so you can produce a better suggestion. Examples:
+- "Which channel are you referring to?"
+- "What specifically do you need them to look at?"
+- "What's the deadline?"
+- "Is this going to your manager or a teammate?"
+Only ask questions when the answer would meaningfully change the rewrite. Don't ask for the sake of asking. Max 3 questions.
+
+When you have questions, still provide a best-guess suggestion, but set "has_questions" to true. After the user answers, you'll get a follow-up request with the answers to produce a refined version.
+
 Respond with ONLY valid JSON in this exact format:
 {
   "flagged": true or false,
-  "confidence": 0.0 to 1.0 (how confident you are this needs fixing. 0.9+ = definitely needs work, 0.5-0.8 = could be better, below 0.5 = probably fine),
-  "mode": "tone" or "polish" or "both" (what type of fix is needed),
-  "red_flags": ["specific phrase 1", "specific phrase 2"] (the exact phrases in the original that triggered the flag),
+  "confidence": 0.0 to 1.0 (how confident you are this needs fixing),
+  "mode": "tone" or "polish" or "both",
+  "red_flags": ["specific phrase 1", "specific phrase 2"],
   "reasoning": "Brief explanation of what was caught",
-  "suggestion": "The rewritten message"
+  "suggestion": "The rewritten message (best guess if questions are pending)",
+  "has_questions": true or false,
+  "questions": ["Question 1?", "Question 2?"] (only if has_questions is true, max 3)
 }
 
 If the message is fine, respond with:
-{"flagged": false, "confidence": 0.0, "mode": "", "red_flags": [], "reasoning": "", "suggestion": ""}`;
+{"flagged": false, "confidence": 0.0, "mode": "", "red_flags": [], "reasoning": "", "suggestion": "", "has_questions": false, "questions": []}`;
 
 // On install/startup, register content scripts for custom sites
 chrome.runtime.onInstalled.addListener(() => registerCustomSites());
@@ -163,6 +174,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       .then(sendResponse)
       .catch((err) => sendResponse({ error: err.message }));
     return true; // keep channel open for async response
+  }
+
+  if (message.type === "REFINE") {
+    // Follow-up: user answered clarifying questions, generate refined rewrite
+    handleRefine(message.original, message.answers, message.tabId)
+      .then(sendResponse)
+      .catch((err) => sendResponse({ error: err.message }));
+    return true;
   }
 
   if (message.type === "GET_RESULT") {
@@ -329,6 +348,8 @@ async function handleAnalyze(text, tabId, context) {
           confidence: result.confidence || 0,
           mode: result.mode || "tone",
           red_flags: result.red_flags || [],
+          has_questions: result.has_questions || false,
+          questions: result.questions || [],
           tabId: tabId
         }
       });
@@ -505,4 +526,69 @@ async function trackStats(flagged, mode) {
   }
 
   await chrome.storage.local.set({ tg_stats: stats });
+}
+
+// Handle refinement after user answers clarifying questions
+async function handleRefine(original, answers, tabId) {
+  const { tg_api_key: apiKey } = await chrome.storage.sync.get(["tg_api_key"]);
+  if (!apiKey) return { error: "No API key" };
+
+  const answersText = answers.map((a) => "Q: " + a.question + "\nA: " + a.answer).join("\n\n");
+
+  const requestBody = JSON.stringify({
+    model: MODEL,
+    max_tokens: 1024,
+    system: "You are ToneGuard. The user wrote a message that needed improvement. You asked clarifying questions and now have the answers. Rewrite the original message incorporating the answers. Follow all the same tone, clarity, and communication rules. Return ONLY the rewritten message text, no JSON, no explanation, no markdown.",
+    messages: [
+      {
+        role: "user",
+        content: "ORIGINAL MESSAGE:\n" + original + "\n\nCLARIFYING ANSWERS:\n" + answersText + "\n\nRewrite the original message incorporating these answers. Return only the rewritten message."
+      }
+    ]
+  });
+
+  try {
+    const response = await fetch(CLAUDE_API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true"
+      },
+      body: requestBody
+    });
+
+    if (!response.ok) {
+      const errBody = await response.text();
+      throw new Error("API error " + response.status + ": " + errBody);
+    }
+
+    const data = await response.json();
+    const refinedText = data.content[0]?.text || "";
+
+    // Update the panel with the refined suggestion
+    if (tabId) {
+      await chrome.storage.session.set({
+        tg_latest_result: {
+          original: original,
+          suggestion: refinedText.trim(),
+          reasoning: "Refined with your answers",
+          confidence: 0.9,
+          mode: "both",
+          red_flags: [],
+          has_questions: false,
+          questions: [],
+          refined: true,
+          tabId: tabId
+        }
+      });
+    }
+
+    return { suggestion: refinedText.trim() };
+
+  } catch (err) {
+    console.error("ToneGuard refine error:", err);
+    return { error: err.message };
+  }
 }

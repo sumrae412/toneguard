@@ -29,6 +29,17 @@
         <div class="message-box original" id="original"></div>
       </div>
 
+      <div class="questions-section" id="questionsSection" style="display: none;">
+        <div class="section-label">Help me improve this</div>
+        <div id="questionsList"></div>
+        <button class="btn btn-primary" id="submitAnswers">Refine with my answers</button>
+      </div>
+
+      <div id="refiningIndicator" class="loading" style="display: none;">
+        <div class="loading-dot"></div>
+        <span>Refining with your answers...</span>
+      </div>
+
       <div class="section">
         <div class="section-label">Suggested rewrite <span class="edit-hint">(click to edit)</span></div>
         <div class="message-box suggestion" id="suggestion" contenteditable="true"></div>
