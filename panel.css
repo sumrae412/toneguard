@@ -217,6 +217,21 @@ body {
   background: #f5f5f5;
 }
 
+/* Keyboard shortcut hints */
+.kbd {
+  display: inline-block;
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba(255,255,255,0.2);
+  margin-left: 6px;
+  font-weight: 400;
+}
+
+.btn-secondary .kbd {
+  background: rgba(0,0,0,0.06);
+}
+
 /* Empty state */
 .empty {
   padding: 40px 0;

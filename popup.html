@@ -211,6 +211,36 @@
     }
 
     .add-site button:hover { background: #43A047; }
+
+    .strictness {
+      margin-bottom: 12px;
+    }
+
+    .strictness label {
+      display: block;
+      font-size: 12px;
+      font-weight: 500;
+      color: #666;
+      margin-bottom: 6px;
+    }
+
+    .strictness-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .strictness-row input[type="range"] {
+      flex: 1;
+      accent-color: #4CAF50;
+    }
+
+    .strictness-label {
+      font-size: 12px;
+      font-weight: 500;
+      color: #4CAF50;
+      min-width: 50px;
+    }
   </style>
 </head>
 <body>
@@ -232,6 +262,14 @@
   <div class="field">
     <label for="apiKey">Claude API Key</label>
     <input type="password" id="apiKey" placeholder="sk-ant-...">
+  </div>
+
+  <div class="strictness">
+    <label>Strictness</label>
+    <div class="strictness-row">
+      <input type="range" id="strictness" min="1" max="3" value="2" step="1">
+      <span class="strictness-label" id="strictnessLabel">Balanced</span>
+    </div>
   </div>
 
   <button class="btn" id="saveBtn">Save</button>

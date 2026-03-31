@@ -4,6 +4,53 @@ const rulesStatusEl = document.getElementById("rulesStatus");
 const historyListEl = document.getElementById("historyList");
 const clearHistoryBtn = document.getElementById("clearHistory");
 
+// Load weekly stats
+chrome.storage.local.get(["tg_stats"], (result) => {
+  const stats = result.tg_stats;
+  if (!stats) return;
+
+  document.getElementById("weekStart").textContent =
+    new Date(stats.weekStart).toLocaleDateString();
+  document.getElementById("statChecked").textContent = stats.checked || 0;
+  document.getElementById("statFlagged").textContent = stats.flagged || 0;
+
+  const checked = stats.checked || 0;
+  const flagged = stats.flagged || 0;
+  const passRate = checked > 0 ? Math.round(((checked - flagged) / checked) * 100) : 0;
+  document.getElementById("statPassRate").textContent = passRate + "%";
+
+  // Decision breakdown bar
+  const total = (stats.accepted || 0) + (stats.edited || 0) + (stats.dismissed || 0);
+  if (total > 0) {
+    document.getElementById("decisionBar").style.display = "block";
+    const bar = document.getElementById("statBar");
+    bar.textContent = "";
+
+    const segments = [
+      { class: "accepted", count: stats.accepted || 0 },
+      { class: "edited", count: stats.edited || 0 },
+      { class: "dismissed", count: stats.dismissed || 0 }
+    ];
+
+    for (const seg of segments) {
+      if (seg.count === 0) continue;
+      const div = document.createElement("div");
+      div.className = "stat-bar-fill " + seg.class;
+      div.style.width = ((seg.count / total) * 100) + "%";
+      bar.appendChild(div);
+    }
+  }
+
+  // Most common flag type
+  if (stats.byMode && Object.keys(stats.byMode).length > 0) {
+    const sorted = Object.entries(stats.byMode).sort((a, b) => b[1] - a[1]);
+    const top = sorted[0];
+    const modeLabels = { tone: "Tone issues", polish: "Clarity/polish", both: "Tone + clarity" };
+    document.getElementById("mostCommon").textContent =
+      "Most common flag: " + (modeLabels[top[0]] || top[0]) + " (" + top[1] + " times)";
+  }
+});
+
 // Load custom rules
 chrome.storage.sync.get(["tg_custom_rules"], (result) => {
   if (result.tg_custom_rules) {

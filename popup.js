@@ -4,6 +4,8 @@ const statusEl = document.getElementById("status");
 const enabledToggle = document.getElementById("enabled");
 const keyDot = document.getElementById("keyDot");
 const keyLabel = document.getElementById("keyLabel");
+const strictnessSlider = document.getElementById("strictness");
+const strictnessLabel = document.getElementById("strictnessLabel");
 const siteListEl = document.getElementById("siteList");
 const newSiteInput = document.getElementById("newSite");
 const addSiteBtn = document.getElementById("addSiteBtn");
@@ -16,7 +18,9 @@ const BUILT_IN_SITES = [
 ];
 
 // Load saved settings
-chrome.storage.sync.get(["tg_api_key", "tg_enabled", "tg_custom_sites"], (result) => {
+const STRICTNESS_LABELS = { 1: "Gentle", 2: "Balanced", 3: "Strict" };
+
+chrome.storage.sync.get(["tg_api_key", "tg_enabled", "tg_custom_sites", "tg_strictness"], (result) => {
   if (result.tg_api_key) {
     apiKeyInput.value = result.tg_api_key;
     keyDot.classList.add("active");
@@ -27,6 +31,10 @@ chrome.storage.sync.get(["tg_api_key", "tg_enabled", "tg_custom_sites"], (result
   }
 
   enabledToggle.checked = result.tg_enabled !== false;
+
+  const strictVal = result.tg_strictness || 2;
+  strictnessSlider.value = strictVal;
+  strictnessLabel.textContent = STRICTNESS_LABELS[strictVal];
 
   renderSiteList(result.tg_custom_sites || []);
 });
@@ -59,6 +67,13 @@ saveBtn.addEventListener("click", () => {
 // Toggle enabled/disabled
 enabledToggle.addEventListener("change", () => {
   chrome.storage.sync.set({ tg_enabled: enabledToggle.checked });
+});
+
+// Strictness slider
+strictnessSlider.addEventListener("input", () => {
+  const val = parseInt(strictnessSlider.value);
+  strictnessLabel.textContent = STRICTNESS_LABELS[val];
+  chrome.storage.sync.set({ tg_strictness: val });
 });
 
 // Render site list

@@ -200,6 +200,22 @@ function showSent(message) {
   }, 2000);
 }
 
+// Keyboard shortcuts
+document.addEventListener("keydown", (e) => {
+  if (!currentResult) return;
+
+  // Don't capture keys when editing the suggestion
+  if (document.activeElement === suggestionEl) return;
+
+  if (e.key === "Enter") {
+    e.preventDefault();
+    useSuggestionBtn.click();
+  } else if (e.key === "Escape") {
+    e.preventDefault();
+    sendOriginalBtn.click();
+  }
+});
+
 // Learning: log every decision to storage
 async function logDecision(decision) {
   decision.timestamp = new Date().toISOString();
@@ -216,4 +232,13 @@ async function logDecision(decision) {
   }
 
   await chrome.storage.local.set({ tg_decisions: decisions });
+
+  // Update weekly stats with the decision type
+  const { tg_stats: stats } = await chrome.storage.local.get(["tg_stats"]);
+  if (stats) {
+    if (decision.action === "used_suggestion") stats.accepted++;
+    else if (decision.action === "used_edited") stats.edited++;
+    else if (decision.action === "sent_original") stats.dismissed++;
+    await chrome.storage.local.set({ tg_stats: stats });
+  }
 }

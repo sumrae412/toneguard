@@ -121,11 +121,106 @@
       gap: 10px;
       align-items: center;
     }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .stat-card {
+      background: #f5f5f5;
+      border-radius: 8px;
+      padding: 12px;
+      text-align: center;
+    }
+
+    .stat-number {
+      font-size: 24px;
+      font-weight: 700;
+      color: #1a1a1a;
+    }
+
+    .stat-label {
+      font-size: 11px;
+      color: #999;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .stat-bar {
+      display: flex;
+      height: 8px;
+      border-radius: 4px;
+      overflow: hidden;
+      background: #e0e0e0;
+      margin-top: 8px;
+    }
+
+    .stat-bar-fill {
+      height: 100%;
+    }
+
+    .stat-bar-fill.accepted { background: #4CAF50; }
+    .stat-bar-fill.edited { background: #2196F3; }
+    .stat-bar-fill.dismissed { background: #FF9800; }
+
+    .stat-legend {
+      display: flex;
+      gap: 12px;
+      margin-top: 6px;
+      font-size: 11px;
+      color: #666;
+    }
+
+    .legend-dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      margin-right: 4px;
+      vertical-align: middle;
+    }
+
+    .most-common {
+      margin-top: 8px;
+      font-size: 13px;
+      color: #666;
+    }
   </style>
 </head>
 <body>
   <h1>ToneGuard Settings</h1>
   <p class="subtitle">Customize how ToneGuard checks your messages.</p>
+
+  <div class="section">
+    <h2>This Week</h2>
+    <p>Your communication stats since <span id="weekStart"></span></p>
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-number" id="statChecked">0</div>
+        <div class="stat-label">Checked</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number" id="statFlagged">0</div>
+        <div class="stat-label">Flagged</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number" id="statPassRate">-</div>
+        <div class="stat-label">Pass Rate</div>
+      </div>
+    </div>
+    <div id="decisionBar" style="display: none;">
+      <div class="stat-bar" id="statBar"></div>
+      <div class="stat-legend">
+        <span><span class="legend-dot" style="background:#4CAF50;"></span>Accepted</span>
+        <span><span class="legend-dot" style="background:#2196F3;"></span>Edited</span>
+        <span><span class="legend-dot" style="background:#FF9800;"></span>Dismissed</span>
+      </div>
+    </div>
+    <div class="most-common" id="mostCommon"></div>
+  </div>
 
   <div class="section">
     <h2>Custom Rules</h2>

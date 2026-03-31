@@ -194,9 +194,9 @@ async function handleAnalyze(text, tabId, context) {
     return { flagged: false };
   }
 
-  // Get API key
-  const { tg_api_key: apiKey, tg_enabled: enabled } =
-    await chrome.storage.sync.get(["tg_api_key", "tg_enabled"]);
+  // Get settings
+  const { tg_api_key: apiKey, tg_enabled: enabled, tg_strictness: strictness } =
+    await chrome.storage.sync.get(["tg_api_key", "tg_enabled", "tg_strictness"]);
 
   if (enabled === false) {
     return { flagged: false };
@@ -206,10 +206,18 @@ async function handleAnalyze(text, tabId, context) {
     return { error: "No API key set. Click the ToneGuard icon to add one." };
   }
 
-  // Build dynamic prompt with learned examples
+  // Build dynamic prompt with learned examples and strictness
   const learnedExamples = await getLearnedExamples();
   const customRules = await getCustomRules();
   let fullPrompt = SYSTEM_PROMPT;
+
+  const strictLevel = strictness || 2;
+  if (strictLevel === 1) {
+    fullPrompt += "\n\nSTRICTNESS: GENTLE. Only flag messages that are clearly problematic — harsh tone, offensive language, or truly incoherent. Let borderline messages through. When in doubt, don't flag.";
+  } else if (strictLevel === 3) {
+    fullPrompt += "\n\nSTRICTNESS: STRICT. Flag anything that could be improved — even slightly unclear phrasing, minor tone issues, or messages that are fine but could be better. Be thorough. The user wants to catch everything.";
+  }
+  // Level 2 (Balanced) = default behavior, no modifier needed
 
   if (customRules) {
     fullPrompt += `\n\nUSER-ADDED RULES:\n${customRules}`;
@@ -218,6 +226,19 @@ async function handleAnalyze(text, tabId, context) {
   if (learnedExamples) {
     fullPrompt += `\n\nLEARNED FROM PAST DECISIONS (use these to calibrate):\n${learnedExamples}`;
   }
+
+  const voiceContext = await getVoiceContext();
+  if (voiceContext) {
+    fullPrompt += "\n\n" + voiceContext;
+  }
+
+  const relationshipContext = await getRelationshipContext(text);
+  if (relationshipContext) {
+    fullPrompt += "\n\n" + relationshipContext;
+  }
+
+  // Track this interaction for relationship memory
+  await saveRecipientInteraction(text, context);
 
   const requestBody = JSON.stringify({
     model: MODEL,
@@ -278,6 +299,14 @@ async function handleAnalyze(text, tabId, context) {
     }
 
     const result = JSON.parse(jsonMatch[0]);
+
+    // Track stats for weekly digest
+    await trackStats(result.flagged, result.mode);
+
+    // Learn from passed messages (voice samples)
+    if (!result.flagged) {
+      await saveVoiceSample(text);
+    }
 
     if (result.flagged && tabId) {
       // Store result for the panel to pick up
@@ -345,4 +374,125 @@ async function getLearnedExamples() {
 async function getCustomRules() {
   const { tg_custom_rules: rules } = await chrome.storage.sync.get(["tg_custom_rules"]);
   return rules || "";
+}
+
+// Voice learning: save messages that passed as examples of good writing
+async function saveVoiceSample(text) {
+  if (!text || text.length < 30) return;
+
+  const { tg_voice_samples: existing } = await chrome.storage.local.get(["tg_voice_samples"]);
+  const samples = existing || [];
+
+  samples.push({
+    text: text.slice(0, 300),
+    timestamp: new Date().toISOString()
+  });
+
+  if (samples.length > 30) {
+    samples.splice(0, samples.length - 30);
+  }
+
+  await chrome.storage.local.set({ tg_voice_samples: samples });
+}
+
+// Build voice description from passed message samples
+async function getVoiceContext() {
+  const { tg_voice_samples: samples } = await chrome.storage.local.get(["tg_voice_samples"]);
+  if (!samples || samples.length < 5) return "";
+
+  const picked = samples.slice(-5);
+  const voiceExamples = picked.map((s) => '  "' + s.text + '"').join("\n");
+
+  return "VOICE SAMPLES (messages the user sent that were fine. Match this writing style in rewrites):\n" + voiceExamples;
+}
+
+// Relationship memory: track tone patterns per recipient
+async function saveRecipientInteraction(text, context) {
+  const mentions = [];
+  const pattern = /@([\w.-]+)/g;
+  let m;
+  while ((m = pattern.exec(text)) !== null) {
+    mentions.push(m[1]);
+  }
+
+  if (mentions.length === 0) return;
+
+  const { tg_relationships: existing } = await chrome.storage.local.get(["tg_relationships"]);
+  const relationships = existing || {};
+
+  for (const name of mentions) {
+    if (!relationships[name]) {
+      relationships[name] = { messageCount: 0, lastSeen: null };
+    }
+    relationships[name].messageCount++;
+    relationships[name].lastSeen = new Date().toISOString();
+  }
+
+  await chrome.storage.local.set({ tg_relationships: relationships });
+}
+
+// Build relationship context for the prompt
+async function getRelationshipContext(text) {
+  const { tg_relationships: relationships } = await chrome.storage.local.get(["tg_relationships"]);
+  if (!relationships) return "";
+
+  const mentions = [];
+  const pattern = /@([\w.-]+)/g;
+  let m;
+  while ((m = pattern.exec(text)) !== null) {
+    mentions.push(m[1]);
+  }
+
+  if (mentions.length === 0) return "";
+
+  const lines = [];
+  for (const name of mentions) {
+    const rel = relationships[name];
+    if (rel && rel.messageCount > 3) {
+      lines.push("@" + name + ": frequent contact (" + rel.messageCount + " messages). Use a familiar, comfortable tone.");
+    } else if (rel) {
+      lines.push("@" + name + ": infrequent contact (" + rel.messageCount + " messages). Keep it professional and clear.");
+    }
+  }
+
+  return lines.length > 0
+    ? "RECIPIENT CONTEXT (based on message history):\n" + lines.join("\n")
+    : "";
+}
+
+// Weekly stats tracking
+async function trackStats(flagged, mode) {
+  const { tg_stats: existing } = await chrome.storage.local.get(["tg_stats"]);
+  const stats = existing || { weekStart: new Date().toISOString(), checked: 0, flagged: 0, accepted: 0, dismissed: 0, edited: 0, byMode: {} };
+
+  // Reset if week has rolled over (7 days)
+  const weekStart = new Date(stats.weekStart);
+  const now = new Date();
+  const daysSince = (now - weekStart) / (1000 * 60 * 60 * 24);
+  if (daysSince >= 7) {
+    // Archive the old week
+    const { tg_stats_history: history } = await chrome.storage.local.get(["tg_stats_history"]);
+    const weeks = history || [];
+    weeks.push(stats);
+    if (weeks.length > 12) weeks.splice(0, weeks.length - 12); // keep 12 weeks
+    await chrome.storage.local.set({ tg_stats_history: weeks });
+
+    // Reset
+    stats.weekStart = now.toISOString();
+    stats.checked = 0;
+    stats.flagged = 0;
+    stats.accepted = 0;
+    stats.dismissed = 0;
+    stats.edited = 0;
+    stats.byMode = {};
+  }
+
+  stats.checked++;
+  if (flagged) {
+    stats.flagged++;
+    const m = mode || "tone";
+    stats.byMode[m] = (stats.byMode[m] || 0) + 1;
+  }
+
+  await chrome.storage.local.set({ tg_stats: stats });
 }

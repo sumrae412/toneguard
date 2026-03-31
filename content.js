@@ -347,12 +347,91 @@
     }
   }
 
+  // Draft mode: inject a "Review" button near editors
+  function injectReviewButton(editor) {
+    if (editor._tgReviewBtn) return;
+
+    const btn = document.createElement("button");
+    btn.textContent = "Review";
+    btn.title = "Check tone and clarity with ToneGuard";
+    btn.style.cssText = `
+      position: absolute;
+      bottom: 4px;
+      right: 60px;
+      background: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      padding: 2px 8px;
+      font-size: 11px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      cursor: pointer;
+      z-index: 999;
+      opacity: 0.7;
+      transition: opacity 0.15s;
+    `;
+    btn.addEventListener("mouseenter", () => { btn.style.opacity = "1"; });
+    btn.addEventListener("mouseleave", () => { btn.style.opacity = "0.7"; });
+
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      const text = currentPlatform.getEditorText(editor);
+      if (!text || text.length < 10) return;
+
+      // Open panel during gesture
+      chrome.runtime.sendMessage({ type: "OPEN_PANEL" });
+      // Run analysis but don't hold the send — draft mode is advisory
+      draftReview(text, editor);
+    });
+
+    // Make editor's parent position:relative so the button positions correctly
+    const parent = editor.parentElement;
+    if (parent && getComputedStyle(parent).position === "static") {
+      parent.style.position = "relative";
+    }
+
+    (parent || editor).appendChild(btn);
+    editor._tgReviewBtn = btn;
+  }
+
+  // Draft review: check without intercepting send
+  async function draftReview(text, editor) {
+    showCheckingIndicator();
+
+    try {
+      const context = getConversationContext();
+      const result = await chrome.runtime.sendMessage({
+        type: "ANALYZE",
+        text: text,
+        context: context
+      });
+
+      hideCheckingIndicator();
+
+      if (result.error) {
+        console.warn("ToneGuard:", result.error);
+        return;
+      }
+
+      if (!result.flagged) {
+        await chrome.storage.session.set({ tg_latest_result: { passed: true } });
+      }
+      // If flagged, the service worker already stored the result and panel will show it
+
+    } catch (err) {
+      console.error("ToneGuard draft review error:", err);
+      hideCheckingIndicator();
+    }
+  }
+
   // Initialize
   function init() {
     // Attach keyboard listener (for Slack, LinkedIn, Gmail)
     document.addEventListener("keydown", handleKeydown, true);
 
-    // Watch for send buttons appearing (SPAs render dynamically)
+    // Watch for send buttons and editors appearing (SPAs render dynamically)
     const observer = new MutationObserver(() => {
       const btns = document.querySelectorAll(currentPlatform.sendBtnSelector);
       btns.forEach((btn) => {
@@ -361,6 +440,10 @@
           btn.addEventListener("click", handleSendBtnClick, true);
         }
       });
+
+      // Inject review buttons on editors
+      const editors = document.querySelectorAll(currentPlatform.editorSelector);
+      editors.forEach((editor) => injectReviewButton(editor));
     });
     observer.observe(document.body, { childList: true, subtree: true });
 
@@ -368,6 +451,11 @@
     document.querySelectorAll(currentPlatform.sendBtnSelector).forEach((btn) => {
       btn._tgBound = true;
       btn.addEventListener("click", handleSendBtnClick, true);
+    });
+
+    // Inject review buttons on any visible editors
+    document.querySelectorAll(currentPlatform.editorSelector).forEach((editor) => {
+      injectReviewButton(editor);
     });
   }
 
