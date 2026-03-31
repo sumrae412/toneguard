@@ -169,6 +169,8 @@
 
     e.preventDefault();
     e.stopImmediatePropagation();
+    // Open panel synchronously during user gesture
+    chrome.runtime.sendMessage({ type: "OPEN_PANEL" });
     analyzeAndIntercept(text, editor);
   }
 
@@ -195,6 +197,8 @@
 
     e.preventDefault();
     e.stopImmediatePropagation();
+    // Open panel synchronously during user gesture
+    chrome.runtime.sendMessage({ type: "OPEN_PANEL" });
     analyzeAndIntercept(text, editor);
   }
 
@@ -249,10 +253,7 @@
     pendingText = text;
     pendingEditor = editor;
 
-    // Open side panel NOW during the user gesture (Chrome requires this)
-    // If the message is clean, we'll close it / show "all good"
-    chrome.runtime.sendMessage({ type: "OPEN_PANEL" });
-
+    // Panel was already opened by the synchronous event handler
     showCheckingIndicator();
 
     try {
