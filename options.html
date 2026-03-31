@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 14px;
+      color: #1a1a1a;
+      background: #fafafa;
+      padding: 40px;
+      max-width: 700px;
+      margin: 0 auto;
+    }
+
+    h1 { font-size: 24px; font-weight: 600; margin-bottom: 8px; }
+    .subtitle { color: #666; margin-bottom: 32px; }
+
+    .section {
+      background: white;
+      border: 1px solid #e0e0e0;
+      border-radius: 10px;
+      padding: 20px;
+      margin-bottom: 24px;
+    }
+
+    .section h2 {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .section p {
+      font-size: 13px;
+      color: #666;
+      margin-bottom: 12px;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 120px;
+      padding: 12px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-family: inherit;
+      font-size: 13px;
+      line-height: 1.5;
+      resize: vertical;
+    }
+
+    textarea:focus {
+      outline: none;
+      border-color: #4CAF50;
+    }
+
+    .btn {
+      padding: 8px 20px;
+      border: none;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      margin-top: 10px;
+    }
+
+    .btn-primary { background: #4CAF50; color: white; }
+    .btn-primary:hover { background: #43A047; }
+    .btn-danger { background: #fff; color: #e53935; border: 1px solid #e53935; }
+    .btn-danger:hover { background: #FFEBEE; }
+
+    .status {
+      font-size: 12px;
+      color: #4CAF50;
+      margin-top: 8px;
+      min-height: 18px;
+    }
+
+    .history-item {
+      padding: 12px;
+      border-bottom: 1px solid #f0f0f0;
+    }
+
+    .history-item:last-child { border-bottom: none; }
+
+    .history-action {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 4px;
+    }
+
+    .history-action.accepted { color: #4CAF50; }
+    .history-action.dismissed { color: #FF9800; }
+    .history-action.edited { color: #2196F3; }
+
+    .history-text {
+      font-size: 13px;
+      color: #333;
+      margin-bottom: 2px;
+    }
+
+    .history-text.muted { color: #999; }
+
+    .history-time {
+      font-size: 11px;
+      color: #bbb;
+    }
+
+    .empty-history {
+      padding: 20px;
+      text-align: center;
+      color: #999;
+      font-size: 13px;
+    }
+
+    .btn-row {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+  </style>
+</head>
+<body>
+  <h1>ToneGuard Settings</h1>
+  <p class="subtitle">Customize how ToneGuard checks your messages.</p>
+
+  <div class="section">
+    <h2>Custom Rules</h2>
+    <p>Add your own rules in plain English. These are added to the built-in rules.</p>
+    <textarea id="customRules" placeholder="Example:&#10;- Never use the word 'urgent' unless it truly is&#10;- Always include a greeting&#10;- Don't use exclamation marks more than once per message"></textarea>
+    <div class="btn-row">
+      <button class="btn btn-primary" id="saveRules">Save rules</button>
+      <span class="status" id="rulesStatus"></span>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Learning History</h2>
+    <p>ToneGuard learns from your choices. Here are your recent decisions.</p>
+    <div id="historyList"></div>
+    <div class="btn-row" style="margin-top: 12px;">
+      <button class="btn btn-danger" id="clearHistory">Clear history</button>
+    </div>
+  </div>
+
+  <script src="options.js"></script>
+</body>
+</html>

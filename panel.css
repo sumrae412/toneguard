@@ -105,6 +105,29 @@ body {
   background: #E8F5E9;
   border: 1px solid #A5D6A7;
   color: #1a1a1a;
+  cursor: text;
+  outline: none;
+  min-height: 60px;
+}
+
+.message-box.suggestion:focus {
+  border-color: #4CAF50;
+  box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.2);
+}
+
+.edit-hint {
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  color: #bbb;
+  font-size: 10px;
+}
+
+.edited-badge {
+  display: inline-block;
+  font-size: 10px;
+  color: #4CAF50;
+  margin-left: 6px;
 }
 
 /* Action buttons */

@@ -1,6 +1,6 @@
 // ToneGuard Side Panel
 // Shows original vs suggested rewrite when a message is flagged.
-// Opens immediately on send, shows loading, then results or "all good."
+// Tracks every decision to learn from user choices.
 
 const loadingEl = document.getElementById("loading");
 const contentEl = document.getElementById("content");
@@ -12,6 +12,13 @@ const useSuggestionBtn = document.getElementById("useSuggestion");
 const sendOriginalBtn = document.getElementById("sendOriginal");
 
 let currentResult = null;
+let suggestionWasEdited = false;
+
+// Track when user edits the suggestion
+suggestionEl.addEventListener("input", () => {
+  suggestionWasEdited = true;
+  useSuggestionBtn.textContent = "Use edited version";
+});
 
 // On panel open, show loading state and check for results
 showLoading();
@@ -29,7 +36,6 @@ async function loadResult() {
   if (response) {
     handleResult(response);
   }
-  // Otherwise stay in loading state — results will come via storage listener
 }
 
 function handleResult(result) {
@@ -50,6 +56,8 @@ function showLoading() {
 
 function showResult(result) {
   currentResult = result;
+  suggestionWasEdited = false;
+  useSuggestionBtn.textContent = "Use suggestion";
 
   originalEl.textContent = result.original;
   suggestionEl.textContent = result.suggestion;
@@ -86,18 +94,40 @@ function showEmpty() {
 useSuggestionBtn.addEventListener("click", () => {
   if (!currentResult) return;
 
+  const finalText = suggestionEl.innerText.trim();
+
+  // Log the decision
+  logDecision({
+    action: suggestionWasEdited ? "used_edited" : "used_suggestion",
+    original: currentResult.original,
+    suggestion: currentResult.suggestion,
+    finalText: finalText,
+    reasoning: currentResult.reasoning,
+    wasEdited: suggestionWasEdited
+  });
+
   chrome.runtime.sendMessage({
     type: "PANEL_ACTION",
     action: "use_suggestion",
-    suggestion: currentResult.suggestion,
+    suggestion: finalText,
     tabId: currentResult.tabId
   });
 
-  showSent("Suggestion applied!");
+  showSent(suggestionWasEdited ? "Edited version sent!" : "Suggestion applied!");
 });
 
 sendOriginalBtn.addEventListener("click", () => {
   if (!currentResult) return;
+
+  // Log the dismissal
+  logDecision({
+    action: "sent_original",
+    original: currentResult.original,
+    suggestion: currentResult.suggestion,
+    finalText: currentResult.original,
+    reasoning: currentResult.reasoning,
+    wasEdited: false
+  });
 
   chrome.runtime.sendMessage({
     type: "PANEL_ACTION",
@@ -120,5 +150,25 @@ function showSent(message) {
     sent.remove();
     showEmpty();
     currentResult = null;
+    suggestionWasEdited = false;
+    useSuggestionBtn.textContent = "Use suggestion";
   }, 2000);
+}
+
+// Learning: log every decision to storage
+async function logDecision(decision) {
+  decision.timestamp = new Date().toISOString();
+  decision.url = ""; // we don't track URLs for privacy
+
+  const { tg_decisions: existing } = await chrome.storage.local.get(["tg_decisions"]);
+  const decisions = existing || [];
+
+  decisions.push(decision);
+
+  // Keep last 100 decisions
+  if (decisions.length > 100) {
+    decisions.splice(0, decisions.length - 100);
+  }
+
+  await chrome.storage.local.set({ tg_decisions: decisions });
 }

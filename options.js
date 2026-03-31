@@ -1,0 +1,101 @@
+const customRulesEl = document.getElementById("customRules");
+const saveRulesBtn = document.getElementById("saveRules");
+const rulesStatusEl = document.getElementById("rulesStatus");
+const historyListEl = document.getElementById("historyList");
+const clearHistoryBtn = document.getElementById("clearHistory");
+
+// Load custom rules
+chrome.storage.sync.get(["tg_custom_rules"], (result) => {
+  if (result.tg_custom_rules) {
+    customRulesEl.value = result.tg_custom_rules;
+  }
+});
+
+// Save custom rules
+saveRulesBtn.addEventListener("click", () => {
+  const rules = customRulesEl.value.trim();
+  chrome.storage.sync.set({ tg_custom_rules: rules }, () => {
+    rulesStatusEl.textContent = "Saved! Rules will apply to your next message.";
+    setTimeout(() => { rulesStatusEl.textContent = ""; }, 3000);
+  });
+});
+
+// Load and render decision history
+chrome.storage.local.get(["tg_decisions"], (result) => {
+  renderHistory(result.tg_decisions || []);
+});
+
+function renderHistory(decisions) {
+  historyListEl.textContent = "";
+
+  if (decisions.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "empty-history";
+    empty.textContent = "No decisions yet. Use ToneGuard to start building your learning history.";
+    historyListEl.appendChild(empty);
+    return;
+  }
+
+  // Show newest first
+  const reversed = [...decisions].reverse();
+
+  for (const d of reversed) {
+    const item = document.createElement("div");
+    item.className = "history-item";
+
+    const action = document.createElement("div");
+    action.className = "history-action";
+
+    if (d.action === "used_suggestion") {
+      action.className += " accepted";
+      action.textContent = "Accepted suggestion";
+    } else if (d.action === "used_edited") {
+      action.className += " edited";
+      action.textContent = "Edited suggestion";
+    } else {
+      action.className += " dismissed";
+      action.textContent = "Sent as-is (dismissed)";
+    }
+    item.appendChild(action);
+
+    const original = document.createElement("div");
+    original.className = "history-text";
+    original.textContent = truncate(d.original, 120);
+    item.appendChild(original);
+
+    if (d.action === "used_edited") {
+      const edited = document.createElement("div");
+      edited.className = "history-text";
+      edited.textContent = "Your version: " + truncate(d.finalText, 120);
+      item.appendChild(edited);
+    } else if (d.action === "used_suggestion") {
+      const sugg = document.createElement("div");
+      sugg.className = "history-text muted";
+      sugg.textContent = "Rewritten: " + truncate(d.suggestion, 120);
+      item.appendChild(sugg);
+    }
+
+    if (d.timestamp) {
+      const time = document.createElement("div");
+      time.className = "history-time";
+      time.textContent = new Date(d.timestamp).toLocaleString();
+      item.appendChild(time);
+    }
+
+    historyListEl.appendChild(item);
+  }
+}
+
+function truncate(text, max) {
+  if (!text) return "";
+  return text.length > max ? text.slice(0, max) + "..." : text;
+}
+
+// Clear history
+clearHistoryBtn.addEventListener("click", () => {
+  if (confirm("Clear all learning history? ToneGuard will start fresh.")) {
+    chrome.storage.local.set({ tg_decisions: [] }, () => {
+      renderHistory([]);
+    });
+  }
+});

@@ -167,6 +167,19 @@ async function handleAnalyze(text, tabId, context) {
     return { error: "No API key set. Click the ToneGuard icon to add one." };
   }
 
+  // Build dynamic prompt with learned examples
+  const learnedExamples = await getLearnedExamples();
+  const customRules = await getCustomRules();
+  let fullPrompt = SYSTEM_PROMPT;
+
+  if (customRules) {
+    fullPrompt += `\n\nUSER-ADDED RULES:\n${customRules}`;
+  }
+
+  if (learnedExamples) {
+    fullPrompt += `\n\nLEARNED FROM PAST DECISIONS (use these to calibrate):\n${learnedExamples}`;
+  }
+
   try {
     const response = await fetch(CLAUDE_API_URL, {
       method: "POST",
@@ -179,7 +192,7 @@ async function handleAnalyze(text, tabId, context) {
       body: JSON.stringify({
         model: MODEL,
         max_tokens: 1024,
-        system: SYSTEM_PROMPT,
+        system: fullPrompt,
         messages: [
           {
             role: "user",
@@ -229,4 +242,47 @@ async function handleAnalyze(text, tabId, context) {
     // On error, let the message through (don't block sends)
     return { flagged: false, error: err.message };
   }
+}
+
+// Build learned examples from past decisions for prompt injection
+async function getLearnedExamples() {
+  const { tg_decisions: decisions } = await chrome.storage.local.get(["tg_decisions"]);
+  if (!decisions || decisions.length === 0) return "";
+
+  const examples = [];
+
+  // "Sent as-is" = false positive (ToneGuard flagged but user disagreed)
+  const falsePositives = decisions
+    .filter((d) => d.action === "sent_original")
+    .slice(-3);
+
+  for (const d of falsePositives) {
+    examples.push(`FALSE POSITIVE (flagged but user sent as-is, so do NOT flag similar messages):\n  Message: "${d.original}"`);
+  }
+
+  // "Used edited" = catch was right but rewrite needed work
+  const edited = decisions
+    .filter((d) => d.action === "used_edited")
+    .slice(-3);
+
+  for (const d of edited) {
+    examples.push(`GOOD CATCH, BETTER REWRITE (user edited the suggestion, learn from their version):\n  Original: "${d.original}"\n  Your suggestion: "${d.suggestion}"\n  User's preferred version: "${d.finalText}"`);
+  }
+
+  // "Used suggestion" = both catch and rewrite were good
+  const accepted = decisions
+    .filter((d) => d.action === "used_suggestion")
+    .slice(-3);
+
+  for (const d of accepted) {
+    examples.push(`GOOD EXAMPLE (user accepted this suggestion):\n  Original: "${d.original}"\n  Rewrite: "${d.suggestion}"`);
+  }
+
+  return examples.join("\n\n");
+}
+
+// Get user-added custom rules
+async function getCustomRules() {
+  const { tg_custom_rules: rules } = await chrome.storage.sync.get(["tg_custom_rules"]);
+  return rules || "";
 }
