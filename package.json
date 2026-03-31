@@ -1,0 +1,24 @@
+{
+  "name": "toneguard",
+  "version": "1.0.0",
+  "description": "",
+  "main": "content.js",
+  "scripts": {
+    "test": "vitest run"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sumrae412/toneguard.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/sumrae412/toneguard/issues"
+  },
+  "homepage": "https://github.com/sumrae412/toneguard#readme",
+  "devDependencies": {
+    "vitest": "^4.1.2"
+  }
+}
