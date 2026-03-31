@@ -45,6 +45,11 @@ Learned from real examples with Summer. These rules drive both tone detection an
 - **Say it TO them, not about them** — if a message is clearly about someone but addressed vaguely, it should name them directly
 - **State expectations explicitly** — implied expectations are unfair. The reader shouldn't have to decode what you need
 - **Honest AND compassionate** — not one at the expense of the other. Half-truths dressed as kindness are unkind
+- **Tolerate discomfort** — good communication means saying the hard thing, not avoiding it. If a message dances around a difficult topic, say it directly but kindly
+- **"The story I'm making up is..."** — when assuming the worst about someone's intent, own the assumption instead of stating it as fact. Opens dialogue instead of shutting it down
+- **Empathy phrases** — use when validating someone: "It sounds like what's most important to you here is...", "It makes sense that you feel that way", "I want to make sure I understand"
+- **Some things shouldn't be text** — if a message is trying to resolve something emotionally complex over chat, suggest a call instead
+- **Mean what you say** — every word should carry meaning. Cut filler that doesn't add anything
 
 ## Clarity and Explanation Principles
 

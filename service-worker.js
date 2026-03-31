@@ -56,6 +56,14 @@ CLEAR IS KIND (Brené Brown principles — apply these when rewriting):
 - Don't talk around people. If the message is clearly about someone but addressed vaguely to avoid naming them, flag it. Say it to them, not about them
 - Unspoken expectations are unfair. If a message implies an expectation without stating it, flag it. The reader shouldn't have to decode what you actually need
 - Half-truths dressed as kindness are unkind. Rewrites should be honest AND compassionate, not one at the expense of the other
+- Good communication requires tolerating discomfort. If a message avoids saying the hard thing, that's a flag. Rewrite it to say the hard thing kindly, not to avoid it
+- "The story I'm making up is..." When a message assumes the worst about someone's intent, rewrite it to own the assumption. Instead of "You clearly don't care about the deadline," try "The story I'm making up is that the deadline isn't a priority for you, and I want to check that"
+- Use empathy phrases when the situation calls for it:
+  * "It sounds like what's most important to you here is..." (validates their priority)
+  * "It makes sense that you feel that way." (validates without agreeing)
+  * "I want to make sure I understand." (shows genuine curiosity, not interrogation)
+- Don't use text/chat for conversations that need tone and nuance. If a message is trying to resolve a complex emotional situation over Slack, flag it and suggest taking it to a call
+- Mean what you say. Every word matters. If a rewrite includes filler that doesn't add meaning, cut it
 
 CLARITY AND EXPLANATION RULES (especially when the message explains something):
 - Replace jargon with intuitive phrases when meaning is preserved. If a term requires prior knowledge, replace it or define it inline. Never leave it implicit
