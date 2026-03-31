@@ -1,0 +1,62 @@
+{
+  "manifest_version": 3,
+  "name": "ToneGuard",
+  "version": "0.1.0",
+  "description": "Checks your messages for tone and clarity before sending. Only interrupts when it matters.",
+
+  "permissions": [
+    "storage",
+    "sidePanel",
+    "activeTab",
+    "scripting"
+  ],
+
+  "host_permissions": [
+    "https://api.anthropic.com/*",
+    "https://*.slack.com/*",
+    "https://mail.google.com/*",
+    "https://www.linkedin.com/*",
+    "https://*.turbotenant.com/*"
+  ],
+
+  "background": {
+    "service_worker": "service-worker.js",
+    "type": "module"
+  },
+
+  "optional_host_permissions": [
+    "https://*/*"
+  ],
+
+  "content_scripts": [
+    {
+      "matches": [
+        "https://app.slack.com/*",
+        "https://mail.google.com/*",
+        "https://www.linkedin.com/*",
+        "https://*.turbotenant.com/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+
+  "side_panel": {
+    "default_path": "panel.html"
+  },
+
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

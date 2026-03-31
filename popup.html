@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      width: 300px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 14px;
+      color: #1a1a1a;
+      padding: 16px;
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+
+    .header h1 {
+      font-size: 16px;
+      font-weight: 600;
+    }
+
+    .toggle-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .toggle {
+      position: relative;
+      width: 40px;
+      height: 22px;
+    }
+
+    .toggle input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .toggle-slider {
+      position: absolute;
+      inset: 0;
+      background: #ccc;
+      border-radius: 11px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .toggle-slider::before {
+      content: "";
+      position: absolute;
+      width: 18px;
+      height: 18px;
+      left: 2px;
+      top: 2px;
+      background: white;
+      border-radius: 50%;
+      transition: transform 0.2s;
+    }
+
+    .toggle input:checked + .toggle-slider {
+      background: #4CAF50;
+    }
+
+    .toggle input:checked + .toggle-slider::before {
+      transform: translateX(18px);
+    }
+
+    .field {
+      margin-bottom: 12px;
+    }
+
+    .field label {
+      display: block;
+      font-size: 12px;
+      font-weight: 500;
+      color: #666;
+      margin-bottom: 4px;
+    }
+
+    .field input[type="password"] {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 13px;
+    }
+
+    .field input:focus {
+      outline: none;
+      border-color: #4CAF50;
+    }
+
+    .btn {
+      width: 100%;
+      padding: 8px;
+      border: none;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      background: #4CAF50;
+      color: white;
+    }
+
+    .btn:hover { background: #43A047; }
+
+    .status {
+      margin-top: 8px;
+      font-size: 12px;
+      color: #666;
+      text-align: center;
+    }
+
+    .status.saved { color: #4CAF50; }
+    .status.error { color: #e53935; }
+
+    .key-status {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: #666;
+      margin-bottom: 12px;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #ccc;
+    }
+
+    .dot.active { background: #4CAF50; }
+    .dot.missing { background: #e53935; }
+
+    .divider {
+      border: none;
+      border-top: 1px solid #eee;
+      margin: 16px 0;
+    }
+
+    .sites-section h2 {
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .site-list {
+      list-style: none;
+      margin-bottom: 8px;
+    }
+
+    .site-list li {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 4px 0;
+      font-size: 13px;
+    }
+
+    .site-list .built-in {
+      color: #999;
+      font-size: 11px;
+    }
+
+    .site-list .remove-btn {
+      background: none;
+      border: none;
+      color: #e53935;
+      cursor: pointer;
+      font-size: 16px;
+      padding: 0 4px;
+      line-height: 1;
+    }
+
+    .site-list .remove-btn:hover { color: #b71c1c; }
+
+    .add-site {
+      display: flex;
+      gap: 6px;
+    }
+
+    .add-site input {
+      flex: 1;
+      padding: 6px 8px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 12px;
+    }
+
+    .add-site input:focus {
+      outline: none;
+      border-color: #4CAF50;
+    }
+
+    .add-site button {
+      padding: 6px 12px;
+      background: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    .add-site button:hover { background: #43A047; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>ToneGuard</h1>
+    <div class="toggle-wrap">
+      <label class="toggle">
+        <input type="checkbox" id="enabled" checked>
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+  </div>
+
+  <div class="key-status" id="keyStatus">
+    <span class="dot" id="keyDot"></span>
+    <span id="keyLabel">Checking...</span>
+  </div>
+
+  <div class="field">
+    <label for="apiKey">Claude API Key</label>
+    <input type="password" id="apiKey" placeholder="sk-ant-...">
+  </div>
+
+  <button class="btn" id="saveBtn">Save</button>
+  <div class="status" id="status"></div>
+
+  <hr class="divider">
+
+  <div class="sites-section">
+    <h2>Active sites</h2>
+    <ul class="site-list" id="siteList"></ul>
+    <div class="add-site">
+      <input type="text" id="newSite" placeholder="example.com">
+      <button id="addSiteBtn">Add</button>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
