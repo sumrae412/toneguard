@@ -6,7 +6,7 @@ import { execFileSync } from "child_process";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, "..");
-const jsFiles = ["content.js", "service-worker.js", "panel.js", "popup.js", "options.js", "lib.js"];
+const jsFiles = ["content.js", "service-worker.js", "overlay.js", "popup.js", "options.js", "lib.js"];
 
 describe("JavaScript syntax validation", () => {
   for (const file of jsFiles) {
@@ -24,7 +24,7 @@ describe("JavaScript syntax validation", () => {
 });
 
 describe("HTML files are well-formed", () => {
-  const htmlFiles = ["panel.html", "popup.html", "options.html"];
+  const htmlFiles = ["popup.html", "options.html"];
 
   for (const file of htmlFiles) {
     it(file + " exists and has basic HTML structure", () => {
@@ -41,11 +41,13 @@ describe("HTML files are well-formed", () => {
   }
 });
 
-describe("CSS files exist", () => {
-  it("panel.css exists and has content", () => {
-    const filePath = path.join(root, "panel.css");
+describe("Prompt files", () => {
+  it("base.txt exists and has content", () => {
+    const filePath = path.join(root, "prompts", "base.txt");
     expect(fs.existsSync(filePath)).toBe(true);
     const content = fs.readFileSync(filePath, "utf-8");
-    expect(content.length).toBeGreaterThan(100);
+    expect(content.length).toBeGreaterThan(500);
+    expect(content).toContain("ToneGuard");
+    expect(content).toContain("flagged");
   });
 });

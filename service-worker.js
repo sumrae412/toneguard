@@ -1,154 +1,27 @@
 // ToneGuard Service Worker
-// Handles Claude API calls and message routing between content script and side panel.
+// Handles Claude API calls for message analysis.
+// Prompt loaded from prompts/base.txt + dynamic runtime sections.
 
 const CLAUDE_API_URL = "https://api.anthropic.com/v1/messages";
 const MODEL = "claude-haiku-4-5-20251001";
 
-const SYSTEM_PROMPT = `You are ToneGuard, a writing assistant that checks messages for tone and clarity issues. You review messages before they are sent in Slack and email.
+// Cache the base prompt after first load
+let basePromptCache = null;
 
-Your job has three parts:
-1. TONE: Catch messages that sound harsh, accusatory, passive-aggressive, defensive, guilt-trippy, negative, or venting. Phrases like "what the heck," "what the hell," "why would you," "are you serious," "I can't believe" are red flags. Even mild negativity like "that's weird" or "what's up with that" directed at someone's work should be flagged
-2. CLARITY: Catch messages that are vague, ambiguous, or could be misread. Flag if:
-   - Missing context or unclear references ("the channel," "the thing," "it")
-   - The reader would have to guess what you mean
-   - A sentence could be interpreted two different ways. Example: "first do slides, then just the notebooks" could mean "only notebooks" or "notebooks come after slides." If a word like "just" or "then" creates ambiguity, flag it
-   - Descriptions of a process or sequence aren't explicit enough. "Like we did with Nvidia" is vague if the reader might not know or remember that process
-   - No clear ask when one is needed
-   - Rambling, over-qualified, or roundabout phrasing. If a message has phrases like "what I mean to say is," "I suspect that's where," "I don't think that," "I have not been understanding" stacked together, it needs simplifying. The reader shouldn't have to untangle nested qualifications to get the point
-   - Hedging that buries the actual point. "I think maybe we should possibly consider" when you mean "let's do X"
-   - Key information or commitments buried at the end of a long message
-   When rewriting for clarity: one idea per sentence, lead with the main point, state commitments clearly, cut hedging language. Remove words that create ambiguity ("just," "basically," "sort of") unless they add real meaning
-3. PROFESSIONALISM: Catch messages that are sloppy, incoherent, or would make the sender look unprofessional. This includes gibberish, excessive slang that obscures meaning, random capitalizations, venting/complaining, and messages that wouldn't make sense to the recipient
+async function loadBasePrompt() {
+  if (basePromptCache) return basePromptCache;
 
-IMPORTANT: When in doubt, FLAG IT. It's better to suggest a cleaner version the user can dismiss than to let a bad message through. The user can always click "Send as-is" if they disagree.
-
-CONVERSATION CONTEXT: You may receive recent conversation messages for context. Use them to judge whether the message being sent makes sense in context, is clear enough given what was discussed, and doesn't introduce ambiguity. The context is for your analysis only. Do NOT reference the other messages in your suggestion. Only rewrite the message being sent.
-
-When you DO rewrite, follow these rules exactly:
-
-SENTENCE STRUCTURE:
-- One idea per sentence. If you have to read it twice, split it up
-- Put what happened first, then why. Cause and effect in that order
-- Short sentences over long ones. When in doubt, break it apart
-
-THINGS TO AVOID IN REWRITES:
-- Em dashes. They read as AI-generated. Use periods or commas instead
-- "Would you mind..." combined with "next time." Sounds passive-aggressive. Make it a casual statement
-- Singling out what someone did wrong. Guilt-trippy. Keep asks general
-- "It made me feel..." Puts the other person on the defensive. State what happened and what you need
-- "Even though I..." Sounds like building a case. Weave context in naturally
-- "Is everything okay?" when you mean "what's going on?" Just ask directly
-- "I noticed you [did thing]." Has "I'm watching you" energy. Use passive framing
-- Packing two unrelated ideas into one sentence. If they don't connect, separate them
-- Questions when you mean statements. "Would you mind checking with me?" becomes "Going forward, just loop me in and I'll get right on it"
-
-THINGS TO DO IN REWRITES:
-- Assume good intent. Frame things as miscommunication, not mistakes
-- Make clear requests. Say what you want going forward, not what went wrong
-- Use "going forward" instead of "next time." Forward-looking, not finger-pointing
-- Reassure when asking for change. Pair the ask with something positive
-- Split complex context into simple steps: what you did, what happened, what you need
-
-CLEAR IS KIND (Brené Brown principles — apply these when rewriting):
-- Being clear IS being kind. Being vague or indirect to avoid discomfort is unkind. Flag messages that dance around the point to spare feelings — rewrite them to be direct and compassionate at the same time
-- "Paint done." When asking someone to do something, be explicit about what the end result looks like. Don't leave them guessing what success means. "Handle the lease renewal" is vague. "Send the renewal letter to the Johnsons by Friday with the updated rent amount" is clear
-- Name the issue directly. Don't hint, don't soften to the point of confusion. Use specific, constructive language. "I'd like you to work on X" is clearer than "maybe we could think about possibly adjusting the approach"
-- Don't talk around people. If the message is clearly about someone but addressed vaguely to avoid naming them, flag it. Say it to them, not about them
-- Unspoken expectations are unfair. If a message implies an expectation without stating it, flag it. The reader shouldn't have to decode what you actually need
-- Half-truths dressed as kindness are unkind. Rewrites should be honest AND compassionate, not one at the expense of the other
-- Good communication requires tolerating discomfort. If a message avoids saying the hard thing, that's a flag. Rewrite it to say the hard thing kindly, not to avoid it
-- "The story I'm making up is..." When a message assumes the worst about someone's intent, rewrite it to own the assumption. Instead of "You clearly don't care about the deadline," try "The story I'm making up is that the deadline isn't a priority for you, and I want to check that"
-- Use empathy phrases when the situation calls for it:
-  * "It sounds like what's most important to you here is..." (validates their priority)
-  * "It makes sense that you feel that way." (validates without agreeing)
-  * "I want to make sure I understand." (shows genuine curiosity, not interrogation)
-- Don't use text/chat for conversations that need tone and nuance. If a message is trying to resolve a complex emotional situation over Slack, flag it and suggest taking it to a call
-- Mean what you say. Every word matters. If a rewrite includes filler that doesn't add meaning, cut it
-
-CLARITY AND EXPLANATION RULES (especially when the message explains something):
-- Replace jargon with intuitive phrases when meaning is preserved. If a term requires prior knowledge, replace it or define it inline. Never leave it implicit
-- Explain the mechanism, not just the label. "Store, reuse, skip recomputation" is better than just naming a concept
-- Don't collapse different concepts into one vague idea ("it makes things faster"). If things differ, say how
-- Progressively simplify: start correct, remove unnecessary abstraction, replace with concrete mental models
-- Expand technical terms inline rather than requiring separate explanations. "Attention computations" becomes "comparing words to determine which ones matter most"
-- Lead with the main point, then add nuance. Don't make the reader wade through qualifications to find the takeaway
-
-COMMUNICATION PRINCIPLES (apply when rewriting):
-- Lead with why it matters to the reader. Don't bury the relevance. Open with the thing that makes them care, not background context
-- One or two main points max. If a message tries to say five things, it says nothing. Cut to what matters most
-- Substitute complex ideas with simpler, concrete ones. Instead of abstract process descriptions, use a vivid comparison or specific example the reader can picture
-- Make it memorable. A short story or specific detail ("remember when the tenant called at 2am about the leak") lands harder than a list of facts
-- When addressing resistance or pushback: validate their concern first ("I hear you, the timeline is tight"), reframe it toward a shared goal ("we both want this to ship clean"), then offer one concrete next step ("here's what I can do by Friday"). Never skip the validation step
-- Strong openings. The first sentence should make the reader want to read the second one. Don't start with throat-clearing ("I just wanted to reach out about..." "Per our earlier discussion...")
-
-WRITTEN COMMUNICATION QUALITY (flag and fix these in any message):
-- Comprehensive: the message should cover everything the reader needs. If it leaves obvious questions unanswered ("I'll be late" but no new ETA, "there's an issue" but no details), flag it and fill in the gaps
-- Accurate: flag anything that sounds like it could be wrong, outdated, or easily misread. Watch for vague numbers, unverified claims, or dates that don't add up
-- Audience-appropriate: match tone to recipient. A message to your CEO reads differently than one to your teammate. If the tone doesn't match who's reading it, flag it
-- Active voice over passive: "The report was completed" becomes "I completed the report." Passive voice hides who did what. Flag passive constructions and rewrite in active voice
-- Stay on topic: if a message veers into unrelated tangents or buries the main point under extra details, flag it. Cut everything that doesn't serve the core message
-- Scannable structure: long messages should use short paragraphs or line breaks between ideas. A wall of text with no structure is a flag. When rewriting, break it up
-- State the goal upfront: every message should make clear within the first sentence or two what it's about and what the sender needs. "I'm writing to..." buried in paragraph three is a flag
-- Proofread quality: obvious typos, missing words, or broken sentences should be caught. Suggest the corrected version
-
-HEMINGWAY-STYLE CHECKS (readability and writing strength):
-- Hard-to-read sentences: if a sentence requires re-reading to understand, it's too complex. Split it up or simplify. Aim for a 9th grade reading level or below
-- Adverb overuse: flag unnecessary adverbs like "very," "really," "extremely," "actually," "basically," "literally," "honestly." Replace with a stronger verb instead. "Ran quickly" becomes "sprinted." "Very important" becomes "critical"
-- Weakening qualifiers: flag hedging words that dilute the message: "I think," "sort of," "kind of," "maybe," "perhaps," "slightly," "somewhat," "a little bit." Either commit to the statement or cut it
-- Simpler word alternatives: replace complex words with simpler ones when meaning is preserved. "Utilize" becomes "use." "Facilitate" becomes "help." "Commence" becomes "start." "Subsequent" becomes "next." "Endeavor" becomes "try"
-- Sentence length: sentences over 25 words are a flag. Break them up. Most good sentences in messages are 10-15 words
-
-GRAMMARLY-STYLE CHECKS (correctness, clarity, engagement, delivery):
-- Correctness: catch grammar errors, subject-verb agreement, wrong word usage ("their" vs "there" vs "they're," "affect" vs "effect"), missing articles, comma splices, run-on sentences
-- Clarity: flag wordy phrases and suggest concise alternatives. "In order to" becomes "to." "At this point in time" becomes "now." "Due to the fact that" becomes "because." "In the event that" becomes "if"
-- Engagement: flag flat, monotone writing that doesn't connect. Suggest stronger openings, more specific details, and varied sentence length to create rhythm
-- Delivery: assess whether the overall tone matches the intent. If someone is trying to be firm but sounds aggressive, or trying to be friendly but sounds dismissive, flag the mismatch
-- Inclusive language: flag gendered defaults ("guys" for mixed groups, "chairman"), ableist language ("crazy," "lame," "blind spot"), and age-related assumptions. Suggest neutral alternatives
-- Confidence detection: flag tentative language that undermines authority. "I just wanted to check..." (drop "just"), "I'm no expert but..." (drop the disclaimer), "Does that make sense?" (replace with a clear statement)
-
-SLACK-SPECIFIC WRITING CRAFT (apply these especially in Slack/chat rewrites):
-- Fewer words, always. Edit ruthlessly. Find the precise word so you don't need a 5-word phrase. As Mark Twain said: "I didn't have time to write you a short one." Every rewrite should be shorter than the original unless adding essential missing context
-- Rich formatting: use *bold* for key points, actions, or names that matter. When drawing parallel comparisons, bold the first set and bold+italic the second. Formatting uses visual processing (fast, strong) instead of linguistic processing (slow, weak). Suggest formatting in rewrites when it would help
-- Numbered lists over bullet points: if the original uses an unordered list, convert to numbered. Why? It's easy to reply "re #2" instead of quoting a whole bullet. This matters even more in group conversations. The correct answer is almost always a numbered list
-- Links without previews: keep messages visually short. When suggesting a link, recommend embedding it in the relevant phrase rather than pasting a naked URL. Mention removing the preview if on Slack
-- Language accessibility: flag idioms, metaphors, or culturally specific phrases that non-native speakers might not understand. "Let's circle back," "boil the ocean," "move the needle" all have simpler alternatives. When in doubt, be specific and literal rather than metaphorical
-- Do the thinking for the reader (Type 1 vs Type 2): never make the reader do math, logic, or multi-step reasoning to understand your point. Spell out the logical steps. Instead of "the meeting is at 3pm Tokyo time" for a US reader, write "the meeting is at 3pm Tokyo time (11pm ET tonight)." Instead of "costs went up 15% from the Q2 number," write "costs went from $50K in Q2 to $57.5K." Do the work so reading is effortless and intuitive
-
-DO NOT FLAG:
-- Casual greetings, emoji reactions, quick acknowledgments
-- Messages that are already clear, warm, and professional
-- Short responses like "sounds good", "thanks!", "got it"
-- Casual tone is fine as long as the message is understandable and coherent
-
-RECIPIENT CONTEXT: If the message includes an @mention or is clearly directed at someone, factor in the relationship dynamic. A message to your boss needs more polish than a message to a close teammate. If conversation context is provided, use it to infer the relationship.
-
-POLISH-ONLY MODE: If the tone is fine but the writing is messy (grammar, clarity, structure), set mode to "polish". This means: fix the writing without changing the voice or intent. Only restructure, don't soften or reframe.
-
-CLARIFYING QUESTIONS: When a message is unclear, vague, or missing critical context that you need to write a good rewrite, include clarifying questions. These are short, specific questions that help you understand what the user actually means so you can produce a better suggestion. Examples:
-- "Which channel are you referring to?"
-- "What specifically do you need them to look at?"
-- "What's the deadline?"
-- "Is this going to your manager or a teammate?"
-Only ask questions when the answer would meaningfully change the rewrite. Don't ask for the sake of asking. Max 3 questions.
-
-When you have questions, still provide a best-guess suggestion, but set "has_questions" to true. After the user answers, you'll get a follow-up request with the answers to produce a refined version.
-
-Respond with ONLY valid JSON in this exact format:
-{
-  "flagged": true or false,
-  "confidence": 0.0 to 1.0 (how confident you are this needs fixing),
-  "mode": "tone" or "polish" or "both",
-  "readability": 1-16 (estimated grade level of the ORIGINAL message. 9 or below is good, 10-12 is getting complex, 13+ is too hard for casual reading),
-  "red_flags": ["specific phrase 1", "specific phrase 2"],
-  "categories": ["adverbs", "passive voice", "wordy", "hedging", "hard to read", "tone", "grammar", "clarity", "inclusive language"] (which checks triggered, include all that apply),
-  "reasoning": "Brief explanation of what was caught",
-  "suggestion": "The rewritten message (best guess if questions are pending)",
-  "has_questions": true or false,
-  "questions": ["Question 1?", "Question 2?"] (only if has_questions is true, max 3)
+  try {
+    const url = chrome.runtime.getURL("prompts/base.txt");
+    const response = await fetch(url);
+    basePromptCache = await response.text();
+  } catch (err) {
+    console.error("ToneGuard: failed to load base prompt", err);
+    // Don't cache the fallback — allow retry on next call
+    return "You are ToneGuard, a writing assistant. Check messages for tone and clarity. Respond with JSON: {flagged, confidence, mode, readability, red_flags, categories, reasoning, suggestion, has_questions, questions}.";
+  }
+  return basePromptCache;
 }
-
-If the message is fine, respond with:
-{"flagged": false, "confidence": 0.0, "mode": "", "readability": 0, "red_flags": [], "categories": [], "reasoning": "", "suggestion": "", "has_questions": false, "questions": []}`;
 
 // On install/startup, register content scripts for custom sites
 chrome.runtime.onInstalled.addListener(() => registerCustomSites());
@@ -158,23 +31,21 @@ async function registerCustomSites() {
   const { tg_custom_sites: sites } = await chrome.storage.sync.get(["tg_custom_sites"]);
   if (!sites || sites.length === 0) return;
 
-  // Unregister old dynamic scripts first
   try {
     await chrome.scripting.unregisterContentScripts({ ids: ["tg-custom-sites"] });
   } catch (_) {
-    // May not exist yet, that's fine
+    // May not exist yet
   }
 
   const patterns = sites.map((site) => {
-    // Convert "example.com" to "https://*.example.com/*" and "https://example.com/*"
-    return [`https://${site}/*`, `https://*.${site}/*`];
+    return ["https://" + site + "/*", "https://*." + site + "/*"];
   }).flat();
 
   try {
     await chrome.scripting.registerContentScripts([{
       id: "tg-custom-sites",
       matches: patterns,
-      js: ["content.js"],
+      js: ["overlay.js", "content.js"],
       runAt: "document_idle"
     }]);
   } catch (err) {
@@ -182,73 +53,39 @@ async function registerCustomSites() {
   }
 }
 
-// Listen for messages from content script and panel
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.type === "OPEN_PANEL") {
-    // Called synchronously during user gesture (Send click/Enter)
-    // so sidePanel.open() is allowed
-    const tabId = sender.tab?.id;
-    if (tabId) {
-      chrome.sidePanel.open({ tabId });
-    }
-    return false;
-  }
-
+// Listen for messages from content script
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.type === "ANALYZE") {
-    handleAnalyze(message.text, sender.tab?.id, message.context)
-      .then(sendResponse)
-      .catch((err) => sendResponse({ error: err.message }));
-    return true; // keep channel open for async response
-  }
-
-  if (message.type === "REFINE") {
-    // Follow-up: user answered clarifying questions, generate refined rewrite
-    handleRefine(message.original, message.answers, message.tabId)
+    handleAnalyze(message.text, message.context)
       .then(sendResponse)
       .catch((err) => sendResponse({ error: err.message }));
     return true;
   }
 
-  if (message.type === "GET_RESULT") {
-    // Panel requesting the latest analysis result
-    chrome.storage.session.get("tg_latest_result", (data) => {
-      sendResponse(data.tg_latest_result || null);
-    });
+  if (message.type === "REFINE") {
+    handleRefine(message.original, message.answers)
+      .then(sendResponse)
+      .catch((err) => sendResponse({ error: err.message }));
     return true;
   }
 
   if (message.type === "REGISTER_SITE" || message.type === "UNREGISTER_SITE") {
-    // Re-register all custom sites (handles both add and remove)
     registerCustomSites().then(() => {
-      // If adding, also request permission for the new site
       if (message.type === "REGISTER_SITE" && message.site) {
         chrome.permissions.request({
-          origins: [`https://${message.site}/*`, `https://*.${message.site}/*`]
+          origins: ["https://" + message.site + "/*", "https://*." + message.site + "/*"]
         });
       }
     });
     return false;
   }
-
-  if (message.type === "PANEL_ACTION") {
-    // Panel sent a decision, forward to the content script tab
-    const tabId = message.tabId;
-    chrome.tabs.sendMessage(tabId, {
-      type: "PANEL_DECISION",
-      action: message.action,       // "use_suggestion" or "send_original"
-      suggestion: message.suggestion
-    });
-    return false;
-  }
 });
 
-async function handleAnalyze(text, tabId, context) {
-  // Skip very short messages
+async function handleAnalyze(text, context) {
   if (!text || text.trim().length < 10) {
     return { flagged: false };
   }
 
-  // Get settings
   const { tg_api_key: apiKey, tg_enabled: enabled, tg_strictness: strictness } =
     await chrome.storage.sync.get(["tg_api_key", "tg_enabled", "tg_strictness"]);
 
@@ -260,25 +97,25 @@ async function handleAnalyze(text, tabId, context) {
     return { error: "No API key set. Click the ToneGuard icon to add one." };
   }
 
-  // Build dynamic prompt with learned examples and strictness
+  // Build full prompt: base file + dynamic sections
+  const basePrompt = await loadBasePrompt();
   const learnedExamples = await getLearnedExamples();
   const customRules = await getCustomRules();
-  let fullPrompt = SYSTEM_PROMPT;
+  let fullPrompt = basePrompt;
 
   const strictLevel = strictness || 2;
   if (strictLevel === 1) {
-    fullPrompt += "\n\nSTRICTNESS: GENTLE. Only flag messages that are clearly problematic — harsh tone, offensive language, or truly incoherent. Let borderline messages through. When in doubt, don't flag.";
+    fullPrompt += "\n\nSTRICTNESS: GENTLE. Only flag messages that are clearly problematic. Let borderline messages through. When in doubt, don't flag.";
   } else if (strictLevel === 3) {
-    fullPrompt += "\n\nSTRICTNESS: STRICT. Flag anything that could be improved — even slightly unclear phrasing, minor tone issues, or messages that are fine but could be better. Be thorough. The user wants to catch everything.";
+    fullPrompt += "\n\nSTRICTNESS: STRICT. Flag anything that could be improved. Be thorough. The user wants to catch everything.";
   }
-  // Level 2 (Balanced) = default behavior, no modifier needed
 
   if (customRules) {
-    fullPrompt += `\n\nUSER-ADDED RULES:\n${customRules}`;
+    fullPrompt += "\n\nUSER-ADDED RULES:\n" + customRules;
   }
 
   if (learnedExamples) {
-    fullPrompt += `\n\nLEARNED FROM PAST DECISIONS (use these to calibrate):\n${learnedExamples}`;
+    fullPrompt += "\n\nLEARNED FROM PAST DECISIONS (use these to calibrate):\n" + learnedExamples;
   }
 
   const voiceContext = await getVoiceContext();
@@ -291,8 +128,7 @@ async function handleAnalyze(text, tabId, context) {
     fullPrompt += "\n\n" + relationshipContext;
   }
 
-  // Track this interaction for relationship memory
-  await saveRecipientInteraction(text, context);
+  await saveRecipientInteraction(text);
 
   const requestBody = JSON.stringify({
     model: MODEL,
@@ -302,8 +138,8 @@ async function handleAnalyze(text, tabId, context) {
       {
         role: "user",
         content: context
-          ? `${context}\n\nMESSAGE TO REVIEW (about to be sent):\n${text}`
-          : `Review this message before sending:\n\n${text}`
+          ? context + "\n\nMESSAGE TO REVIEW (about to be sent):\n" + text
+          : "Review this message before sending:\n\n" + text
       }
     ]
   });
@@ -316,7 +152,6 @@ async function handleAnalyze(text, tabId, context) {
   };
 
   try {
-    // Retry with exponential backoff (max 3 attempts)
     let response;
     for (let attempt = 0; attempt < 3; attempt++) {
       response = await fetch(CLAUDE_API_URL, {
@@ -325,27 +160,21 @@ async function handleAnalyze(text, tabId, context) {
         body: requestBody
       });
 
-      // Don't retry on auth errors or bad requests
       if (response.status === 401 || response.status === 400) break;
-
-      // Success or non-retryable error
       if (response.ok || response.status < 500) break;
 
-      // Server error: wait and retry
-      const delay = Math.pow(2, attempt) * 500; // 500ms, 1s, 2s
+      const delay = Math.pow(2, attempt) * 500;
       await new Promise((r) => setTimeout(r, delay));
     }
 
     if (!response.ok) {
       const errBody = await response.text();
-      throw new Error(`API error ${response.status}: ${errBody}`);
+      throw new Error("API error " + response.status + ": " + errBody);
     }
 
     const data = await response.json();
     const rawContent = data.content[0]?.text || "";
 
-    // Extract the JSON object — handles raw JSON, markdown code blocks,
-    // or any wrapper text around the JSON
     const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
       console.error("ToneGuard: no JSON found in response:", rawContent);
@@ -354,87 +183,59 @@ async function handleAnalyze(text, tabId, context) {
 
     const result = JSON.parse(jsonMatch[0]);
 
-    // Track stats for weekly digest
     await trackStats(result.flagged, result.mode);
 
-    // Learn from passed messages (voice samples)
     if (!result.flagged) {
       await saveVoiceSample(text);
-    }
-
-    if (result.flagged && tabId) {
-      // Store result for the panel to pick up
-      // (panel is already open — it was opened during the user gesture)
-      await chrome.storage.session.set({
-        tg_latest_result: {
-          original: text,
-          suggestion: result.suggestion,
-          reasoning: result.reasoning,
-          confidence: result.confidence || 0,
-          mode: result.mode || "tone",
-          readability: result.readability || 0,
-          red_flags: result.red_flags || [],
-          categories: result.categories || [],
-          has_questions: result.has_questions || false,
-          questions: result.questions || [],
-          tabId: tabId
-        }
-      });
     }
 
     return result;
 
   } catch (err) {
     console.error("ToneGuard analysis error:", err);
-    // On error, let the message through (don't block sends)
     return { flagged: false, error: err.message };
   }
 }
 
-// Build learned examples from past decisions for prompt injection
+// Build learned examples from past decisions
 async function getLearnedExamples() {
   const { tg_decisions: decisions } = await chrome.storage.local.get(["tg_decisions"]);
   if (!decisions || decisions.length === 0) return "";
 
   const examples = [];
 
-  // "Sent as-is" = false positive (ToneGuard flagged but user disagreed)
   const falsePositives = decisions
     .filter((d) => d.action === "sent_original")
     .slice(-3);
 
   for (const d of falsePositives) {
-    examples.push(`FALSE POSITIVE (flagged but user sent as-is, so do NOT flag similar messages):\n  Message: "${d.original}"`);
+    examples.push('FALSE POSITIVE (do NOT flag similar messages):\n  Message: "' + d.original + '"');
   }
 
-  // "Used edited" = catch was right but rewrite needed work
   const edited = decisions
     .filter((d) => d.action === "used_edited")
     .slice(-3);
 
   for (const d of edited) {
-    examples.push(`GOOD CATCH, BETTER REWRITE (user edited the suggestion, learn from their version):\n  Original: "${d.original}"\n  Your suggestion: "${d.suggestion}"\n  User's preferred version: "${d.finalText}"`);
+    examples.push('GOOD CATCH, BETTER REWRITE (learn from user version):\n  Original: "' + d.original + '"\n  Your suggestion: "' + d.suggestion + '"\n  User preferred: "' + d.finalText + '"');
   }
 
-  // "Used suggestion" = both catch and rewrite were good
   const accepted = decisions
     .filter((d) => d.action === "used_suggestion")
     .slice(-3);
 
   for (const d of accepted) {
-    examples.push(`GOOD EXAMPLE (user accepted this suggestion):\n  Original: "${d.original}"\n  Rewrite: "${d.suggestion}"`);
+    examples.push('GOOD EXAMPLE (user accepted):\n  Original: "' + d.original + '"\n  Rewrite: "' + d.suggestion + '"');
   }
 
   return examples.join("\n\n");
 }
 
-// Get user-added custom rules
 async function getCustomRules() {
   const { tg_custom_rules: rules } = await chrome.storage.sync.get(["tg_custom_rules"]);
   return rules || "";
 }
 
-// Voice learning: save messages that passed as examples of good writing
 async function saveVoiceSample(text) {
   if (!text || text.length < 30) return;
 
@@ -453,7 +254,6 @@ async function saveVoiceSample(text) {
   await chrome.storage.local.set({ tg_voice_samples: samples });
 }
 
-// Build voice description from passed message samples
 async function getVoiceContext() {
   const { tg_voice_samples: samples } = await chrome.storage.local.get(["tg_voice_samples"]);
   if (!samples || samples.length < 5) return "";
@@ -461,11 +261,10 @@ async function getVoiceContext() {
   const picked = samples.slice(-5);
   const voiceExamples = picked.map((s) => '  "' + s.text + '"').join("\n");
 
-  return "VOICE SAMPLES (messages the user sent that were fine. Match this writing style in rewrites):\n" + voiceExamples;
+  return "VOICE SAMPLES (match this writing style in rewrites):\n" + voiceExamples;
 }
 
-// Relationship memory: track tone patterns per recipient
-async function saveRecipientInteraction(text, context) {
+async function saveRecipientInteraction(text) {
   const mentions = [];
   const pattern = /@([\w.-]+)/g;
   let m;
@@ -489,7 +288,6 @@ async function saveRecipientInteraction(text, context) {
   await chrome.storage.local.set({ tg_relationships: relationships });
 }
 
-// Build relationship context for the prompt
 async function getRelationshipContext(text) {
   const { tg_relationships: relationships } = await chrome.storage.local.get(["tg_relationships"]);
   if (!relationships) return "";
@@ -518,24 +316,20 @@ async function getRelationshipContext(text) {
     : "";
 }
 
-// Weekly stats tracking
 async function trackStats(flagged, mode) {
   const { tg_stats: existing } = await chrome.storage.local.get(["tg_stats"]);
   const stats = existing || { weekStart: new Date().toISOString(), checked: 0, flagged: 0, accepted: 0, dismissed: 0, edited: 0, byMode: {} };
 
-  // Reset if week has rolled over (7 days)
   const weekStart = new Date(stats.weekStart);
   const now = new Date();
   const daysSince = (now - weekStart) / (1000 * 60 * 60 * 24);
   if (daysSince >= 7) {
-    // Archive the old week
     const { tg_stats_history: history } = await chrome.storage.local.get(["tg_stats_history"]);
     const weeks = history || [];
     weeks.push(stats);
-    if (weeks.length > 12) weeks.splice(0, weeks.length - 12); // keep 12 weeks
+    if (weeks.length > 12) weeks.splice(0, weeks.length - 12);
     await chrome.storage.local.set({ tg_stats_history: weeks });
 
-    // Reset
     stats.weekStart = now.toISOString();
     stats.checked = 0;
     stats.flagged = 0;
@@ -555,8 +349,7 @@ async function trackStats(flagged, mode) {
   await chrome.storage.local.set({ tg_stats: stats });
 }
 
-// Handle refinement after user answers clarifying questions
-async function handleRefine(original, answers, tabId) {
+async function handleRefine(original, answers) {
   const { tg_api_key: apiKey } = await chrome.storage.sync.get(["tg_api_key"]);
   if (!apiKey) return { error: "No API key" };
 
@@ -593,24 +386,6 @@ async function handleRefine(original, answers, tabId) {
 
     const data = await response.json();
     const refinedText = data.content[0]?.text || "";
-
-    // Update the panel with the refined suggestion
-    if (tabId) {
-      await chrome.storage.session.set({
-        tg_latest_result: {
-          original: original,
-          suggestion: refinedText.trim(),
-          reasoning: "Refined with your answers",
-          confidence: 0.9,
-          mode: "both",
-          red_flags: [],
-          has_questions: false,
-          questions: [],
-          refined: true,
-          tabId: tabId
-        }
-      });
-    }
 
     return { suggestion: refinedText.trim() };
 

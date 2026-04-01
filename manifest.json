@@ -1,12 +1,11 @@
 {
   "manifest_version": 3,
   "name": "ToneGuard",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Checks your messages for tone and clarity before sending. Only interrupts when it matters.",
 
   "permissions": [
     "storage",
-    "sidePanel",
     "activeTab",
     "scripting"
   ],
@@ -36,16 +35,19 @@
         "https://www.linkedin.com/*",
         "https://*.turbotenant.com/*"
       ],
-      "js": ["content.js"],
+      "js": ["overlay.js", "content.js"],
       "run_at": "document_idle"
     }
   ],
 
   "options_page": "options.html",
 
-  "side_panel": {
-    "default_path": "panel.html"
-  },
+  "web_accessible_resources": [
+    {
+      "resources": ["prompts/base.txt"],
+      "matches": ["<all_urls>"]
+    }
+  ],
 
   "action": {
     "default_popup": "popup.html",

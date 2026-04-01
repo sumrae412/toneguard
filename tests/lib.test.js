@@ -10,7 +10,7 @@ import {
   shouldAnalyze,
   truncate,
   extractMentions
-} from "../lib.js";
+} from "./lib-exports.mjs";
 
 describe("detectPlatform", () => {
   it("detects Slack", () => {
