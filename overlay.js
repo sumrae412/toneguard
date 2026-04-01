@@ -16,14 +16,22 @@
   // DOM references (set once on first ensureHost)
   let els = {};
 
-  // Expose API on window for content.js to call
-  window.__toneGuard = {
+  // Expose API on window for content.js to call.
+  // setOnDecision must be called before freeze, so content.js setupOverlay()
+  // runs first (overlay.js loads before content.js in manifest).
+  // Object.freeze prevents host page scripts from overwriting the API.
+  let decisionSet = false;
+  window.__toneGuard = Object.freeze({
     showLoading,
     showResult,
     showPassed,
     hide,
-    setOnDecision(fn) { onDecision = fn; }
-  };
+    setOnDecision(fn) {
+      if (decisionSet) return; // only allow one binding
+      onDecision = fn;
+      decisionSet = true;
+    }
+  });
 
   // --- DOM Builder Helpers ---
 
@@ -455,8 +463,15 @@
     els.drawer.focus();
   }
 
+  function clearToast() {
+    if (!els.drawer) return;
+    const existing = els.drawer.querySelector(".tg-passed");
+    if (existing) existing.remove();
+  }
+
   function showPassed() {
     ensureHost();
+    clearToast();
     els.loading.style.display = "none";
     els.content.style.display = "none";
     els.empty.style.display = "none";
@@ -472,6 +487,7 @@
   }
 
   function showSent(message) {
+    clearToast();
     els.content.style.display = "none";
 
     const sent = el("div", { className: "tg-passed", textContent: message });

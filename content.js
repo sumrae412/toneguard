@@ -263,6 +263,9 @@
 
   // Core: send text for analysis
   async function analyzeAndIntercept(text, editor) {
+    // Concurrency guard: don't start a new analysis while one is in-flight
+    if (pendingEditor) return;
+
     pendingText = text;
     pendingEditor = editor;
 
@@ -300,6 +303,8 @@
         console.warn("ToneGuard:", result.error);
         if (window.__toneGuard) window.__toneGuard.hide();
         currentPlatform.releaseSend(editor);
+        pendingEditor = null;
+        pendingText = null;
         return;
       }
 
@@ -309,6 +314,8 @@
           window.__toneGuard.showPassed();
         }
         currentPlatform.releaseSend(editor);
+        pendingEditor = null;
+        pendingText = null;
         return;
       }
 
@@ -334,6 +341,8 @@
       hideCheckingIndicator();
       if (window.__toneGuard) window.__toneGuard.hide();
       currentPlatform.releaseSend(editor);
+      pendingEditor = null;
+      pendingText = null;
     }
   }
 

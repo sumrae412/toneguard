@@ -17,7 +17,8 @@ async function loadBasePrompt() {
     basePromptCache = await response.text();
   } catch (err) {
     console.error("ToneGuard: failed to load base prompt", err);
-    basePromptCache = "You are ToneGuard, a writing assistant. Check messages for tone and clarity. Respond with JSON: {flagged, confidence, mode, readability, red_flags, categories, reasoning, suggestion, has_questions, questions}.";
+    // Don't cache the fallback — allow retry on next call
+    return "You are ToneGuard, a writing assistant. Check messages for tone and clarity. Respond with JSON: {flagged, confidence, mode, readability, red_flags, categories, reasoning, suggestion, has_questions, questions}.";
   }
   return basePromptCache;
 }
