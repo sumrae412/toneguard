@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <!-- Blue background -->
+  <circle cx="64" cy="64" r="64" fill="#2196F3"/>
+
+  <!-- Ears -->
+  <circle cx="30" cy="22" r="14" fill="#BBDEFB"/>
+  <circle cx="98" cy="22" r="14" fill="#BBDEFB"/>
+
+  <!-- Big round head fills the frame -->
+  <circle cx="64" cy="60" r="46" fill="#E3F2FD"/>
+
+  <!-- Happy squint eyes -->
+  <path d="M38 46 Q48 36 58 46" stroke="#1565C0" stroke-width="4" fill="none" stroke-linecap="round"/>
+  <path d="M70 46 Q80 36 90 46" stroke="#1565C0" stroke-width="4" fill="none" stroke-linecap="round"/>
+
+  <!-- Blush -->
+  <circle cx="40" cy="56" r="6" fill="#F48FB1" opacity="0.3"/>
+  <circle cx="88" cy="56" r="6" fill="#F48FB1" opacity="0.3"/>
+
+  <!-- Two paws covering mouth — simple rounded shapes from below -->
+  <ellipse cx="44" cy="78" rx="22" ry="16" fill="#FFCCBC" stroke="#DFA88A" stroke-width="1.5"/>
+  <ellipse cx="84" cy="78" rx="22" ry="16" fill="#FFCCBC" stroke="#DFA88A" stroke-width="1.5"/>
+
+  <!-- Paw toes (three dots per paw) -->
+  <circle cx="34" cy="68" r="4" fill="#FFCCBC" stroke="#DFA88A" stroke-width="1.2"/>
+  <circle cx="44" cy="65" r="4" fill="#FFCCBC" stroke="#DFA88A" stroke-width="1.2"/>
+  <circle cx="54" cy="68" r="4" fill="#FFCCBC" stroke="#DFA88A" stroke-width="1.2"/>
+
+  <circle cx="74" cy="68" r="4" fill="#FFCCBC" stroke="#DFA88A" stroke-width="1.2"/>
+  <circle cx="84" cy="65" r="4" fill="#FFCCBC" stroke="#DFA88A" stroke-width="1.2"/>
+  <circle cx="94" cy="68" r="4" fill="#FFCCBC" stroke="#DFA88A" stroke-width="1.2"/>
+
+  <!-- Shield badge -->
+  <g transform="translate(92, 92)">
+    <path d="M0 4 L10 0 L20 4 L20 12 C20 18 10 23 10 23 C10 23 0 18 0 12 Z" fill="#4CAF50"/>
+    <path d="M6 11 L9 14 L15 7" stroke="white" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>
