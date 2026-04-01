@@ -34,6 +34,100 @@
     }
   });
 
+  // --- State Management ---
+
+  function resetState() {
+    currentResult = null;
+    suggestionWasEdited = false;
+    if (!els.original) return;
+    els.original.textContent = "";
+    els.suggestion.textContent = "";
+    els.reasoning.textContent = "";
+    els.flagsList.textContent = "";
+    els.categories.textContent = "";
+    els.questionsList.textContent = "";
+    if (els.useSuggestionBtn) {
+      els.useSuggestionBtn.textContent = "Use suggestion";
+    }
+    // Clear any diff view
+    const diffEl = els.drawer?.querySelector(".tg-diff");
+    if (diffEl) diffEl.remove();
+    // Clear any undo/toast
+    clearToast();
+  }
+
+  // --- Word-Level Diff ---
+
+  // Simple longest-common-subsequence word diff (no dependencies)
+  function wordDiff(oldText, newText) {
+    const oldWords = oldText.split(/(\s+)/);
+    const newWords = newText.split(/(\s+)/);
+    const m = oldWords.length;
+    const n = newWords.length;
+
+    // Build LCS table
+    const dp = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+    for (let i = 1; i <= m; i++) {
+      for (let j = 1; j <= n; j++) {
+        if (oldWords[i - 1] === newWords[j - 1]) {
+          dp[i][j] = dp[i - 1][j - 1] + 1;
+        } else {
+          dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
+        }
+      }
+    }
+
+    // Backtrack to produce diff segments
+    const segments = [];
+    let i = m, j = n;
+    const stack = [];
+
+    while (i > 0 || j > 0) {
+      if (i > 0 && j > 0 && oldWords[i - 1] === newWords[j - 1]) {
+        stack.push({ type: "same", text: oldWords[i - 1] });
+        i--; j--;
+      } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
+        stack.push({ type: "added", text: newWords[j - 1] });
+        j--;
+      } else {
+        stack.push({ type: "removed", text: oldWords[i - 1] });
+        i--;
+      }
+    }
+
+    // Reverse (backtrack produces reverse order)
+    stack.reverse();
+
+    // Merge adjacent same-type segments
+    for (const seg of stack) {
+      if (segments.length > 0 && segments[segments.length - 1].type === seg.type) {
+        segments[segments.length - 1].text += seg.text;
+      } else {
+        segments.push({ type: seg.type, text: seg.text });
+      }
+    }
+
+    return segments;
+  }
+
+  function buildDiffView(original, suggestion) {
+    const segments = wordDiff(original, suggestion);
+    const container = el("div", { className: "tg-diff" });
+
+    for (const seg of segments) {
+      const span = document.createElement("span");
+      span.textContent = seg.text;
+      if (seg.type === "removed") {
+        span.className = "tg-diff-removed";
+      } else if (seg.type === "added") {
+        span.className = "tg-diff-added";
+      }
+      container.appendChild(span);
+    }
+
+    return container;
+  }
+
   // --- DOM Builder Helpers ---
 
   function el(tag, attrs, children) {
@@ -96,10 +190,15 @@
       el("div", { className: "tg-flags-list", id: "tgFlagsList" })
     ]);
 
-    // Original message section
-    const originalSection = el("div", { className: "tg-section" }, [
+    // Original message section (hidden when diff is shown)
+    const originalSection = el("div", { className: "tg-section", id: "tgOriginalSection" }, [
       el("div", { className: "tg-section-label", textContent: "Your message" }),
       el("div", { className: "tg-message-box tg-original", id: "tgOriginal" })
+    ]);
+
+    // Diff section (shows inline changes — replaces original when active)
+    const diffSection = el("div", { className: "tg-section", id: "tgDiffSection", style: "display:none" }, [
+      el("div", { className: "tg-section-label", textContent: "Changes" })
     ]);
 
     // Questions section
@@ -167,6 +266,7 @@
       confidenceBar,
       metaRow,
       redFlags,
+      diffSection,
       originalSection,
       questionsSection,
       refining,
@@ -222,6 +322,8 @@
       loading: shadow.getElementById("tgLoading"),
       content: shadow.getElementById("tgContent"),
       empty: shadow.getElementById("tgEmpty"),
+      originalSection: shadow.getElementById("tgOriginalSection"),
+      diffSection: shadow.getElementById("tgDiffSection"),
       original: shadow.getElementById("tgOriginal"),
       suggestion: shadow.getElementById("tgSuggestion"),
       reasoning: shadow.getElementById("tgReasoning"),
@@ -246,20 +348,8 @@
     parts.useSuggestionBtn.addEventListener("click", () => {
       if (!currentResult) return;
       const finalText = els.suggestion.innerText.trim();
-
-      logDecision({
-        action: suggestionWasEdited ? "used_edited" : "used_suggestion",
-        original: currentResult.original,
-        suggestion: currentResult.suggestion,
-        finalText: finalText,
-        reasoning: currentResult.reasoning,
-        wasEdited: suggestionWasEdited
-      });
-
-      if (onDecision) {
-        onDecision({ action: "use_suggestion", suggestion: finalText });
-      }
-      showSent(suggestionWasEdited ? "Edited version sent!" : "Suggestion applied!");
+      const wasEdited = suggestionWasEdited;
+      showUndoCountdown(finalText, wasEdited);
     });
 
     parts.sendOriginalBtn.addEventListener("click", () => handleSendOriginal());
@@ -368,6 +458,7 @@
 
   function showLoading() {
     ensureHost();
+    resetState();
     els.loading.style.display = "flex";
     els.content.style.display = "none";
     els.empty.style.display = "none";
@@ -383,6 +474,20 @@
     els.original.textContent = result.original;
     els.suggestion.textContent = result.suggestion;
     els.reasoning.textContent = result.reasoning;
+
+    // Inline diff view — show changes instead of "Your message" when edits are small
+    const existingDiff = els.diffSection.querySelector(".tg-diff");
+    if (existingDiff) existingDiff.remove();
+
+    if (result.original && result.suggestion && result.original !== result.suggestion) {
+      const diffView = buildDiffView(result.original, result.suggestion);
+      els.diffSection.appendChild(diffView);
+      els.diffSection.style.display = "block";
+      els.originalSection.style.display = "none";
+    } else {
+      els.diffSection.style.display = "none";
+      els.originalSection.style.display = "block";
+    }
 
     // Badge
     if (result.refined) {
@@ -534,6 +639,63 @@
     }, 8000);
   }
 
+  // Undo countdown: show "Sending in 3..." with an Undo button
+  let undoTimer = null;
+  let undoInterval = null;
+
+  function showUndoCountdown(finalText, wasEdited) {
+    const savedResult = { ...currentResult };
+    els.content.style.display = "none";
+
+    const toast = el("div", { className: "tg-undo-toast" });
+    const countdownText = el("div", { className: "tg-undo-countdown", textContent: "Sending in 3..." });
+    const undoBtn = el("button", {
+      className: "tg-btn tg-btn-secondary",
+      textContent: "Undo"
+    });
+    toast.appendChild(countdownText);
+    toast.appendChild(undoBtn);
+    els.drawer.appendChild(toast);
+
+    let secondsLeft = 3;
+
+    undoInterval = setInterval(() => {
+      secondsLeft--;
+      if (secondsLeft > 0) {
+        countdownText.textContent = "Sending in " + secondsLeft + "...";
+      }
+    }, 1000);
+
+    undoTimer = setTimeout(() => {
+      clearInterval(undoInterval);
+      toast.remove();
+
+      logDecision({
+        action: wasEdited ? "used_edited" : "used_suggestion",
+        original: savedResult.original,
+        suggestion: savedResult.suggestion,
+        finalText: finalText,
+        reasoning: savedResult.reasoning,
+        wasEdited: wasEdited
+      });
+
+      if (onDecision) {
+        onDecision({ action: "use_suggestion", suggestion: finalText });
+      }
+      showSent(wasEdited ? "Edited version sent!" : "Suggestion applied!");
+    }, 3000);
+
+    undoBtn.addEventListener("click", () => {
+      clearTimeout(undoTimer);
+      clearInterval(undoInterval);
+      undoTimer = null;
+      undoInterval = null;
+      toast.remove();
+      // Restore the result view
+      showResult(savedResult);
+    });
+  }
+
   function showSent(message) {
     clearToast();
     els.content.style.display = "none";
@@ -543,9 +705,7 @@
 
     setTimeout(() => {
       sent.remove();
-      hide();
-      currentResult = null;
-      suggestionWasEdited = false;
+      hide(); // resetState() runs inside hide()
     }, 2000);
   }
 
@@ -558,7 +718,7 @@
     if (!els.drawer) return;
     els.drawer.classList.remove("tg-open");
     els.backdrop.classList.remove("tg-open");
-    currentResult = null;
+    resetState();
   }
 
   // --- Decision logging (same format as old panel.js) ---
@@ -903,6 +1063,85 @@
       "  flex: none;",
       "  width: auto;",
       "  padding: 8px 24px;",
+      "}",
+
+      "/* Diff view */",
+      ".tg-diff {",
+      "  padding: 12px;",
+      "  border-radius: 8px;",
+      "  font-size: 14px;",
+      "  line-height: 1.6;",
+      "  white-space: pre-wrap;",
+      "  word-wrap: break-word;",
+      "  background: #fff;",
+      "  border: 1px solid #e0e0e0;",
+      "}",
+      ".tg-diff-removed {",
+      "  text-decoration: line-through;",
+      "  color: #C62828;",
+      "  background: #FFEBEE;",
+      "  border-radius: 2px;",
+      "  padding: 0 2px;",
+      "}",
+      ".tg-diff-added {",
+      "  color: #2E7D32;",
+      "  background: #E8F5E9;",
+      "  border-radius: 2px;",
+      "  padding: 0 2px;",
+      "}",
+
+      "/* Undo countdown */",
+      ".tg-undo-toast {",
+      "  text-align: center;",
+      "  padding: 30px 0;",
+      "}",
+      ".tg-undo-countdown {",
+      "  font-size: 15px;",
+      "  color: #666;",
+      "  margin-bottom: 12px;",
+      "}",
+      ".tg-undo-toast .tg-btn {",
+      "  flex: none;",
+      "  width: auto;",
+      "  padding: 8px 24px;",
+      "}",
+
+      "/* Dark mode */",
+      "@media (prefers-color-scheme: dark) {",
+      "  .tg-drawer { background: #1e1e1e; color: #e0e0e0; }",
+      "  .tg-close { color: #777; }",
+      "  .tg-close:hover { color: #ccc; }",
+      "  .tg-badge { background: #3d2e1a; color: #FFB300; }",
+      "  .tg-badge.tg-polish { background: #1a2e3d; color: #64B5F6; }",
+      "  .tg-badge.tg-both { background: #3d2e1a; color: #FFB300; }",
+      "  .tg-flag-chip { background: #3d1c1c; color: #EF9A9A; }",
+      "  .tg-readability.tg-good { background: #1b3a1b; color: #81C784; }",
+      "  .tg-readability.tg-medium { background: #3d2e1a; color: #FFB74D; }",
+      "  .tg-readability.tg-hard { background: #3d1c1c; color: #EF9A9A; }",
+      "  .tg-category-chip { background: #2d1a35; color: #CE93D8; }",
+      "  .tg-reason { background: #3d3520; border-left-color: #FFB300; color: #D7CCC8; }",
+      "  .tg-section-label { color: #777; }",
+      "  .tg-message-box.tg-original { background: #2d2d2d; border-color: #404040; color: #999; }",
+      "  .tg-message-box.tg-suggestion { background: #1b3a1b; border-color: #2d5f2d; color: #e0e0e0; }",
+      "  .tg-message-box.tg-suggestion:focus { border-color: #4CAF50; box-shadow: 0 0 0 2px rgba(76,175,80,0.3); }",
+      "  .tg-question-input { background: #2d2d2d; border-color: #404040; color: #e0e0e0; }",
+      "  .tg-question-input:focus { border-color: #4CAF50; }",
+      "  .tg-btn-primary { background: #388E3C; }",
+      "  .tg-btn-primary:hover { background: #2E7D32; }",
+      "  .tg-btn-secondary { background: #2d2d2d; color: #999; border-color: #555; }",
+      "  .tg-btn-secondary:hover { background: #333; }",
+      "  .tg-kbd { background: rgba(255,255,255,0.1); }",
+      "  .tg-btn-secondary .tg-kbd { background: rgba(255,255,255,0.08); }",
+      "  .tg-loading { color: #999; }",
+      "  .tg-empty { color: #777; }",
+      "  .tg-edit-hint { color: #666; }",
+      "  .tg-diff { background: #2d2d2d; border-color: #404040; }",
+      "  .tg-diff-removed { background: #3d1c1c; color: #EF9A9A; }",
+      "  .tg-diff-added { background: #1b3a1b; color: #81C784; }",
+      "  .tg-undo-countdown { color: #999; }",
+      "  .tg-stale-title { color: #FFB74D; }",
+      "  .tg-stale-msg { color: #999; }",
+      "  .tg-backdrop { background: rgba(0, 0, 0, 0.5); }",
       "}"
     ].join("\n");
   }

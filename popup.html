@@ -241,6 +241,45 @@
       color: #4CAF50;
       min-width: 50px;
     }
+
+    .site-strictness {
+      margin-bottom: 12px;
+    }
+
+    .site-strictness h3 {
+      font-size: 11px;
+      font-weight: 500;
+      color: #999;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 6px;
+    }
+
+    .site-strict-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 4px;
+      font-size: 12px;
+    }
+
+    .site-strict-row .site-name {
+      width: 70px;
+      color: #666;
+      flex-shrink: 0;
+    }
+
+    .site-strict-row input[type="range"] {
+      flex: 1;
+      accent-color: #4CAF50;
+    }
+
+    .site-strict-row .site-strict-label {
+      font-size: 11px;
+      color: #4CAF50;
+      min-width: 50px;
+      text-align: right;
+    }
   </style>
 </head>
 <body>
@@ -271,6 +310,8 @@
       <span class="strictness-label" id="strictnessLabel">Balanced</span>
     </div>
   </div>
+
+  <div class="site-strictness" id="siteStrictness"></div>
 
   <button class="btn" id="saveBtn">Save</button>
   <div class="status" id="status"></div>

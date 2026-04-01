@@ -10,12 +10,21 @@ const siteListEl = document.getElementById("siteList");
 const newSiteInput = document.getElementById("newSite");
 const addSiteBtn = document.getElementById("addSiteBtn");
 
+const siteStrictnessEl = document.getElementById("siteStrictness");
+
 const BUILT_IN_SITES = [
   "app.slack.com",
   "mail.google.com",
   "www.linkedin.com",
   "*.turbotenant.com"
 ];
+
+const SITE_DISPLAY_NAMES = {
+  slack: "Slack",
+  gmail: "Gmail",
+  linkedin: "LinkedIn",
+  turbotenant: "TurboTenant"
+};
 
 // Load saved settings
 const STRICTNESS_LABELS = { 1: "Gentle", 2: "Balanced", 3: "Strict" };
@@ -32,10 +41,19 @@ chrome.storage.sync.get(["tg_api_key", "tg_enabled", "tg_custom_sites", "tg_stri
 
   enabledToggle.checked = result.tg_enabled !== false;
 
-  const strictVal = result.tg_strictness || 2;
-  strictnessSlider.value = strictVal;
-  strictnessLabel.textContent = STRICTNESS_LABELS[strictVal];
+  // Support both old (number) and new (object) strictness format
+  const rawStrict = result.tg_strictness;
+  let strictMap;
+  if (typeof rawStrict === "object" && rawStrict !== null) {
+    strictMap = rawStrict;
+  } else {
+    strictMap = { default: rawStrict || 2 };
+  }
 
+  strictnessSlider.value = strictMap.default || 2;
+  strictnessLabel.textContent = STRICTNESS_LABELS[strictMap.default || 2];
+
+  renderSiteStrictness(strictMap);
   renderSiteList(result.tg_custom_sites || []);
 });
 
@@ -69,12 +87,82 @@ enabledToggle.addEventListener("change", () => {
   chrome.storage.sync.set({ tg_enabled: enabledToggle.checked });
 });
 
-// Strictness slider
+// Strictness slider (sets the default for all sites)
 strictnessSlider.addEventListener("input", () => {
   const val = parseInt(strictnessSlider.value);
   strictnessLabel.textContent = STRICTNESS_LABELS[val];
-  chrome.storage.sync.set({ tg_strictness: val });
+  // Update the default while preserving per-site overrides
+  chrome.storage.sync.get(["tg_strictness"], (result) => {
+    const rawStrict = result.tg_strictness;
+    let strictMap;
+    if (typeof rawStrict === "object" && rawStrict !== null) {
+      strictMap = rawStrict;
+    } else {
+      strictMap = {};
+    }
+    strictMap.default = val;
+    chrome.storage.sync.set({ tg_strictness: strictMap });
+  });
 });
+
+// Render per-site strictness overrides
+function renderSiteStrictness(strictMap) {
+  siteStrictnessEl.textContent = "";
+
+  const heading = document.createElement("h3");
+  heading.textContent = "Per-site overrides";
+  siteStrictnessEl.appendChild(heading);
+
+  const sites = ["slack", "gmail", "linkedin", "turbotenant"];
+
+  for (const site of sites) {
+    const row = document.createElement("div");
+    row.className = "site-strict-row";
+
+    const name = document.createElement("span");
+    name.className = "site-name";
+    name.textContent = SITE_DISPLAY_NAMES[site] || site;
+    row.appendChild(name);
+
+    const slider = document.createElement("input");
+    slider.type = "range";
+    slider.min = "0";
+    slider.max = "3";
+    slider.step = "1";
+    // 0 = "Default" (use global), 1-3 = override
+    slider.value = strictMap[site] || 0;
+    row.appendChild(slider);
+
+    const label = document.createElement("span");
+    label.className = "site-strict-label";
+    const val = strictMap[site] || 0;
+    label.textContent = val === 0 ? "Default" : STRICTNESS_LABELS[val];
+    row.appendChild(label);
+
+    slider.addEventListener("input", () => {
+      const v = parseInt(slider.value);
+      label.textContent = v === 0 ? "Default" : STRICTNESS_LABELS[v];
+
+      chrome.storage.sync.get(["tg_strictness"], (result) => {
+        const rawStrict = result.tg_strictness;
+        let map;
+        if (typeof rawStrict === "object" && rawStrict !== null) {
+          map = rawStrict;
+        } else {
+          map = { default: rawStrict || 2 };
+        }
+        if (v === 0) {
+          delete map[site];
+        } else {
+          map[site] = v;
+        }
+        chrome.storage.sync.set({ tg_strictness: map });
+      });
+    });
+
+    siteStrictnessEl.appendChild(row);
+  }
+}
 
 // Render site list
 function renderSiteList(customSites) {
