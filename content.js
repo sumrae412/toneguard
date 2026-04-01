@@ -1,6 +1,7 @@
 // ToneGuard Content Script
 // Intercepts send actions on supported sites, checks tone before sending.
 // Supports Slack, Gmail, LinkedIn, TurboTenant, and user-added custom sites.
+// Uses the in-page overlay (overlay.js) instead of Chrome Side Panel.
 
 (function () {
   "use strict";
@@ -156,6 +157,22 @@
 
   currentPlatform = PLATFORMS[SITE] || PLATFORMS.generic;
 
+  // Set up overlay decision callback
+  function setupOverlay() {
+    if (!window.__toneGuard) return;
+    window.__toneGuard.setOnDecision((decision) => {
+      if (!pendingEditor) return;
+
+      if (decision.action === "use_suggestion" && decision.suggestion) {
+        currentPlatform.replaceEditorText(pendingEditor, decision.suggestion);
+      }
+
+      currentPlatform.releaseSend(pendingEditor);
+      pendingText = null;
+      pendingEditor = null;
+    });
+  }
+
   // Unified send button click handler
   function handleSendBtnClick(e) {
     if (releasing) return;
@@ -169,9 +186,6 @@
 
     e.preventDefault();
     e.stopImmediatePropagation();
-    // Try to open panel synchronously during user gesture
-    // Fails silently if gesture context is lost — analysis still runs
-    try { chrome.runtime.sendMessage({ type: "OPEN_PANEL" }); } catch (_) {}
     analyzeAndIntercept(text, editor);
   }
 
@@ -198,9 +212,6 @@
 
     e.preventDefault();
     e.stopImmediatePropagation();
-    // Try to open panel synchronously during user gesture
-    // Fails silently if gesture context is lost — analysis still runs
-    try { chrome.runtime.sendMessage({ type: "OPEN_PANEL" }); } catch (_) {}
     analyzeAndIntercept(text, editor);
   }
 
@@ -220,8 +231,8 @@
       const messages = [];
       const els = Array.from(messageEls).slice(-5);
 
-      for (const el of els) {
-        const text = el.innerText?.trim();
+      for (const msgEl of els) {
+        const text = msgEl.innerText?.trim();
         if (text && text.length > 0) {
           messages.push(text);
         }
@@ -230,7 +241,7 @@
       if (messages.length === 0) return "";
 
       return "RECENT CONVERSATION (for context only):\n" +
-        messages.map((m, i) => `[${i + 1}] ${m}`).join("\n");
+        messages.map((m, i) => "[" + (i + 1) + "] " + m).join("\n");
 
     } catch (_) {
       return ""; // fail silently
@@ -260,6 +271,7 @@
     const safetyTimeout = setTimeout(() => {
       console.warn("ToneGuard: safety timeout, releasing send");
       hideCheckingIndicator();
+      if (window.__toneGuard) window.__toneGuard.hide();
       if (pendingEditor) {
         currentPlatform.releaseSend(pendingEditor);
         pendingEditor = null;
@@ -267,7 +279,10 @@
       }
     }, 10000);
 
-    // Panel was already opened by the synchronous event handler
+    // Show overlay loading state
+    if (window.__toneGuard) {
+      window.__toneGuard.showLoading();
+    }
     showCheckingIndicator();
 
     try {
@@ -278,44 +293,49 @@
         context: context
       });
 
+      clearTimeout(safetyTimeout);
       hideCheckingIndicator();
 
       if (result.error) {
         console.warn("ToneGuard:", result.error);
+        if (window.__toneGuard) window.__toneGuard.hide();
         currentPlatform.releaseSend(editor);
         return;
       }
 
       if (!result.flagged) {
-        // Tell the panel everything is fine
-        await chrome.storage.session.set({ tg_latest_result: { passed: true } });
+        // Show "Looks good!" briefly and release
+        if (window.__toneGuard) {
+          window.__toneGuard.showPassed();
+        }
         currentPlatform.releaseSend(editor);
         return;
       }
 
-      // Flagged. Panel is already open and will pick up the result
-      // via storage.session listener. We wait for PANEL_DECISION message.
+      // Flagged — show result in overlay and wait for decision
+      if (window.__toneGuard) {
+        window.__toneGuard.showResult({
+          original: text,
+          suggestion: result.suggestion,
+          reasoning: result.reasoning,
+          confidence: result.confidence || 0,
+          mode: result.mode || "tone",
+          readability: result.readability || 0,
+          red_flags: result.red_flags || [],
+          categories: result.categories || [],
+          has_questions: result.has_questions || false,
+          questions: result.questions || []
+        });
+      }
 
     } catch (err) {
+      clearTimeout(safetyTimeout);
       console.error("ToneGuard error:", err);
       hideCheckingIndicator();
+      if (window.__toneGuard) window.__toneGuard.hide();
       currentPlatform.releaseSend(editor);
     }
   }
-
-  // Listen for panel decisions
-  chrome.runtime.onMessage.addListener((message) => {
-    if (message.type !== "PANEL_DECISION") return;
-    if (!pendingEditor) return;
-
-    if (message.action === "use_suggestion" && message.suggestion) {
-      currentPlatform.replaceEditorText(pendingEditor, message.suggestion);
-    }
-
-    currentPlatform.releaseSend(pendingEditor);
-    pendingText = null;
-    pendingEditor = null;
-  });
 
   // Visual indicator
   let indicatorEl = null;
@@ -325,30 +345,25 @@
 
     indicatorEl = document.createElement("div");
     indicatorEl.textContent = "Checking tone...";
-    indicatorEl.style.cssText = `
-      position: fixed;
-      bottom: 80px;
-      right: 20px;
-      background: #4CAF50;
-      color: white;
-      padding: 8px 16px;
-      border-radius: 8px;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      font-size: 13px;
-      z-index: 999999;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-      animation: tg-pulse 1.5s ease-in-out infinite;
-    `;
+    indicatorEl.style.cssText = [
+      "position: fixed",
+      "bottom: 80px",
+      "right: 20px",
+      "background: #4CAF50",
+      "color: white",
+      "padding: 8px 16px",
+      "border-radius: 8px",
+      "font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+      "font-size: 13px",
+      "z-index: 999999",
+      "box-shadow: 0 2px 8px rgba(0,0,0,0.2)",
+      "animation: tg-pulse 1.5s ease-in-out infinite"
+    ].join(";");
 
-    const style = document.createElement("style");
-    style.id = "tg-style";
-    style.textContent = `
-      @keyframes tg-pulse {
-        0%, 100% { opacity: 1; }
-        50% { opacity: 0.7; }
-      }
-    `;
     if (!document.getElementById("tg-style")) {
+      const style = document.createElement("style");
+      style.id = "tg-style";
+      style.textContent = "@keyframes tg-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }";
       document.head.appendChild(style);
     }
     document.body.appendChild(indicatorEl);
@@ -368,22 +383,22 @@
     const btn = document.createElement("button");
     btn.textContent = "Review";
     btn.title = "Check tone and clarity with ToneGuard";
-    btn.style.cssText = `
-      position: absolute;
-      bottom: 4px;
-      right: 60px;
-      background: #4CAF50;
-      color: white;
-      border: none;
-      border-radius: 4px;
-      padding: 2px 8px;
-      font-size: 11px;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      cursor: pointer;
-      z-index: 999;
-      opacity: 0.7;
-      transition: opacity 0.15s;
-    `;
+    btn.style.cssText = [
+      "position: absolute",
+      "bottom: 4px",
+      "right: 60px",
+      "background: #4CAF50",
+      "color: white",
+      "border: none",
+      "border-radius: 4px",
+      "padding: 2px 8px",
+      "font-size: 11px",
+      "font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+      "cursor: pointer",
+      "z-index: 999",
+      "opacity: 0.7",
+      "transition: opacity 0.15s"
+    ].join(";");
     btn.addEventListener("mouseenter", () => { btn.style.opacity = "1"; });
     btn.addEventListener("mouseleave", () => { btn.style.opacity = "0.7"; });
 
@@ -394,9 +409,7 @@
       const text = currentPlatform.getEditorText(editor);
       if (!text || text.length < 10) return;
 
-      // Open panel during gesture
-      chrome.runtime.sendMessage({ type: "OPEN_PANEL" });
-      // Run analysis but don't hold the send — draft mode is advisory
+      // Run analysis in draft mode (advisory, no send interception)
       draftReview(text, editor);
     });
 
@@ -411,7 +424,10 @@
   }
 
   // Draft review: check without intercepting send
-  async function draftReview(text, editor) {
+  async function draftReview(text, _editor) {
+    if (window.__toneGuard) {
+      window.__toneGuard.showLoading();
+    }
     showCheckingIndicator();
 
     try {
@@ -426,22 +442,39 @@
 
       if (result.error) {
         console.warn("ToneGuard:", result.error);
+        if (window.__toneGuard) window.__toneGuard.hide();
         return;
       }
 
       if (!result.flagged) {
-        await chrome.storage.session.set({ tg_latest_result: { passed: true } });
+        if (window.__toneGuard) window.__toneGuard.showPassed();
+      } else if (window.__toneGuard) {
+        window.__toneGuard.showResult({
+          original: text,
+          suggestion: result.suggestion,
+          reasoning: result.reasoning,
+          confidence: result.confidence || 0,
+          mode: result.mode || "tone",
+          readability: result.readability || 0,
+          red_flags: result.red_flags || [],
+          categories: result.categories || [],
+          has_questions: result.has_questions || false,
+          questions: result.questions || []
+        });
       }
-      // If flagged, the service worker already stored the result and panel will show it
 
     } catch (err) {
       console.error("ToneGuard draft review error:", err);
       hideCheckingIndicator();
+      if (window.__toneGuard) window.__toneGuard.hide();
     }
   }
 
   // Initialize
   function init() {
+    // Set up overlay decision handler
+    setupOverlay();
+
     // Attach keyboard listener (for Slack, LinkedIn, Gmail)
     document.addEventListener("keydown", handleKeydown, true);
 

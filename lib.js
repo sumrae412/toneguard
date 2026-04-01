@@ -111,16 +111,19 @@ function extractMentions(text) {
   return mentions;
 }
 
-// Export for tests (ESM)
-export {
-  detectPlatform,
-  parseApiResponse,
-  cleanSiteInput,
-  validateApiKey,
-  getStrictnessLabel,
-  getReadabilityClass,
-  getConfidenceClass,
-  shouldAnalyze,
-  truncate,
-  extractMentions
-};
+// Make functions available globally when loaded as a content script (non-module),
+// and via the test wrapper (tests/lib-exports.mjs) for vitest.
+if (typeof globalThis !== "undefined") {
+  globalThis.__toneGuardLib = {
+    detectPlatform,
+    parseApiResponse,
+    cleanSiteInput,
+    validateApiKey,
+    getStrictnessLabel,
+    getReadabilityClass,
+    getConfidenceClass,
+    shouldAnalyze,
+    truncate,
+    extractMentions
+  };
+}
