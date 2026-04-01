@@ -56,7 +56,7 @@ async function registerCustomSites() {
 // Listen for messages from content script
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.type === "ANALYZE") {
-    handleAnalyze(message.text, message.context)
+    handleAnalyze(message.text, message.context, message.site)
       .then(sendResponse)
       .catch((err) => sendResponse({ error: err.message }));
     return true;
@@ -78,7 +78,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   }
 });
 
-async function handleAnalyze(text, context) {
+async function handleAnalyze(text, context, site) {
   if (!text || text.trim().length < 10) {
     return { flagged: false };
   }
@@ -100,7 +100,13 @@ async function handleAnalyze(text, context) {
   const customRules = await getCustomRules();
   let fullPrompt = basePrompt;
 
-  const strictLevel = strictness || 2;
+  // Per-site strictness: supports { default: 2, slack: 3, gmail: 1 } or plain number (backward compat)
+  let strictLevel = 2;
+  if (typeof strictness === "object" && strictness !== null) {
+    strictLevel = (site && strictness[site]) ?? strictness.default ?? 2;
+  } else {
+    strictLevel = strictness || 2;
+  }
   if (strictLevel === 1) {
     fullPrompt += "\n\nSTRICTNESS: GENTLE. Only flag messages that are clearly problematic. Let borderline messages through. When in doubt, don't flag.";
   } else if (strictLevel === 3) {

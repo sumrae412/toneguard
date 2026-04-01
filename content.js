@@ -315,7 +315,8 @@
       const result = await chrome.runtime.sendMessage({
         type: "ANALYZE",
         text: text,
-        context: context
+        context: context,
+        site: SITE
       });
 
       clearTimeout(safetyTimeout);
@@ -479,7 +480,8 @@
       const result = await chrome.runtime.sendMessage({
         type: "ANALYZE",
         text: text,
-        context: context
+        context: context,
+        site: SITE
       });
 
       hideCheckingIndicator();
