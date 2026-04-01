@@ -25,6 +25,7 @@
     showLoading,
     showResult,
     showPassed,
+    showStale,
     hide,
     setOnDecision(fn) {
       if (decisionSet) return; // only allow one binding
@@ -314,8 +315,17 @@
     showSent("Sent as-is.");
   }
 
+  function isContextValid() {
+    try { return !!chrome.runtime?.id; } catch (_) { return false; }
+  }
+
   async function submitAnswers() {
     if (!currentResult) return;
+
+    if (!isContextValid()) {
+      showStale();
+      return;
+    }
 
     const inputs = els.questionsList.querySelectorAll(".tg-question-input");
     const answers = [];
@@ -486,6 +496,44 @@
     }, 2000);
   }
 
+  function showStale() {
+    ensureHost();
+    clearToast();
+    els.loading.style.display = "none";
+    els.content.style.display = "none";
+    els.empty.style.display = "none";
+
+    const notice = el("div", { className: "tg-stale" });
+    notice.appendChild(el("div", {
+      className: "tg-stale-icon",
+      textContent: "\u26A0"
+    }));
+    notice.appendChild(el("div", {
+      className: "tg-stale-title",
+      textContent: "ToneGuard was updated"
+    }));
+    notice.appendChild(el("div", {
+      className: "tg-stale-msg",
+      textContent: "Reload this tab to reconnect. Your message was sent as-is."
+    }));
+    const reloadBtn = el("button", {
+      className: "tg-btn tg-btn-primary",
+      textContent: "Reload tab"
+    });
+    reloadBtn.addEventListener("click", () => {
+      location.reload();
+    });
+    notice.appendChild(reloadBtn);
+    els.drawer.appendChild(notice);
+    openDrawer();
+
+    // Auto-close after 8 seconds
+    setTimeout(() => {
+      notice.remove();
+      hide();
+    }, 8000);
+  }
+
   function showSent(message) {
     clearToast();
     els.content.style.display = "none";
@@ -516,6 +564,9 @@
   // --- Decision logging (same format as old panel.js) ---
 
   async function logDecision(decision) {
+    // Skip storage write if extension context is stale — message already sent
+    if (!isContextValid()) return;
+
     decision.timestamp = new Date().toISOString();
     decision.url = "";
 
@@ -826,6 +877,32 @@
       "  text-align: center;",
       "  color: #4CAF50;",
       "  font-size: 14px;",
+      "}",
+
+      ".tg-stale {",
+      "  padding: 30px 0;",
+      "  text-align: center;",
+      "}",
+      ".tg-stale-icon {",
+      "  font-size: 28px;",
+      "  margin-bottom: 8px;",
+      "}",
+      ".tg-stale-title {",
+      "  font-size: 15px;",
+      "  font-weight: 600;",
+      "  color: #E65100;",
+      "  margin-bottom: 6px;",
+      "}",
+      ".tg-stale-msg {",
+      "  font-size: 13px;",
+      "  color: #666;",
+      "  margin-bottom: 16px;",
+      "  line-height: 1.4;",
+      "}",
+      ".tg-stale .tg-btn {",
+      "  flex: none;",
+      "  width: auto;",
+      "  padding: 8px 24px;",
       "}"
     ].join("\n");
   }
