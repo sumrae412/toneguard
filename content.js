@@ -12,6 +12,16 @@
   let pendingEditor = null;
   let currentPlatform = null;
 
+  // Detect if the extension context was invalidated (extension reloaded
+  // without reloading this tab). chrome.runtime.id becomes undefined.
+  function isContextValid() {
+    try {
+      return !!chrome.runtime?.id;
+    } catch (_) {
+      return false;
+    }
+  }
+
   // Detect which platform we're on
   function detectPlatform() {
     const host = location.hostname;
@@ -282,6 +292,18 @@
       }
     }, 10000);
 
+    // Check if extension context is still valid before calling chrome APIs
+    if (!isContextValid()) {
+      clearTimeout(safetyTimeout);
+      if (window.__toneGuard) {
+        window.__toneGuard.showStale();
+      }
+      currentPlatform.releaseSend(editor);
+      pendingEditor = null;
+      pendingText = null;
+      return;
+    }
+
     // Show overlay loading state
     if (window.__toneGuard) {
       window.__toneGuard.showLoading();
@@ -337,9 +359,17 @@
 
     } catch (err) {
       clearTimeout(safetyTimeout);
-      console.error("ToneGuard error:", err);
       hideCheckingIndicator();
-      if (window.__toneGuard) window.__toneGuard.hide();
+
+      // Extension was reloaded — show reload prompt instead of silently failing
+      if (!isContextValid()) {
+        console.warn("ToneGuard: extension context invalidated, prompting reload");
+        if (window.__toneGuard) window.__toneGuard.showStale();
+      } else {
+        console.error("ToneGuard error:", err);
+        if (window.__toneGuard) window.__toneGuard.hide();
+      }
+
       currentPlatform.releaseSend(editor);
       pendingEditor = null;
       pendingText = null;
@@ -434,6 +464,11 @@
 
   // Draft review: check without intercepting send
   async function draftReview(text, _editor) {
+    if (!isContextValid()) {
+      if (window.__toneGuard) window.__toneGuard.showStale();
+      return;
+    }
+
     if (window.__toneGuard) {
       window.__toneGuard.showLoading();
     }

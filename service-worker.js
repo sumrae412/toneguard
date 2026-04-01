@@ -70,13 +70,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   }
 
   if (message.type === "REGISTER_SITE" || message.type === "UNREGISTER_SITE") {
-    registerCustomSites().then(() => {
-      if (message.type === "REGISTER_SITE" && message.site) {
-        chrome.permissions.request({
-          origins: ["https://" + message.site + "/*", "https://*." + message.site + "/*"]
-        });
-      }
-    });
+    // Re-register content scripts for custom sites.
+    // chrome.permissions.request() is called from the popup (user gesture context),
+    // not here — service workers can't request permissions.
+    registerCustomSites();
     return false;
   }
 });

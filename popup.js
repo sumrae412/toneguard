@@ -141,10 +141,13 @@ function addSite() {
       renderSiteList(sites);
       newSiteInput.value = "";
 
-      // Register content script for the new site
-      chrome.runtime.sendMessage({
-        type: "REGISTER_SITE",
-        site: site
+      // Request host permission here (popup has user gesture context).
+      // Service workers can't call chrome.permissions.request().
+      chrome.permissions.request({
+        origins: ["https://" + site + "/*", "https://*." + site + "/*"]
+      }).then(() => {
+        // Tell service worker to register the content script
+        chrome.runtime.sendMessage({ type: "REGISTER_SITE", site: site });
       });
     });
   });
