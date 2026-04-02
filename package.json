@@ -4,7 +4,8 @@
   "description": "",
   "main": "content.js",
   "scripts": {
-    "test": "vitest run"
+    "test": "vitest run",
+    "build": "mkdir -p dist && rm -f toneguard-*.zip && zip -r toneguard-$(node -p \"require('./manifest.json').version\").zip manifest.json service-worker.js content.js overlay.js popup.js popup.html options.js options.html lib.js icons/ prompts/ welcome.html welcome.js PRIVACY.md LICENSE -x '*.DS_Store'"
   },
   "repository": {
     "type": "git",
