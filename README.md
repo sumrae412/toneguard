@@ -123,6 +123,29 @@ ToneGuard uses your own Claude API key — there is no intermediary server. Mess
 
 See [PRIVACY.md](PRIVACY.md) for the full privacy policy.
 
+## Android / Mobile (PWA)
+
+ToneGuard includes a Progressive Web App in the `pwa/` directory that works on Android (and iOS) via the browser share sheet.
+
+### How it works on Android
+
+1. Host the `pwa/` folder on any static server (GitHub Pages, Netlify, Vercel, etc.)
+2. Open the URL in Chrome on your phone and tap **"Add to Home Screen"**
+3. ToneGuard appears in your Android **Share menu**
+4. In any messaging app, **select your text** → **Share** → **ToneGuard**
+5. ToneGuard analyzes the text and shows a suggestion with a diff
+6. Tap **Copy suggestion** → switch back to your app and paste
+
+This isn't fully automatic like the Chrome extension, but it works across every app on the phone — Slack, WhatsApp, Gmail, Messages, etc.
+
+### Running the PWA locally
+
+```bash
+# Any static server works
+npx serve .
+# Then open http://localhost:3000/pwa/ on your phone
+```
+
 ## License
 
 [ISC](LICENSE)
