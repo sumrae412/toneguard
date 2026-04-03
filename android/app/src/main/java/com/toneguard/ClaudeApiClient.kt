@@ -1,0 +1,188 @@
+package com.toneguard
+
+import okhttp3.*
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.IOException
+
+data class AnalysisResult(
+    val flagged: Boolean,
+    val confidence: Double = 0.0,
+    val mode: String = "tone",
+    val readability: Int = 0,
+    val redFlags: List<String> = emptyList(),
+    val categories: List<String> = emptyList(),
+    val reasoning: String = "",
+    val suggestion: String = "",
+    val error: String? = null
+)
+
+class ClaudeApiClient(private val apiKey: String) {
+
+    private val client = OkHttpClient.Builder()
+        .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+        .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+        .build()
+
+    fun analyze(text: String, strictness: Int, callback: (AnalysisResult) -> Unit) {
+        if (text.trim().length < 10) {
+            callback(AnalysisResult(flagged = false))
+            return
+        }
+
+        val systemPrompt = buildSystemPrompt(strictness)
+        val body = JSONObject().apply {
+            put("model", "claude-haiku-4-5-20251001")
+            put("max_tokens", 1024)
+            put("system", systemPrompt)
+            put("messages", JSONArray().apply {
+                put(JSONObject().apply {
+                    put("role", "user")
+                    put("content", "Review this message before sending:\n\n$text")
+                })
+            })
+        }
+
+        val request = Request.Builder()
+            .url("https://api.anthropic.com/v1/messages")
+            .addHeader("Content-Type", "application/json")
+            .addHeader("x-api-key", apiKey)
+            .addHeader("anthropic-version", "2023-06-01")
+            .post(body.toString().toRequestBody("application/json".toMediaType()))
+            .build()
+
+        var lastError: String? = null
+
+        for (attempt in 0..2) {
+            try {
+                val response = client.newCall(request).execute()
+
+                if (response.code == 401 || response.code == 400 || response.code == 403) {
+                    callback(AnalysisResult(flagged = false, error = getFriendlyError(response.code)))
+                    return
+                }
+
+                if (response.isSuccessful) {
+                    val responseBody = response.body?.string() ?: ""
+                    val result = parseResponse(responseBody)
+                    callback(result)
+                    return
+                }
+
+                if (response.code < 500) {
+                    callback(AnalysisResult(flagged = false, error = getFriendlyError(response.code)))
+                    return
+                }
+
+                lastError = getFriendlyError(response.code)
+                Thread.sleep((Math.pow(2.0, attempt.toDouble()) * 500).toLong())
+            } catch (e: IOException) {
+                lastError = "Network error. Check your internet connection."
+                if (attempt < 2) {
+                    Thread.sleep((Math.pow(2.0, attempt.toDouble()) * 500).toLong())
+                }
+            }
+        }
+
+        callback(AnalysisResult(flagged = false, error = lastError))
+    }
+
+    private fun parseResponse(body: String): AnalysisResult {
+        try {
+            val json = JSONObject(body)
+            val content = json.getJSONArray("content")
+            val text = content.getJSONObject(0).getString("text")
+
+            val jsonRegex = Regex("\\{[\\s\\S]*\\}")
+            val match = jsonRegex.find(text) ?: return AnalysisResult(flagged = false)
+            val result = JSONObject(match.value)
+
+            val flagged = result.optBoolean("flagged", false)
+            if (!flagged) return AnalysisResult(flagged = false)
+
+            val redFlags = mutableListOf<String>()
+            val flagsArray = result.optJSONArray("red_flags")
+            if (flagsArray != null) {
+                for (i in 0 until flagsArray.length()) {
+                    redFlags.add(flagsArray.getString(i))
+                }
+            }
+
+            val categories = mutableListOf<String>()
+            val catsArray = result.optJSONArray("categories")
+            if (catsArray != null) {
+                for (i in 0 until catsArray.length()) {
+                    categories.add(catsArray.getString(i))
+                }
+            }
+
+            return AnalysisResult(
+                flagged = true,
+                confidence = result.optDouble("confidence", 0.0),
+                mode = result.optString("mode", "tone"),
+                readability = result.optInt("readability", 0),
+                redFlags = redFlags,
+                categories = categories,
+                reasoning = result.optString("reasoning", ""),
+                suggestion = result.optString("suggestion", "")
+            )
+        } catch (e: Exception) {
+            return AnalysisResult(flagged = false, error = "Failed to parse response")
+        }
+    }
+
+    private fun getFriendlyError(status: Int): String {
+        return when (status) {
+            401 -> "Invalid API key. Check your key in ToneGuard settings."
+            403 -> "API key doesn\u2019t have permission. Check console.anthropic.com."
+            429 -> "Rate limit reached. Wait a moment and try again."
+            400 -> "Bad request. The message may be too long."
+            500, 502, 503 -> "Anthropic\u2019s API is temporarily unavailable."
+            else -> "API error ($status)."
+        }
+    }
+
+    private fun buildSystemPrompt(strictness: Int): String {
+        val base = """You are ToneGuard, a writing assistant that checks messages for tone and clarity issues before sending.
+
+Your job has three parts:
+1. TONE: Catch messages that sound harsh, accusatory, passive-aggressive, defensive, guilt-trippy, or negative.
+2. CLARITY: Catch messages that are vague, ambiguous, or could be misread. Flag missing context, unclear references, hedging that buries the point, and rambling phrasing.
+3. PROFESSIONALISM: Catch messages that are sloppy, incoherent, or would make the sender look unprofessional.
+
+IMPORTANT: When in doubt, FLAG IT. The user can always dismiss your suggestion.
+
+When you DO rewrite:
+- One idea per sentence
+- Put what happened first, then why
+- Short sentences over long ones
+- No em dashes (use periods or commas)
+- Assume good intent. Frame things as miscommunication, not mistakes
+- Make clear requests. Say what you want going forward
+- Be direct and compassionate at the same time
+
+Respond with ONLY a JSON object (no markdown, no explanation outside JSON):
+{
+  "flagged": boolean,
+  "confidence": number 0-1,
+  "mode": "tone" | "polish" | "both",
+  "readability": number (grade level),
+  "red_flags": ["quoted phrases from the message that are problematic"],
+  "categories": ["short labels for issue types found"],
+  "reasoning": "1-2 sentence explanation of what's wrong",
+  "suggestion": "the rewritten message"
+}
+
+If the message is fine, return: {"flagged": false}"""
+
+        val strictnessAddendum = when (strictness) {
+            1 -> "\n\nSTRICTNESS: GENTLE. Only flag messages that are clearly problematic. Let borderline messages through."
+            3 -> "\n\nSTRICTNESS: STRICT. Flag anything that could be improved. Be thorough."
+            else -> ""
+        }
+
+        return base + strictnessAddendum
+    }
+}
