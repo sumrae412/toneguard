@@ -1,16 +1,19 @@
 // ToneGuard PWA Service Worker — enables installability and share target
-const CACHE_NAME = "toneguard-pwa-v1";
-const ASSETS = [
-  "/pwa/index.html",
-  "/pwa/app.js",
-  "/pwa/manifest.json",
-  "/icons/icon48.png",
-  "/icons/icon128.png"
-];
+// Use relative URLs so this works on any base path (e.g. GitHub Pages /toneguard/pwa/)
+const CACHE_NAME = "toneguard-pwa-v2";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS))
+    caches.open(CACHE_NAME).then((cache) =>
+      cache.addAll([
+        "./",
+        "./index.html",
+        "./app.js",
+        "./manifest.json",
+        "../icons/icon48.png",
+        "../icons/icon128.png"
+      ])
+    )
   );
   self.skipWaiting();
 });
