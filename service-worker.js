@@ -24,7 +24,14 @@ async function loadBasePrompt() {
 }
 
 // On install/startup, register content scripts for custom sites
-chrome.runtime.onInstalled.addListener(() => registerCustomSites());
+chrome.runtime.onInstalled.addListener((details) => {
+  registerCustomSites();
+
+  // Show welcome page on first install
+  if (details.reason === "install") {
+    chrome.tabs.create({ url: chrome.runtime.getURL("welcome.html") });
+  }
+});
 chrome.runtime.onStartup.addListener(() => registerCustomSites());
 
 async function registerCustomSites() {
@@ -163,7 +170,7 @@ async function handleAnalyze(text, context, site) {
         body: requestBody
       });
 
-      if (response.status === 401 || response.status === 400) break;
+      if (response.status === 401 || response.status === 400 || response.status === 403) break;
       if (response.ok || response.status < 500) break;
 
       const delay = Math.pow(2, attempt) * 500;
@@ -172,7 +179,9 @@ async function handleAnalyze(text, context, site) {
 
     if (!response.ok) {
       const errBody = await response.text();
-      throw new Error("API error " + response.status + ": " + errBody);
+      const friendlyError = getFriendlyApiError(response.status, errBody);
+      console.error("ToneGuard API error:", response.status, errBody);
+      return { flagged: false, error: friendlyError };
     }
 
     const data = await response.json();
@@ -196,7 +205,33 @@ async function handleAnalyze(text, context, site) {
 
   } catch (err) {
     console.error("ToneGuard analysis error:", err);
+    if (err.message && err.message.includes("Failed to fetch")) {
+      return { flagged: false, error: "Network error — check your internet connection and try again." };
+    }
     return { flagged: false, error: err.message };
+  }
+}
+
+function getFriendlyApiError(status, body) {
+  switch (status) {
+    case 401:
+      return "Invalid API key. Open ToneGuard settings and check your key.";
+    case 403:
+      return "API key doesn't have permission. Check your key's access level at console.anthropic.com.";
+    case 429:
+      return "Rate limit reached. Wait a moment and try again, or check your Anthropic usage limits.";
+    case 400: {
+      if (body && body.includes("credit")) {
+        return "No API credits remaining. Add credits at console.anthropic.com.";
+      }
+      return "Bad request — the message may be too long. Try shortening it.";
+    }
+    case 500:
+    case 502:
+    case 503:
+      return "Anthropic's API is temporarily unavailable. Your message was sent without checking.";
+    default:
+      return "API error (" + status + "). Your message was sent without checking.";
   }
 }
 
