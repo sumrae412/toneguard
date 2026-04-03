@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">ToneGuard</string>
+    <string name="accessibility_service_description">ToneGuard checks your messages for tone and clarity before sending. It detects when you tap Send in messaging apps and briefly reviews your message.</string>
+    <string name="api_key_hint">sk-ant-…</string>
+    <string name="save">Save</string>
+    <string name="api_key_label">Claude API Key</string>
+    <string name="strictness_label">Strictness</string>
+    <string name="gentle">Gentle</string>
+    <string name="balanced">Balanced</string>
+    <string name="strict">Strict</string>
+    <string name="enable_toneguard">Enable ToneGuard</string>
+    <string name="setup_accessibility">Set Up Accessibility</string>
+    <string name="status_ready">Ready — ToneGuard is active</string>
+    <string name="status_needs_key">Enter your Claude API key to get started</string>
+    <string name="status_needs_accessibility">Enable the accessibility service to intercept messages</string>
+    <string name="use_suggestion">Copy suggestion</string>
+    <string name="send_original">Dismiss</string>
+    <string name="checking">Reviewing your message…</string>
+    <string name="looks_good">Looks good!</string>
+    <string name="get_api_key">Get an API key from console.anthropic.com</string>
+</resources>
