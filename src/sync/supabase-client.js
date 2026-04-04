@@ -1,8 +1,8 @@
 // ToneGuard Supabase client — thin wrapper for sync backend.
 // Requires SUPABASE_URL and SUPABASE_ANON_KEY to be configured.
 
-const SUPABASE_URL = "%%SUPABASE_URL%%";
-const SUPABASE_ANON_KEY = "%%SUPABASE_ANON_KEY%%";
+const SUPABASE_URL = "https://jimjfaaaccqtcbbxsrys.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_NyUr9I9amTiVVWT5H8ysvg_lB054qK0";
 const TABLE = "sync_data";
 
 /**
