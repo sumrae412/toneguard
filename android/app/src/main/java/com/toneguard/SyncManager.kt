@@ -50,11 +50,13 @@ class SyncManager(private val store: LearningStore) {
 
     private var userHash: String? = null
     private var jwt: String? = null
-    private val remoteVersions = mutableMapOf<String, Int>()
+    @Volatile private var remoteVersions = mutableMapOf<String, Int>()
+    private val versionsLock = Any()
     private val pendingPush = mutableSetOf<String>()
     private var debounceRunnable: Runnable? = null
     private var pollRunnable: Runnable? = null
     private var realtimeWs: WebSocket? = null
+    private var heartbeatRunnable: Runnable? = null
 
     var lastSyncAt: String? = null
         private set
@@ -110,6 +112,8 @@ class SyncManager(private val store: LearningStore) {
     fun destroy() {
         realtimeWs?.close(1000, "shutdown")
         realtimeWs = null
+        heartbeatRunnable?.let { handler.removeCallbacks(it) }
+        heartbeatRunnable = null
         debounceRunnable?.let { handler.removeCallbacks(it) }
         pollRunnable?.let { handler.removeCallbacks(it) }
     }
@@ -160,7 +164,7 @@ class SyncManager(private val store: LearningStore) {
             val payload = row.opt("payload")
             val version = row.optInt("version", 0)
 
-            remoteVersions[dataType] = version
+            synchronized(versionsLock) { remoteVersions[dataType] = version }
             val storageKey = STORAGE_KEYS[dataType] ?: continue
             val localData = store.getRawJson(storageKey)
 
@@ -198,7 +202,7 @@ class SyncManager(private val store: LearningStore) {
                     }
                 }
 
-                val version = remoteVersions[dataType] ?: 0
+                val version = synchronized(versionsLock) { remoteVersions[dataType] ?: 0 }
 
                 val body = JSONObject().apply {
                     put("user_hash", hash)
@@ -218,7 +222,7 @@ class SyncManager(private val store: LearningStore) {
 
                 val response = client.newCall(request).execute()
                 if (response.isSuccessful) {
-                    remoteVersions[dataType] = version + 1
+                    synchronized(versionsLock) { remoteVersions[dataType] = version + 1 }
                 } else {
                     Log.e(TAG, "Push failed for $dataType: ${response.code}")
                     synchronized(pendingPush) { pendingPush.add(dataType) }
@@ -289,8 +293,9 @@ class SyncManager(private val store: LearningStore) {
                 }
                 webSocket.send(joinMsg.toString())
 
-                // Start heartbeat
-                handler.postDelayed(object : Runnable {
+                // Start heartbeat (tracked for cleanup in destroy())
+                heartbeatRunnable?.let { handler.removeCallbacks(it) }
+                heartbeatRunnable = object : Runnable {
                     override fun run() {
                         try {
                             val hb = JSONObject().apply {
@@ -303,7 +308,8 @@ class SyncManager(private val store: LearningStore) {
                             handler.postDelayed(this, 30000)
                         } catch (_: Exception) { /* ws closed */ }
                     }
-                }, 30000)
+                }
+                handler.postDelayed(heartbeatRunnable!!, 30000)
             }
 
             override fun onMessage(webSocket: WebSocket, text: String) {
