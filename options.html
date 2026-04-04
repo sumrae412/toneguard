@@ -188,6 +188,25 @@
       font-size: 13px;
       color: #666;
     }
+
+    .sync-status {
+      font-size: 12px;
+      color: #999;
+      padding: 8px 0;
+    }
+
+    .sync-status.connected {
+      color: #4CAF50;
+    }
+
+    .sync-conflict {
+      font-size: 12px;
+      color: #FF9800;
+      padding: 6px 10px;
+      background: #FFF8E1;
+      border-radius: 6px;
+      margin-top: 8px;
+    }
   </style>
 </head>
 <body>
@@ -230,6 +249,14 @@
       <button class="btn btn-primary" id="saveRules">Save rules</button>
       <span class="status" id="rulesStatus"></span>
     </div>
+  </div>
+
+  <div class="section">
+    <h2>Sync</h2>
+    <p>Learning data syncs automatically across your devices.</p>
+    <div id="syncStatus" class="sync-status">Sync: checking...</div>
+    <div id="syncConflict" class="sync-conflict" style="display: none;"></div>
+    <button class="btn btn-primary" id="syncNowBtn" style="margin-top: 8px;">Sync now</button>
   </div>
 
   <div class="section">

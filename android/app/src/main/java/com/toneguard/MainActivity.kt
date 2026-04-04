@@ -22,7 +22,10 @@ class MainActivity : AppCompatActivity() {
     private lateinit var strictnessLabel: TextView
     private lateinit var accessibilityBtn: MaterialButton
     private lateinit var overlayBtn: MaterialButton
+    private lateinit var syncDot: View
+    private lateinit var syncText: TextView
 
+    private var syncManager: SyncManager? = null
     private val strictnessLabels = mapOf(1f to "Gentle", 2f to "Balanced", 3f to "Strict")
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -38,6 +41,8 @@ class MainActivity : AppCompatActivity() {
         strictnessLabel = findViewById(R.id.strictnessLabel)
         accessibilityBtn = findViewById(R.id.accessibilityBtn)
         overlayBtn = findViewById(R.id.overlayBtn)
+        syncDot = findViewById(R.id.syncDot)
+        syncText = findViewById(R.id.syncText)
 
         // Load saved settings
         val savedKey = Prefs.getApiKey(this)
@@ -66,6 +71,7 @@ class MainActivity : AppCompatActivity() {
             keyStatus.text = "Saved!"
             keyStatus.setTextColor(getColor(R.color.green))
             updateStatus()
+            initSync(key)
         }
 
         // Strictness
@@ -92,6 +98,46 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         updateStatus()
+
+        // Init sync if we have an API key
+        val savedKey = Prefs.getApiKey(this)
+        if (!savedKey.isNullOrBlank() && syncManager == null) {
+            initSync(savedKey)
+        }
+    }
+
+    override fun onDestroy() {
+        syncManager?.destroy()
+        super.onDestroy()
+    }
+
+    private fun initSync(apiKey: String) {
+        syncManager?.destroy()
+        val store = LearningStore(this)
+        syncManager = SyncManager(store).also { sm ->
+            sm.onSyncStatusChanged = { connected, lastSync ->
+                updateSyncStatus(connected, lastSync)
+            }
+            sm.init(apiKey)
+        }
+    }
+
+    private fun updateSyncStatus(connected: Boolean, lastSync: String?) {
+        if (connected) {
+            syncDot.setBackgroundResource(R.drawable.dot_active)
+            val timeStr = if (lastSync != null) {
+                try {
+                    val instant = java.time.Instant.parse(lastSync)
+                    val formatter = java.time.format.DateTimeFormatter.ofPattern("h:mm a")
+                        .withZone(java.time.ZoneId.systemDefault())
+                    "Synced at ${formatter.format(instant)}"
+                } catch (_: Exception) { "Synced" }
+            } else "Connected"
+            syncText.text = timeStr
+        } else {
+            syncDot.setBackgroundResource(R.drawable.dot_inactive)
+            syncText.text = "Not synced"
+        }
     }
 
     private fun updateStatus() {

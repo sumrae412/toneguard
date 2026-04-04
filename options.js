@@ -64,8 +64,58 @@ saveRulesBtn.addEventListener("click", () => {
   chrome.storage.sync.set({ tg_custom_rules: rules }, () => {
     rulesStatusEl.textContent = "Saved! Rules will apply to your next message.";
     setTimeout(() => { rulesStatusEl.textContent = ""; }, 3000);
+
+    // Trigger sync push for custom rules
+    chrome.runtime.sendMessage({ type: "SYNC_PUSH", dataType: "custom_rules" }).catch(() => {});
   });
 });
+
+// Show sync status
+const syncStatusEl = document.getElementById("syncStatus");
+const syncNowBtn = document.getElementById("syncNowBtn");
+
+function refreshSyncStatus() {
+  if (!syncStatusEl) return;
+  chrome.runtime.sendMessage({ type: "SYNC_STATUS" }, (response) => {
+    if (chrome.runtime.lastError || !response) {
+      syncStatusEl.textContent = "Sync: not connected";
+      syncStatusEl.className = "sync-status";
+      return;
+    }
+    if (response.connected) {
+      const lastSync = response.lastSyncAt
+        ? new Date(response.lastSyncAt).toLocaleString()
+        : "never";
+      syncStatusEl.textContent = "Sync: connected (last: " + lastSync + ")";
+      syncStatusEl.className = "sync-status connected";
+    } else {
+      syncStatusEl.textContent = "Sync: not connected";
+      syncStatusEl.className = "sync-status";
+    }
+  });
+}
+
+refreshSyncStatus();
+
+if (syncNowBtn) {
+  syncNowBtn.addEventListener("click", () => {
+    syncNowBtn.disabled = true;
+    syncNowBtn.textContent = "Syncing...";
+
+    // Trigger a full pull via the service worker
+    chrome.runtime.sendMessage({ type: "SYNC_PULL" }, (response) => {
+      syncNowBtn.disabled = false;
+      syncNowBtn.textContent = "Sync now";
+
+      if (chrome.runtime.lastError) {
+        syncStatusEl.textContent = "Sync failed: " + chrome.runtime.lastError.message;
+        syncStatusEl.className = "sync-status";
+      } else {
+        refreshSyncStatus();
+      }
+    });
+  });
+}
 
 // Load and render decision history
 chrome.storage.local.get(["tg_decisions"], (result) => {

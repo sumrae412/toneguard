@@ -98,6 +98,18 @@ function truncate(text, max) {
 }
 
 /**
+ * Hash an API key using SHA-256. Returns hex string.
+ * The raw key never leaves the device — only the hash is sent for sync identity.
+ */
+async function hashApiKey(apiKey) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(apiKey);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+/**
  * Extract @mentions from text.
  */
 function extractMentions(text) {
@@ -124,6 +136,7 @@ if (typeof globalThis !== "undefined") {
     getConfidenceClass,
     shouldAnalyze,
     truncate,
-    extractMentions
+    extractMentions,
+    hashApiKey
   };
 }

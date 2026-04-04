@@ -2,11 +2,40 @@
 // Handles Claude API calls for message analysis.
 // Prompt loaded from prompts/base.txt + dynamic runtime sections.
 
+importScripts(
+  "lib.js",
+  "src/sync/merge.js",
+  "src/sync/storage-adapter.js",
+  "src/sync/supabase-client.js",
+  "src/sync/sync-manager.js"
+);
+
 const CLAUDE_API_URL = "https://api.anthropic.com/v1/messages";
 const MODEL = "claude-haiku-4-5-20251001";
 
 // Cache the base prompt after first load
 let basePromptCache = null;
+
+// Sync manager (initialized once API key is available)
+let syncManager = null;
+
+async function initSync() {
+  if (syncManager) return;
+
+  const { tg_api_key: apiKey } = await chrome.storage.sync.get(["tg_api_key"]);
+  if (!apiKey) return;
+
+  const storage = new globalThis.__toneGuardStorage.ChromeStorageAdapter();
+  const supabase = new globalThis.__toneGuardSupabase.ToneGuardSupabase();
+  const merge = globalThis.__toneGuardMerge;
+
+  syncManager = new globalThis.__toneGuardSync.SyncManager(storage, supabase, merge);
+  syncManager.onConflict = (type, msg) => {
+    console.log("ToneGuard sync conflict:", type, msg);
+  };
+
+  await syncManager.init(apiKey);
+}
 
 async function loadBasePrompt() {
   if (basePromptCache) return basePromptCache;
@@ -32,7 +61,10 @@ chrome.runtime.onInstalled.addListener((details) => {
     chrome.tabs.create({ url: chrome.runtime.getURL("welcome.html") });
   }
 });
-chrome.runtime.onStartup.addListener(() => registerCustomSites());
+chrome.runtime.onStartup.addListener(() => {
+  registerCustomSites();
+  initSync();
+});
 
 async function registerCustomSites() {
   const { tg_custom_sites: sites } = await chrome.storage.sync.get(["tg_custom_sites"]);
@@ -73,6 +105,32 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     handleRefine(message.original, message.answers)
       .then(sendResponse)
       .catch((err) => sendResponse({ error: err.message }));
+    return true;
+  }
+
+  if (message.type === "SYNC_PUSH") {
+    if (syncManager) syncManager.schedulePush(message.dataType);
+    return false;
+  }
+
+  if (message.type === "SYNC_STATUS") {
+    sendResponse({
+      connected: !!syncManager,
+      lastSyncAt: syncManager?.lastSyncAt || null
+    });
+    return true;
+  }
+
+  if (message.type === "SYNC_PULL") {
+    if (syncManager) {
+      syncManager.pull()
+        .then(() => sendResponse({ ok: true }))
+        .catch((err) => sendResponse({ error: err.message }));
+    } else {
+      initSync()
+        .then(() => sendResponse({ ok: true }))
+        .catch((err) => sendResponse({ error: err.message }));
+    }
     return true;
   }
 
@@ -290,6 +348,8 @@ async function saveVoiceSample(text) {
   }
 
   await chrome.storage.local.set({ tg_voice_samples: samples });
+
+  if (syncManager) syncManager.schedulePush("voice_samples");
 }
 
 async function getVoiceContext() {
@@ -324,6 +384,8 @@ async function saveRecipientInteraction(text) {
   }
 
   await chrome.storage.local.set({ tg_relationships: relationships });
+
+  if (syncManager) syncManager.schedulePush("relationships");
 }
 
 async function getRelationshipContext(text) {
@@ -385,6 +447,8 @@ async function trackStats(flagged, mode) {
   }
 
   await chrome.storage.local.set({ tg_stats: stats });
+
+  if (syncManager) syncManager.schedulePush("stats_history");
 }
 
 async function handleRefine(original, answers) {

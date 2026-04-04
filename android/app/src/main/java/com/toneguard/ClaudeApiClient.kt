@@ -19,7 +19,7 @@ data class AnalysisResult(
     val error: String? = null
 )
 
-class ClaudeApiClient(private val apiKey: String) {
+class ClaudeApiClient(private val apiKey: String, private val learningStore: LearningStore? = null) {
 
     private val client = OkHttpClient.Builder()
         .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
@@ -32,7 +32,7 @@ class ClaudeApiClient(private val apiKey: String) {
             return
         }
 
-        val systemPrompt = buildSystemPrompt(strictness)
+        val systemPrompt = buildSystemPrompt(strictness, text)
         val body = JSONObject().apply {
             put("model", "claude-haiku-4-5-20251001")
             put("max_tokens", 1024)
@@ -144,7 +144,7 @@ class ClaudeApiClient(private val apiKey: String) {
         }
     }
 
-    private fun buildSystemPrompt(strictness: Int): String {
+    private fun buildSystemPrompt(strictness: Int, messageText: String = ""): String {
         val base = """You are ToneGuard, a writing assistant that checks messages for tone and clarity issues before sending.
 
 Your job has three parts:
@@ -183,6 +183,26 @@ If the message is fine, return: {"flagged": false}"""
             else -> ""
         }
 
-        return base + strictnessAddendum
+        var prompt = base + strictnessAddendum
+
+        // Add learning context if available
+        if (learningStore != null) {
+            val learnedExamples = learningStore.getLearnedExamples()
+            if (learnedExamples.isNotEmpty()) {
+                prompt += "\n\nLEARNED FROM PAST DECISIONS (use these to calibrate):\n$learnedExamples"
+            }
+
+            val voiceContext = learningStore.getVoiceContext()
+            if (voiceContext.isNotEmpty()) {
+                prompt += "\n\n$voiceContext"
+            }
+
+            val relationshipContext = learningStore.getRelationshipContext(messageText)
+            if (relationshipContext.isNotEmpty()) {
+                prompt += "\n\n$relationshipContext"
+            }
+        }
+
+        return prompt
     }
 }

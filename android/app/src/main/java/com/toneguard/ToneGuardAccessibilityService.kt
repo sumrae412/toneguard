@@ -10,6 +10,8 @@ import android.view.accessibility.AccessibilityNodeInfo
 class ToneGuardAccessibilityService : AccessibilityService() {
 
     private lateinit var overlay: OverlayManager
+    private lateinit var learningStore: LearningStore
+    private var syncManager: SyncManager? = null
     private val handler = Handler(Looper.getMainLooper())
     private var analyzing = false
 
@@ -39,7 +41,14 @@ class ToneGuardAccessibilityService : AccessibilityService() {
 
     override fun onCreate() {
         super.onCreate()
-        overlay = OverlayManager(this)
+        learningStore = LearningStore(this)
+        initSync()
+        overlay = OverlayManager(this, learningStore, syncManager)
+    }
+
+    private fun initSync() {
+        val apiKey = Prefs.getApiKey(this) ?: return
+        syncManager = SyncManager(learningStore).also { it.init(apiKey) }
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
@@ -66,6 +75,7 @@ class ToneGuardAccessibilityService : AccessibilityService() {
 
     override fun onDestroy() {
         overlay.dismiss()
+        syncManager?.destroy()
         super.onDestroy()
     }
 
@@ -101,7 +111,11 @@ class ToneGuardAccessibilityService : AccessibilityService() {
 
         val apiKey = Prefs.getApiKey(this) ?: return
         val strictness = Prefs.getStrictness(this)
-        val client = ClaudeApiClient(apiKey)
+        val client = ClaudeApiClient(apiKey, learningStore)
+
+        // Save recipient interaction for relationship tracking
+        learningStore.saveRecipientInteraction(messageText)
+        syncManager?.schedulePush("relationships")
 
         Thread {
             client.analyze(messageText, strictness) { result ->
@@ -112,7 +126,14 @@ class ToneGuardAccessibilityService : AccessibilityService() {
                     return@analyze
                 }
 
+                // Track stats
+                learningStore.trackStats(result.flagged, result.mode)
+                syncManager?.schedulePush("stats_history")
+
                 if (!result.flagged) {
+                    // Message passed — save as voice sample
+                    learningStore.saveVoiceSample(messageText)
+                    syncManager?.schedulePush("voice_samples")
                     overlay.showPassed()
                     return@analyze
                 }

@@ -739,6 +739,9 @@
       }
       await chrome.storage.local.set({ tg_decisions: decisions });
 
+      // Notify service worker to sync decisions
+      chrome.runtime.sendMessage({ type: "SYNC_PUSH", dataType: "decisions" }).catch(() => {});
+
       const { tg_stats: stats } = await chrome.storage.local.get(["tg_stats"]);
       if (stats) {
         if (decision.action === "used_suggestion") stats.accepted++;

@@ -19,12 +19,17 @@ import android.widget.*
 import androidx.core.content.ContextCompat
 import com.google.android.material.button.MaterialButton
 
-class OverlayManager(private val context: Context) {
+class OverlayManager(
+    private val context: Context,
+    private val learningStore: LearningStore? = null,
+    private val syncManager: SyncManager? = null
+) {
 
     private val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
     private val handler = Handler(Looper.getMainLooper())
     private var overlayView: View? = null
     private var currentResult: AnalysisResult? = null
+    private var currentOriginal: String? = null
 
     private val layoutParams: WindowManager.LayoutParams
         get() = WindowManager.LayoutParams(
@@ -56,6 +61,7 @@ class OverlayManager(private val context: Context) {
     fun showResult(result: AnalysisResult, original: String) {
         handler.post {
             currentResult = result
+            currentOriginal = original
             ensureOverlay()
             val view = overlayView ?: return@post
 
@@ -108,10 +114,31 @@ class OverlayManager(private val context: Context) {
                 copyToClipboard(result.suggestion)
                 view.findViewById<TextView>(R.id.copyFeedback).text =
                     "Copied! Switch back to your app and paste."
+
+                // Log decision
+                learningStore?.logDecision(
+                    action = "used_suggestion",
+                    original = original,
+                    suggestion = result.suggestion,
+                    finalText = null
+                )
+                learningStore?.trackDecisionStats("used_suggestion")
+                syncManager?.schedulePush("decisions")
+
                 handler.postDelayed({ dismiss() }, 2000)
             }
 
             view.findViewById<MaterialButton>(R.id.dismissBtn).setOnClickListener {
+                // Log decision
+                learningStore?.logDecision(
+                    action = "sent_original",
+                    original = original,
+                    suggestion = result.suggestion,
+                    finalText = null
+                )
+                learningStore?.trackDecisionStats("sent_original")
+                syncManager?.schedulePush("decisions")
+
                 dismiss()
             }
 
