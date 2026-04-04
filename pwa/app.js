@@ -5,6 +5,57 @@ const CLAUDE_API_URL = "https://api.anthropic.com/v1/messages";
 const MODEL = "claude-haiku-4-5-20251001";
 const STORAGE_KEY = "toneguard_api_key";
 
+// Sync manager (initialized when API key is available)
+let pwaSyncManager = null;
+
+async function initPwaSync() {
+  const apiKey = localStorage.getItem(STORAGE_KEY);
+  if (!apiKey || pwaSyncManager) return;
+
+  try {
+    const storage = new globalThis.__toneGuardStorage.WebStorageAdapter();
+    const supabase = new globalThis.__toneGuardSupabase.ToneGuardSupabase();
+    const merge = globalThis.__toneGuardMerge;
+
+    pwaSyncManager = new globalThis.__toneGuardSync.SyncManager(storage, supabase, merge);
+    await pwaSyncManager.init(apiKey);
+  } catch (err) {
+    console.warn("ToneGuard PWA: sync init failed", err.message);
+  }
+}
+
+async function logPwaDecision(decision) {
+  decision.timestamp = new Date().toISOString();
+
+  try {
+    const raw = localStorage.getItem("tg_decisions");
+    const decisions = raw ? JSON.parse(raw) : [];
+    decisions.push(decision);
+    if (decisions.length > 100) decisions.splice(0, decisions.length - 100);
+    localStorage.setItem("tg_decisions", JSON.stringify(decisions));
+
+    if (pwaSyncManager) pwaSyncManager.schedulePush("decisions");
+  } catch (err) {
+    console.warn("ToneGuard PWA: failed to log decision", err);
+  }
+}
+
+async function savePwaVoiceSample(text) {
+  if (!text || text.length < 30) return;
+
+  try {
+    const raw = localStorage.getItem("tg_voice_samples");
+    const samples = raw ? JSON.parse(raw) : [];
+    samples.push({ text: text.slice(0, 300), timestamp: new Date().toISOString() });
+    if (samples.length > 30) samples.splice(0, samples.length - 30);
+    localStorage.setItem("tg_voice_samples", JSON.stringify(samples));
+
+    if (pwaSyncManager) pwaSyncManager.schedulePush("voice_samples");
+  } catch (err) {
+    console.warn("ToneGuard PWA: failed to save voice sample", err);
+  }
+}
+
 // ── Elements ──
 const setupView = document.getElementById("setupView");
 const mainView = document.getElementById("mainView");
@@ -212,6 +263,7 @@ saveKeyBtn.addEventListener("click", () => {
   keyStatus.className = "key-status saved";
   showMain();
   messageInput.focus();
+  initPwaSync();
 });
 
 // ── Check ──
@@ -275,12 +327,16 @@ async function analyze() {
     const parsed = JSON.parse(jsonMatch[0]);
 
     if (!parsed.flagged) {
+      savePwaVoiceSample(text);
       showPassed();
       return;
     }
 
     parsed._original = text;
     showResult(parsed);
+
+    // Store the original text for decision logging
+    window._lastAnalyzedText = text;
 
   } catch (err) {
     showInput();
@@ -296,11 +352,25 @@ async function analyze() {
 copyBtn.addEventListener("click", () => {
   const text = suggestionText.textContent;
   copyToClipboard(text, "Suggestion copied! Switch back to your app and paste.");
+
+  logPwaDecision({
+    action: "used_suggestion",
+    original: window._lastAnalyzedText || "",
+    suggestion: text,
+    finalText: ""
+  });
 });
 
 copyOriginalBtn.addEventListener("click", () => {
   const text = originalText.textContent;
   copyToClipboard(text, "Original copied!");
+
+  logPwaDecision({
+    action: "sent_original",
+    original: text,
+    suggestion: suggestionText.textContent || "",
+    finalText: ""
+  });
 });
 
 newCheckBtn.addEventListener("click", () => {
@@ -430,3 +500,4 @@ if ("serviceWorker" in navigator) {
 
 // ── Start ──
 init();
+initPwaSync();
