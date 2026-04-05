@@ -6,6 +6,10 @@
 (function () {
   "use strict";
 
+  // Step 8: Guard against double-injection
+  if (window.__toneGuardActive) return;
+  window.__toneGuardActive = true;
+
   // State
   let releasing = false;
   let pendingText = null;
@@ -22,13 +26,13 @@
     }
   }
 
-  // Detect which platform we're on
+  // Detect which platform we're on (Step 8: exact domain matching)
   function detectPlatform() {
     const host = location.hostname;
-    if (host.includes("slack")) return "slack";
-    if (host.includes("mail.google")) return "gmail";
-    if (host.includes("linkedin")) return "linkedin";
-    if (host.includes("turbotenant")) return "turbotenant";
+    if (host === "app.slack.com") return "slack";
+    if (host === "mail.google.com") return "gmail";
+    if (host === "www.linkedin.com") return "linkedin";
+    if (host.endsWith(".turbotenant.com") || host === "turbotenant.com") return "turbotenant";
     return "generic";
   }
 
@@ -512,6 +516,71 @@
     } catch (err) {
       console.error("ToneGuard draft review error:", err);
       hideCheckingIndicator();
+      if (window.__toneGuard) window.__toneGuard.hide();
+    }
+  }
+
+  // --- Context Menu Selection Analysis (Step 7) ---
+
+  chrome.runtime.onMessage.addListener((message, _sender, _sendResponse) => {
+    if (message.type !== "ANALYZE_SELECTION") return;
+
+    const text = message.text || window.getSelection()?.toString() || "";
+    if (!text || text.trim().length < 5) return;
+
+    // Determine context from current site
+    const context = SITE !== "generic"
+      ? "Selected text on " + SITE + " (review mode, not send-interception)"
+      : "Selected text on " + location.hostname + " (review mode)";
+
+    selectionReview(text, context);
+  });
+
+  async function selectionReview(text, context) {
+    if (!isContextValid()) {
+      if (window.__toneGuard) window.__toneGuard.showStale();
+      return;
+    }
+
+    if (window.__toneGuard) window.__toneGuard.showLoading();
+    showCheckingIndicator();
+
+    try {
+      const result = await chrome.runtime.sendMessage({
+        type: "ANALYZE",
+        text: text,
+        context: context,
+        site: SITE
+      });
+
+      hideCheckingIndicator();
+
+      if (result.error) {
+        console.warn("ToneGuard:", result.error);
+        if (window.__toneGuard) window.__toneGuard.hide();
+        return;
+      }
+
+      if (!result.flagged) {
+        if (window.__toneGuard) window.__toneGuard.showPassed();
+      } else if (window.__toneGuard) {
+        window.__toneGuard.showResult({
+          original: text,
+          suggestion: result.suggestion,
+          reasoning: result.reasoning,
+          confidence: result.confidence || 0,
+          mode: result.mode || "tone",
+          readability: result.readability || 0,
+          red_flags: result.red_flags || [],
+          categories: result.categories || [],
+          has_questions: result.has_questions || false,
+          questions: result.questions || [],
+          selectionMode: true // Tells overlay to show Copy/Replace instead of Send
+        });
+      }
+    } catch (err) {
+      hideCheckingIndicator();
+      console.error("ToneGuard selection review error:", err);
       if (window.__toneGuard) window.__toneGuard.hide();
     }
   }

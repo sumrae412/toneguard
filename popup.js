@@ -231,11 +231,28 @@ function addSite() {
 
       // Request host permission here (popup has user gesture context).
       // Service workers can't call chrome.permissions.request().
+      // Visual feedback while activating
+      addSiteBtn.textContent = "Activating...";
+      addSiteBtn.disabled = true;
+
       chrome.permissions.request({
         origins: ["https://" + site + "/*", "https://*." + site + "/*"]
       }).then(() => {
-        // Tell service worker to register the content script
-        chrome.runtime.sendMessage({ type: "REGISTER_SITE", site: site });
+        // Tell service worker to register the content script and wait for confirmation
+        chrome.runtime.sendMessage({ type: "REGISTER_SITE", site: site }, (response) => {
+          if (response && response.ok) {
+            addSiteBtn.textContent = "Active!";
+          } else {
+            addSiteBtn.textContent = "Added (reload tab)";
+          }
+          setTimeout(() => {
+            addSiteBtn.textContent = "Add";
+            addSiteBtn.disabled = false;
+          }, 2000);
+        });
+      }).catch(() => {
+        addSiteBtn.textContent = "Add";
+        addSiteBtn.disabled = false;
       });
     });
   });
