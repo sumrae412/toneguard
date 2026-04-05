@@ -469,7 +469,53 @@
     ensureHost();
     currentResult = result;
     suggestionWasEdited = false;
-    els.useSuggestionBtn.textContent = "Use suggestion";
+
+    // Selection mode (context menu): show Copy/Replace instead of Use/Send
+    if (result.selectionMode) {
+      els.useSuggestionBtn.textContent = "Copy rewrite";
+      els.sendOriginalBtn.textContent = "Dismiss";
+
+      // Check if selection is in an editable field for Replace support
+      const sel = window.getSelection();
+      const anchorNode = sel?.anchorNode;
+      const isEditable = anchorNode && (
+        anchorNode.nodeType === Node.ELEMENT_NODE
+          ? anchorNode.isContentEditable || anchorNode.tagName === "TEXTAREA" || anchorNode.tagName === "INPUT"
+          : anchorNode.parentElement?.isContentEditable
+      );
+
+      // Override button handlers for selection mode
+      els.useSuggestionBtn.onclick = () => {
+        const text = els.suggestion.textContent || result.suggestion;
+        navigator.clipboard.writeText(text);
+        els.useSuggestionBtn.textContent = "Copied!";
+        setTimeout(() => hide(), 1000);
+      };
+      els.sendOriginalBtn.onclick = () => hide();
+
+      // Add Replace button if editable
+      const existingReplace = els.drawer?.querySelector(".tg-replace-btn");
+      if (existingReplace) existingReplace.remove();
+      if (isEditable && result.suggestion) {
+        const replaceBtn = el("button", {
+          className: "tg-btn tg-replace-btn",
+          textContent: "Replace selection"
+        });
+        replaceBtn.addEventListener("click", () => {
+          document.execCommand("insertText", false, result.suggestion);
+          hide();
+        });
+        els.useSuggestionBtn.parentElement.insertBefore(replaceBtn, els.sendOriginalBtn);
+      }
+    } else {
+      els.useSuggestionBtn.textContent = "Use suggestion";
+      // Reset to default handlers (re-bound in ensureHost, so just clear overrides)
+      els.useSuggestionBtn.onclick = null;
+      els.sendOriginalBtn.onclick = null;
+      els.sendOriginalBtn.textContent = "Send as-is";
+      const existingReplace = els.drawer?.querySelector(".tg-replace-btn");
+      if (existingReplace) existingReplace.remove();
+    }
 
     els.original.textContent = result.original;
     els.suggestion.textContent = result.suggestion;

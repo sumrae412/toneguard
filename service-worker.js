@@ -52,9 +52,10 @@ async function loadBasePrompt() {
   return basePromptCache;
 }
 
-// On install/startup, register content scripts for custom sites
+// On install/startup, register content scripts for custom sites + context menu
 chrome.runtime.onInstalled.addListener((details) => {
   registerCustomSites();
+  createContextMenu();
 
   // Show welcome page on first install
   if (details.reason === "install") {
@@ -63,22 +64,56 @@ chrome.runtime.onInstalled.addListener((details) => {
 });
 chrome.runtime.onStartup.addListener(() => {
   registerCustomSites();
+  createContextMenu();
   initSync();
+});
+
+// --- Context Menu (Step 7) ---
+
+function createContextMenu() {
+  chrome.contextMenus.create({
+    id: "toneguard-analyze",
+    title: "Check tone with ToneGuard",
+    contexts: ["selection"]
+  });
+}
+
+chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+  if (info.menuItemId !== "toneguard-analyze") return;
+  if (!tab?.id || !info.selectionText) return;
+
+  // Inject content + overlay scripts if not already present, then send message
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      files: ["overlay.js", "content.js"]
+    });
+  } catch (_) {
+    // Scripts may already be injected — that's fine
+  }
+
+  chrome.tabs.sendMessage(tab.id, {
+    type: "ANALYZE_SELECTION",
+    text: info.selectionText
+  });
 });
 
 async function registerCustomSites() {
   const { tg_custom_sites: sites } = await chrome.storage.sync.get(["tg_custom_sites"]);
-  if (!sites || sites.length === 0) return;
 
+  // Always try to unregister first (Step 8: wrap in try-catch so failure doesn't block re-register)
   try {
     await chrome.scripting.unregisterContentScripts({ ids: ["tg-custom-sites"] });
   } catch (_) {
-    // May not exist yet
+    // No existing scripts registered — that's fine, proceed
   }
 
-  const patterns = sites.map((site) => {
-    return ["https://" + site + "/*", "https://*." + site + "/*"];
-  }).flat();
+  if (!sites || sites.length === 0) return;
+
+  const patterns = sites.flatMap((site) => [
+    "https://" + site + "/*",
+    "https://*." + site + "/*"
+  ]);
 
   try {
     await chrome.scripting.registerContentScripts([{
@@ -89,6 +124,22 @@ async function registerCustomSites() {
     }]);
   } catch (err) {
     console.error("ToneGuard: failed to register custom sites", err);
+    return;
+  }
+
+  // Step 8: Inject into already-open tabs that match the new patterns
+  try {
+    const tabs = await chrome.tabs.query({ url: patterns });
+    for (const tab of tabs) {
+      chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        files: ["overlay.js", "content.js"]
+      }).catch(() => {
+        // Tab may not be injectable (e.g., chrome:// pages)
+      });
+    }
+  } catch (_) {
+    // tabs.query may fail if patterns are invalid — non-fatal
   }
 }
 
@@ -138,8 +189,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     // Re-register content scripts for custom sites.
     // chrome.permissions.request() is called from the popup (user gesture context),
     // not here — service workers can't request permissions.
-    registerCustomSites();
-    return false;
+    registerCustomSites()
+      .then(() => sendResponse({ ok: true }))
+      .catch((err) => sendResponse({ error: err.message }));
+    return true; // async response
   }
 });
 
