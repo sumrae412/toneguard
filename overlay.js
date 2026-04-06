@@ -313,6 +313,12 @@
     shadow.appendChild(parts.backdrop);
     shadow.appendChild(parts.drawer);
 
+    // Isolate keyboard/focus events so the host page (Slack, Gmail, etc.)
+    // can't intercept them — enables typing in inputs and contentEditable
+    for (const evt of ["keydown", "keyup", "keypress", "input", "focusin", "focusout"]) {
+      host.addEventListener(evt, (e) => e.stopPropagation());
+    }
+
     document.body.appendChild(host);
 
     // Prevent keyboard/mouse events from leaking to the host page (e.g. Slack).
@@ -476,6 +482,19 @@
     ensureHost();
     currentResult = result;
     suggestionWasEdited = false;
+
+    // Clear any selection-mode overrides from a previous context-menu analysis
+    // so the addEventListener handlers (undo countdown, send original) work correctly
+    if (els.useSuggestionBtn) {
+      els.useSuggestionBtn.onclick = null;
+      els.useSuggestionBtn.textContent = "Use suggestion";
+    }
+    if (els.sendOriginalBtn) {
+      els.sendOriginalBtn.onclick = null;
+      els.sendOriginalBtn.textContent = "Send original";
+    }
+    const oldReplace = els.drawer?.querySelector(".tg-replace-btn");
+    if (oldReplace) oldReplace.remove();
 
     // Selection mode (context menu): show Copy/Replace instead of Use/Send
     if (result.selectionMode) {
