@@ -50,8 +50,25 @@
 
       replaceEditorText(el, text) {
         el.focus();
+
+        // Strategy 1: execCommand (works in some browsers/editors)
         document.execCommand("selectAll", false, null);
         document.execCommand("insertText", false, text);
+
+        // Verify it worked — if not, fall back to direct DOM manipulation
+        if (el.innerText.trim() !== text.trim()) {
+          // Strategy 2: clear and rebuild the editor content directly
+          while (el.firstChild) el.removeChild(el.firstChild);
+          // Slack's Quill editor expects <p> elements
+          const lines = text.split("\n");
+          for (const line of lines) {
+            const p = document.createElement("p");
+            p.textContent = line || "\u200B"; // zero-width space for empty lines
+            el.appendChild(p);
+          }
+          // Notify the editor framework of the change
+          el.dispatchEvent(new Event("input", { bubbles: true }));
+        }
       },
 
       releaseSend(el) {
@@ -203,13 +220,44 @@
     analyzeAndIntercept(text, editor);
   }
 
+  // Check if the event originates from inside the ToneGuard overlay
+  function isFromOverlay(e) {
+    const host = document.getElementById("toneguard-overlay-host");
+    if (!host) return false;
+    // Events from closed shadow DOM retarget to the host element
+    if (e.target === host) return true;
+    // Also check composed path for open shadow DOMs
+    if (e.composedPath && e.composedPath()[0] !== e.target) {
+      return e.composedPath().some(node => node === host);
+    }
+    return false;
+  }
+
+  // Check if Slack's autocomplete/mention picker is open
+  function isAutocompleteOpen() {
+    return !!document.querySelector(
+      '[data-qa="mention_autocomplete"], ' +
+      '[data-qa="autocomplete_list"], ' +
+      '.c-autocomplete, ' +
+      '.p-autocomplete_list, ' +
+      '.p-channel_sidebar_autocomplete, ' +
+      '[data-qa="emoji_autocomplete"], ' +
+      '[data-qa="slash_command_autocomplete"]'
+    );
+  }
+
   // Unified keydown handler
   function handleKeydown(e) {
     if (releasing) return;
 
+    // Never intercept events from the ToneGuard overlay itself
+    if (isFromOverlay(e)) return;
+
     // Slack + LinkedIn: Enter sends
     if (SITE === "slack" || SITE === "linkedin") {
       if (e.key !== "Enter" || e.shiftKey) return;
+      // Don't intercept Enter when selecting from autocomplete dropdowns
+      if (isAutocompleteOpen()) return;
     }
     // Gmail: Ctrl/Cmd+Enter sends
     else if (SITE === "gmail") {
