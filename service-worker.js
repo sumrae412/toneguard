@@ -304,7 +304,12 @@ async function handleAnalyze(text, context, site) {
       return { flagged: false };
     }
 
-    const result = JSON.parse(jsonMatch[0]);
+    // Strip control characters (tabs, newlines, etc.) inside JSON string values
+    // that Claude may produce, which cause JSON.parse to fail.
+    const sanitized = jsonMatch[0].replace(/[\x00-\x1F\x7F]/g, (ch) =>
+      ch === "\n" ? "\\n" : ch === "\r" ? "\\r" : ch === "\t" ? "\\t" : ""
+    );
+    const result = JSON.parse(sanitized);
 
     await trackStats(result.flagged, result.mode);
 
