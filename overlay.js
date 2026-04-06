@@ -315,6 +315,13 @@
 
     document.body.appendChild(host);
 
+    // Prevent keyboard/mouse events from leaking to the host page (e.g. Slack).
+    // Must be on the host element (not inside the shadow root) because composed
+    // events like keydown/click retarget across the shadow boundary.
+    for (const evt of ["mousedown", "click", "keydown", "keypress", "keyup", "input"]) {
+      host.addEventListener(evt, (e) => e.stopPropagation());
+    }
+
     // Cache element references
     els = {
       drawer: parts.drawer,
@@ -1173,6 +1180,7 @@
       "  .tg-message-box.tg-original { background: #2d2d2d; border-color: #404040; color: #999; }",
       "  .tg-message-box.tg-suggestion { background: #1b3a1b; border-color: #2d5f2d; color: #e0e0e0; }",
       "  .tg-message-box.tg-suggestion:focus { border-color: #4CAF50; box-shadow: 0 0 0 2px rgba(76,175,80,0.3); }",
+      "  .tg-question-label { color: #ccc; }",
       "  .tg-question-input { background: #2d2d2d; border-color: #404040; color: #e0e0e0; }",
       "  .tg-question-input:focus { border-color: #4CAF50; }",
       "  .tg-btn-primary { background: #388E3C; }",
