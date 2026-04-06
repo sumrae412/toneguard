@@ -315,6 +315,13 @@
 
     document.body.appendChild(host);
 
+    // Prevent keyboard/mouse events from leaking to the host page (e.g. Slack).
+    // Must be on the host element (not inside the shadow root) because composed
+    // events like keydown/click retarget across the shadow boundary.
+    for (const evt of ["mousedown", "click", "keydown", "keypress", "keyup", "input"]) {
+      host.addEventListener(evt, (e) => e.stopPropagation());
+    }
+
     // Cache element references
     els = {
       drawer: parts.drawer,
@@ -380,11 +387,6 @@
 
     // Make drawer focusable for keyboard events
     parts.drawer.setAttribute("tabindex", "-1");
-
-    // Prevent all keyboard/mouse events from leaking to the host page (e.g. Slack)
-    for (const evt of ["mousedown", "click", "keydown", "keypress", "keyup", "input"]) {
-      parts.drawer.addEventListener(evt, (e) => e.stopPropagation());
-    }
   }
 
   // --- Handlers ---
@@ -563,10 +565,6 @@
           placeholder: "Your answer...",
           "data-question": q
         });
-        // Prevent host page (e.g. Slack) from stealing focus/keystrokes
-        for (const evt of ["mousedown", "click", "focus", "keydown", "keypress", "keyup", "input"]) {
-          input.addEventListener(evt, (e) => e.stopPropagation());
-        }
         item.appendChild(input);
         els.questionsList.appendChild(item);
       }
