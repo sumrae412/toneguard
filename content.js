@@ -233,17 +233,38 @@
     return false;
   }
 
-  // Check if Slack's autocomplete/mention picker is open
+  // Check if Slack's autocomplete/mention picker is open.
+  //
+  // Primary signal: the ARIA combobox pattern. When Slack's composer opens
+  // any autocomplete popup (@mentions, #channels, :emoji:, /slash commands),
+  // it sets aria-activedescendant on the focused editor to the highlighted
+  // item id. This is required for screen-reader support so it can't break
+  // without also breaking accessibility — much more stable than sniffing
+  // data-qa attributes or CSS class names across Slack releases.
+  //
+  // Secondary signal: any visible role="listbox"/role="menu" on the page.
   function isAutocompleteOpen() {
-    return !!document.querySelector(
-      '[data-qa="mention_autocomplete"], ' +
-      '[data-qa="autocomplete_list"], ' +
-      '.c-autocomplete, ' +
-      '.p-autocomplete_list, ' +
-      '.p-channel_sidebar_autocomplete, ' +
-      '[data-qa="emoji_autocomplete"], ' +
-      '[data-qa="slash_command_autocomplete"]'
+    // 1. aria-activedescendant or aria-expanded on the focused editor
+    const active = document.activeElement;
+    if (active && active.getAttribute) {
+      const descendant = active.getAttribute("aria-activedescendant");
+      if (descendant && descendant.trim() !== "") return true;
+      if (active.getAttribute("aria-expanded") === "true") return true;
+    }
+
+    // 2. Any visible listbox/menu popup (Slack renders autocomplete as
+    //    role="listbox"). Visibility check ignores off-screen ARIA widgets.
+    //    Skip anything inside our own overlay.
+    const popups = document.querySelectorAll(
+      '[role="listbox"], [role="menu"], [role="grid"][aria-label*="autocomplete" i]'
     );
+    for (const p of popups) {
+      if (p.closest && p.closest("#toneguard-overlay-frame, #toneguard-overlay-host")) continue;
+      const rect = p.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0) return true;
+    }
+
+    return false;
   }
 
   // Unified keydown handler
