@@ -68,6 +68,14 @@ chrome.runtime.onStartup.addListener(() => {
   initSync();
 });
 
+// Permission grants from the popup can race with the popup closing (Chrome
+// dismisses the popup when the native permission dialog opens, destroying
+// the popup's JS context before its .then() can send REGISTER_SITE).
+// Re-register here so newly granted host permissions always take effect.
+chrome.permissions.onAdded.addListener(() => {
+  registerCustomSites();
+});
+
 // --- Context Menu (Step 7) ---
 
 function createContextMenu() {
