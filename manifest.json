@@ -44,7 +44,12 @@
 
   "web_accessible_resources": [
     {
-      "resources": ["prompts/base.txt"],
+      "resources": [
+        "prompts/base.txt",
+        "overlay.html",
+        "overlay-frame.css",
+        "overlay-frame.js"
+      ],
       "matches": ["<all_urls>"]
     }
   ],

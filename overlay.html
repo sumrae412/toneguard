@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="color-scheme" content="light dark">
+  <title>ToneGuard</title>
+  <link rel="stylesheet" href="overlay-frame.css">
+</head>
+<body>
+  <div class="tg-backdrop" id="tgBackdrop"></div>
+  <div class="tg-drawer" id="tgDrawer" tabindex="-1">
+    <button class="tg-close" id="tgClose" title="Close" type="button">&#x2715;</button>
+
+    <div class="tg-header">
+      <h2>ToneGuard</h2>
+      <span class="tg-badge" id="tgBadge">Suggestion</span>
+    </div>
+
+    <div class="tg-loading" id="tgLoading" style="display:none">
+      <div class="tg-loading-dot"></div>
+      <span>Reviewing your message...</span>
+    </div>
+
+    <div id="tgContent" style="display:none">
+      <div class="tg-reason" id="tgReasoning"></div>
+
+      <div class="tg-confidence-bar">
+        <div class="tg-confidence-fill" id="tgConfidenceFill"></div>
+      </div>
+
+      <div class="tg-meta-row" id="tgMetaRow" style="display:none">
+        <span class="tg-readability" id="tgReadability"></span>
+        <span class="tg-categories" id="tgCategories"></span>
+      </div>
+
+      <div class="tg-red-flags" id="tgRedFlags" style="display:none">
+        <div class="tg-section-label">Flagged phrases</div>
+        <div class="tg-flags-list" id="tgFlagsList"></div>
+      </div>
+
+      <div class="tg-section" id="tgDiffSection" style="display:none">
+        <div class="tg-section-label">Changes</div>
+      </div>
+
+      <div class="tg-section" id="tgOriginalSection">
+        <div class="tg-section-label">Your message</div>
+        <div class="tg-message-box tg-original" id="tgOriginal"></div>
+      </div>
+
+      <div id="tgQuestionsSection" style="display:none">
+        <div class="tg-section-label">Help me improve this</div>
+        <div id="tgQuestionsList"></div>
+        <button class="tg-btn tg-btn-primary" id="tgSubmitAnswers" type="button">Refine with my answers</button>
+      </div>
+
+      <div class="tg-loading" id="tgRefining" style="display:none">
+        <div class="tg-loading-dot"></div>
+        <span>Refining with your answers...</span>
+      </div>
+
+      <div class="tg-section">
+        <div class="tg-section-label">
+          Suggested rewrite
+          <span class="tg-edit-hint">(click to edit)</span>
+        </div>
+        <div class="tg-message-box tg-suggestion" id="tgSuggestion" contenteditable="true"></div>
+      </div>
+
+      <div class="tg-actions">
+        <button class="tg-btn tg-btn-primary" id="tgUseSuggestion" type="button">
+          Use suggestion <span class="tg-kbd">Enter</span>
+        </button>
+        <button class="tg-btn tg-btn-secondary" id="tgSendOriginal" type="button">
+          Send as-is <span class="tg-kbd">Esc</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="tg-empty" id="tgEmpty" style="display:none">
+      <p>ToneGuard is active. It'll appear here when it catches something.</p>
+    </div>
+  </div>
+
+  <script src="overlay-frame.js"></script>
+</body>
+</html>
