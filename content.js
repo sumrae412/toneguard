@@ -215,9 +215,16 @@
     else if (SITE === "gmail") {
       if (e.key !== "Enter" || !(e.ctrlKey || e.metaKey)) return;
     }
-    // Generic: don't intercept keyboard sends (just buttons)
+    // Generic (custom sites): treat plain Enter as send, Shift+Enter as newline.
+    // This matches the convention on Slack/LinkedIn/Discord/Frame.io/etc.
     else {
-      return;
+      if (e.key !== "Enter" || e.shiftKey) return;
+      // Only intercept if the focused element looks like a message editor
+      const t = e.target;
+      const isEditor =
+        (t && t.matches && t.matches(currentPlatform.editorSelector)) ||
+        (t && t.closest && t.closest(currentPlatform.editorSelector));
+      if (!isEditor) return;
     }
 
     const editor = e.target.closest(currentPlatform.editorSelector) || e.target;
@@ -296,13 +303,15 @@
       }
     }, 10000);
 
-    // Check if extension context is still valid before calling chrome APIs
+    // Check if extension context is still valid before calling chrome APIs.
+    // If stale, show reload prompt and DO NOT release the send — the message
+    // is unchecked and must not go out automatically. User can reload the tab
+    // and resend manually.
     if (!isContextValid()) {
       clearTimeout(safetyTimeout);
       if (window.__toneGuard) {
         window.__toneGuard.showStale();
       }
-      currentPlatform.releaseSend(editor);
       pendingEditor = null;
       pendingText = null;
       return;
@@ -366,15 +375,18 @@
       clearTimeout(safetyTimeout);
       hideCheckingIndicator();
 
-      // Extension was reloaded — show reload prompt instead of silently failing
+      // Extension was reloaded — show reload prompt and block the send.
+      // The message is unchecked; don't let it go out automatically.
       if (!isContextValid()) {
         console.warn("ToneGuard: extension context invalidated, prompting reload");
         if (window.__toneGuard) window.__toneGuard.showStale();
-      } else {
-        console.error("ToneGuard error:", err);
-        if (window.__toneGuard) window.__toneGuard.hide();
+        pendingEditor = null;
+        pendingText = null;
+        return;
       }
 
+      console.error("ToneGuard error:", err);
+      if (window.__toneGuard) window.__toneGuard.hide();
       currentPlatform.releaseSend(editor);
       pendingEditor = null;
       pendingText = null;

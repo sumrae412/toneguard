@@ -315,6 +315,15 @@
 
     document.body.appendChild(host);
 
+    // Stop composed keyboard/focus events at the host so host pages (Slack,
+    // Gmail, LinkedIn) can't steal focus from overlay inputs/contentEditable.
+    // Closed shadow DOM doesn't reveal internal targets, but composed events
+    // still bubble to document — we must block them at the host boundary.
+    const STOP_EVENTS = ["keydown", "keyup", "keypress", "input", "focusin", "focusout"];
+    for (const evt of STOP_EVENTS) {
+      host.addEventListener(evt, (e) => e.stopPropagation());
+    }
+
     // Cache element references
     els = {
       drawer: parts.drawer,

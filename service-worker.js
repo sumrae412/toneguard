@@ -68,6 +68,14 @@ chrome.runtime.onStartup.addListener(() => {
   initSync();
 });
 
+// Permission grants from the popup can race with the popup closing (Chrome
+// dismisses the popup when the native permission dialog opens, destroying
+// the popup's JS context before its .then() can send REGISTER_SITE).
+// Re-register here so newly granted host permissions always take effect.
+chrome.permissions.onAdded.addListener(() => {
+  registerCustomSites();
+});
+
 // --- Context Menu (Step 7) ---
 
 function createContextMenu() {
@@ -304,7 +312,10 @@ async function handleAnalyze(text, context, site) {
       return { flagged: false };
     }
 
-    const result = JSON.parse(jsonMatch[0]);
+    // Claude responses can contain literal control chars inside JSON strings,
+    // which breaks JSON.parse. Strip them before parsing.
+    const sanitized = jsonMatch[0].replace(/[\x00-\x1F\x7F]/g, " ");
+    const result = JSON.parse(sanitized);
 
     await trackStats(result.flagged, result.mode);
 
