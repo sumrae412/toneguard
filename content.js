@@ -220,15 +220,20 @@
     analyzeAndIntercept(text, editor);
   }
 
-  // Check if the event originates from inside the ToneGuard overlay
+  // Check if the event originates from inside the ToneGuard overlay.
+  // The overlay is now an extension iframe; events inside it don't normally
+  // propagate to the parent document at all, but we still guard in case any
+  // residual event targets the iframe element itself (focus/blur on the
+  // iframe wrapper, etc.).
   function isFromOverlay(e) {
-    const host = document.getElementById("toneguard-overlay-host");
-    if (!host) return false;
-    // Events from closed shadow DOM retarget to the host element
-    if (e.target === host) return true;
-    // Also check composed path for open shadow DOMs
-    if (e.composedPath && e.composedPath()[0] !== e.target) {
-      return e.composedPath().some(node => node === host);
+    const frame = document.getElementById("toneguard-overlay-frame");
+    if (!frame) return false;
+    if (e.target === frame) return true;
+    if (e.composedPath) {
+      const path = e.composedPath();
+      for (const node of path) {
+        if (node === frame) return true;
+      }
     }
     return false;
   }
