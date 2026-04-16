@@ -79,10 +79,15 @@ chrome.permissions.onAdded.addListener(() => {
 // --- Context Menu (Step 7) ---
 
 function createContextMenu() {
-  chrome.contextMenus.create({
-    id: "toneguard-analyze",
-    title: "Check tone with ToneGuard",
-    contexts: ["selection"]
+  // removeAll() before create() — on extension reload, the menu item from the
+  // previous install may still exist. Without this, re-registering throws:
+  //   "Cannot create item with duplicate id toneguard-analyze"
+  chrome.contextMenus.removeAll(() => {
+    chrome.contextMenus.create({
+      id: "toneguard-analyze",
+      title: "Check tone with ToneGuard",
+      contexts: ["selection"]
+    });
   });
 }
 
@@ -306,18 +311,14 @@ async function handleAnalyze(text, context, site) {
     const data = await response.json();
     const rawContent = data.content[0]?.text || "";
 
-    const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      console.error("ToneGuard: no JSON found in response:", rawContent);
-      return { flagged: false };
+    // parseApiResponse (from lib.js) handles markdown fences, surrounding
+    // text, and literal control chars inside string values. Returns null on
+    // unrecoverable parse failure — don't silently pass through.
+    const result = parseApiResponse(rawContent);
+    if (!result) {
+      console.error("ToneGuard: could not parse JSON from response:", rawContent);
+      return { flagged: false, error: "Response parse error — message sent without checking." };
     }
-
-    // Strip control characters (tabs, newlines, etc.) inside JSON string values
-    // that Claude may produce, which cause JSON.parse to fail.
-    const sanitized = jsonMatch[0].replace(/[\x00-\x1F\x7F]/g, (ch) =>
-      ch === "\n" ? "\\n" : ch === "\r" ? "\\r" : ch === "\t" ? "\\t" : ""
-    );
-    const result = JSON.parse(sanitized);
 
     await trackStats(result.flagged, result.mode);
 
