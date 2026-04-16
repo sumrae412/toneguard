@@ -38,12 +38,23 @@ async def analyze_message(
     context: str = "",
     recipient: str = "",
 ) -> dict:
-    """Check a message for tone issues and get a rewrite suggestion.
+    """Check a message for tone issues, get a rubric-scored rewrite.
+
+    Two critics (Claude Haiku for tone, GPT-4o-mini for clarity) analyze the
+    message in parallel, each producing a competing rewrite. A synthesizer
+    (Claude Sonnet) picks the best rewrite, scores it on a 6-dimension rubric
+    (tone, clarity, brevity, empathy, directness, voice_fidelity), and refines
+    it if any dimension falls below B.
 
     Args:
         message: The message text to analyze
         context: Optional context about where/why the message is being sent
         recipient: Optional recipient name (used to load relationship data)
+
+    Returns:
+        dict with: flagged, issues, rewrite, confidence, diff, agents,
+        rubric (per-dimension grades/scores/notes), overall_grade,
+        overall_score, rewrite_source, refinement_passes, grade_history
     """
     return await analyzer.analyze(message, context, recipient)
 

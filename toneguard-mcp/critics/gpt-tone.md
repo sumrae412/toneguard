@@ -33,12 +33,13 @@ Return ONLY valid JSON:
       "explanation": "why this is wordy and a tighter alternative"
     }
   ],
-  "suggestion": "A complete rewrite that is clearer and more direct while preserving intent",
+  "suggestion": "A brief note on what to fix",
+  "rewrite": "A complete rewrite of the ENTIRE message that is clearer and more direct while preserving intent. This must be a full standalone message the user could send as-is, not a fragment or partial fix.",
   "confidence": 0.80
 }
 ```
 
-If the message has no issues: `{"flagged": false, "issues": [], "suggestion": "", "confidence": 0.95}`
+If the message has no issues: `{"flagged": false, "issues": [], "suggestion": "", "rewrite": "", "confidence": 0.95}`
 
 ## Rules
 
