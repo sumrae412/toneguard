@@ -32,12 +32,13 @@ Return ONLY valid JSON:
       "explanation": "why this is an issue and how it might land"
     }
   ],
-  "suggestion": "A complete rewrite of the message that fixes all issues while preserving intent",
+  "suggestion": "A brief note on what to fix",
+  "rewrite": "A complete rewrite of the ENTIRE message that fixes all tone issues while preserving intent. This must be a full standalone message the user could send as-is, not a fragment or partial fix.",
   "confidence": 0.85
 }
 ```
 
-If the message has no issues: `{"flagged": false, "issues": [], "suggestion": "", "confidence": 0.95}`
+If the message has no issues: `{"flagged": false, "issues": [], "suggestion": "", "rewrite": "", "confidence": 0.95}`
 
 ## Rules
 
