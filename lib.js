@@ -14,16 +14,73 @@ function detectPlatform(hostname) {
 }
 
 /**
+ * Escape unescaped control characters (tabs, newlines, CR) that appear
+ * INSIDE string literals. Leaves structural whitespace alone.
+ *
+ * JSON.parse rejects literal newlines/tabs/CR inside string values. Claude
+ * occasionally emits them in long rewrites. This walks the string tracking
+ * whether we're inside a "..." literal, escaping only in-string control chars.
+ *
+ * @param {string} s - Raw (possibly invalid) JSON text.
+ * @returns {string} JSON text safe to pass to JSON.parse.
+ */
+function escapeControlCharsInStrings(s) {
+  let result = "";
+  let inString = false;
+  let escaped = false;
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (escaped) {
+      result += ch;
+      escaped = false;
+      continue;
+    }
+    if (ch === "\\" && inString) {
+      result += ch;
+      escaped = true;
+      continue;
+    }
+    if (ch === '"') {
+      inString = !inString;
+      result += ch;
+      continue;
+    }
+    if (inString) {
+      if (ch === "\n") result += "\\n";
+      else if (ch === "\r") result += "\\r";
+      else if (ch === "\t") result += "\\t";
+      else if (ch < "\x20" || ch === "\x7F") {
+        // Other control chars — hex-encode
+        result += "\\u" + ch.charCodeAt(0).toString(16).padStart(4, "0");
+      } else {
+        result += ch;
+      }
+    } else {
+      result += ch;
+    }
+  }
+  return result;
+}
+
+/**
  * Extract JSON object from Claude API response text.
  * Handles raw JSON, markdown code blocks, or any wrapper text.
+ * Tolerates literal control chars inside string values (Claude sometimes
+ * emits unescaped \n in long rewrites).
  * Returns parsed object or null.
  */
 function parseApiResponse(rawContent) {
   if (!rawContent) return null;
   const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
   if (!jsonMatch) return null;
+  // Fast path: valid JSON parses directly
   try {
     return JSON.parse(jsonMatch[0]);
+  } catch {
+    // Fall through — try repairing in-string control chars
+  }
+  try {
+    return JSON.parse(escapeControlCharsInStrings(jsonMatch[0]));
   } catch {
     return null;
   }

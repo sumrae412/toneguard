@@ -66,6 +66,43 @@ describe("parseApiResponse", () => {
   it("returns null for invalid JSON", () => {
     expect(parseApiResponse("{not valid json}")).toBeNull();
   });
+
+  // Regression: Claude Haiku 4.5 pretty-prints JSON responses with literal
+  // newlines in structural whitespace. Prior sanitizer (service-worker.js)
+  // escaped \n globally, producing \n (backslash-n) in structural positions
+  // which JSON.parse rejects at "position 1 column 2".
+  it("parses pretty-printed JSON with structural newlines", () => {
+    const raw = '{\n  "flagged": true,\n  "suggestion": "test"\n}';
+    const result = parseApiResponse(raw);
+    expect(result).toEqual({ flagged: true, suggestion: "test" });
+  });
+
+  it("parses JSON with literal newlines INSIDE string values", () => {
+    // Raw Claude response — literal \n inside the suggestion string
+    // (technically invalid JSON, but Claude sometimes emits it). The
+    // sanitizer must escape only the in-string newlines, not structural.
+    const raw = '{\n  "flagged": true,\n  "suggestion": "Line 1\nLine 2"\n}';
+    const result = parseApiResponse(raw);
+    expect(result).toEqual({ flagged: true, suggestion: "Line 1\nLine 2" });
+  });
+
+  it("parses pretty-printed JSON wrapped in markdown fences", () => {
+    const raw = '```json\n{\n  "flagged": false\n}\n```';
+    const result = parseApiResponse(raw);
+    expect(result).toEqual({ flagged: false });
+  });
+
+  it("handles tabs and carriage returns in structural positions", () => {
+    const raw = '{\r\n\t"flagged": true\r\n}';
+    const result = parseApiResponse(raw);
+    expect(result).toEqual({ flagged: true });
+  });
+
+  it("preserves escaped newlines inside strings (already-escaped)", () => {
+    const raw = '{"suggestion": "line 1\\nline 2"}';
+    const result = parseApiResponse(raw);
+    expect(result).toEqual({ suggestion: "line 1\nline 2" });
+  });
 });
 
 describe("cleanSiteInput", () => {
