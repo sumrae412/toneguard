@@ -335,17 +335,16 @@ class ToneAnalyzer:
     ) -> dict[str, Any]:
         """Refine the rewrite if any rubric dimension scores below threshold."""
         rubric = result.get("rubric", {})
-        passes = 0
+        refinement_attempts = 0
 
-        while passes < MAX_REFINEMENT_PASSES:
+        while refinement_attempts < MAX_REFINEMENT_PASSES:
             weak_dims = _find_weak_dimensions(rubric)
             if not weak_dims:
                 break  # All dimensions at or above threshold
 
-            passes += 1
             logger.info(
                 "Self-grade pass %d: weak dimensions %s",
-                passes,
+                refinement_attempts + 1,
                 [d["name"] for d in weak_dims],
             )
 
@@ -361,14 +360,20 @@ class ToneAnalyzer:
                 )
                 refined = self._parse_json(resp.content[0].text)
             except Exception as e:
-                logger.error("Self-grade refinement failed: %s", e)
+                logger.error("Self-grade refinement failed on pass %d: %s",
+                             refinement_attempts + 1, e)
                 break
 
-            # Update result with refined rewrite and new rubric
+            # Count attempt after successful API call (not on exception)
+            refinement_attempts += 1
+
+            # Update rewrite if refinement produced one
             if refined.get("rewrite"):
                 result["rewrite"] = refined["rewrite"]
                 result["diff"] = _compute_diff(original, refined["rewrite"])
 
+            # Update rubric — if refinement didn't return one, break to
+            # avoid looping on stale scores that will never improve
             if refined.get("rubric"):
                 refined = _normalize_rubric(refined)
                 result["rubric"] = refined["rubric"]
@@ -378,13 +383,19 @@ class ToneAnalyzer:
                 result["overall_score"] = overall["score"]
                 result["grade_history"].append(
                     {
-                        "pass": passes,
+                        "pass": refinement_attempts,
                         "overall_grade": overall["grade"],
                         "overall_score": overall["score"],
                     }
                 )
+            else:
+                logger.warning(
+                    "Refinement pass %d returned no rubric — stopping loop",
+                    refinement_attempts,
+                )
+                break
 
-        result["refinement_passes"] = passes
+        result["refinement_passes"] = refinement_attempts
         return result
 
     @staticmethod
@@ -409,6 +420,7 @@ class ToneAnalyzer:
                 "flagged": False,
                 "issues": [],
                 "suggestion": "",
+                "rewrite": "",
                 "confidence": 0,
             }
 

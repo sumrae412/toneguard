@@ -429,6 +429,98 @@ class TestSelfGrading:
         # No rubric, no refinement for unflagged messages
         assert result.get("refinement_passes") is None or result.get("refinement_passes") == 0
 
+    @pytest.mark.asyncio
+    async def test_refinement_api_failure_mid_loop(self, analyzer):
+        """If refinement API fails on pass 2, stops gracefully with pass 1 result."""
+        claude_resp = _make_critic_response()
+        gpt_resp = _make_critic_response()
+        synth_resp = _make_synthesis_response(rubric=_make_rubric(clarity=60))
+        # Pass 1 improves but still weak; pass 2 will throw
+        pass1_ok = json.dumps({
+            "rewrite": "Slightly better",
+            "rubric": _make_rubric(clarity=75),
+        })
+
+        synth_call_count = 0
+
+        async def mock_claude_create(**kwargs):
+            nonlocal synth_call_count
+            if "claude-haiku" in kwargs.get("model", ""):
+                msg = MagicMock()
+                msg.content = [MagicMock(text=claude_resp)]
+                return msg
+            msg = MagicMock()
+            if synth_call_count == 0:
+                msg.content = [MagicMock(text=synth_resp)]
+            elif synth_call_count == 1:
+                msg.content = [MagicMock(text=pass1_ok)]
+            else:
+                raise RuntimeError("API timeout on pass 2")
+            synth_call_count += 1
+            return msg
+
+        mock_gpt_choice = MagicMock()
+        mock_gpt_choice.message.content = gpt_resp
+        mock_gpt_resp = MagicMock()
+        mock_gpt_resp.choices = [mock_gpt_choice]
+
+        async def mock_gpt_create(**kwargs):
+            return mock_gpt_resp
+
+        analyzer._anthropic.messages.create = mock_claude_create
+        analyzer._openai.chat.completions.create = mock_gpt_create
+
+        result = await analyzer.analyze("test message")
+
+        # Should have completed pass 1 but stopped on pass 2 failure
+        assert result["refinement_passes"] == 1
+        assert result["rewrite"] == "Slightly better"
+        assert result["rubric"]["clarity"]["score"] == 75
+
+    @pytest.mark.asyncio
+    async def test_refinement_missing_rubric_stops_loop(self, analyzer):
+        """If refinement returns rewrite but no rubric, loop stops to avoid stale scores."""
+        claude_resp = _make_critic_response()
+        gpt_resp = _make_critic_response()
+        synth_resp = _make_synthesis_response(rubric=_make_rubric(clarity=60))
+        # Refinement returns rewrite but omits rubric
+        no_rubric = json.dumps({
+            "rewrite": "Improved but no scores",
+        })
+
+        _mock_analyzer_apis(
+            analyzer, claude_resp, gpt_resp, synth_resp,
+            refine_resps=[no_rubric],
+        )
+        result = await analyzer.analyze("test message")
+
+        # Should stop after 1 attempt due to missing rubric
+        assert result["refinement_passes"] == 1
+        assert result["rewrite"] == "Improved but no scores"
+        # Grade history should only have the initial entry (no new one without rubric)
+        assert len(result["grade_history"]) == 1
+
+    @pytest.mark.asyncio
+    async def test_synthesis_missing_rubric_skips_grading(self, analyzer):
+        """If synthesizer returns no rubric at all, self-grading is skipped."""
+        claude_resp = _make_critic_response()
+        gpt_resp = _make_critic_response()
+        # Synthesizer response with no rubric key
+        synth_resp = json.dumps({
+            "flagged": True,
+            "issues": [{"rule": "test", "quote": "test", "explanation": "test"}],
+            "rewrite": "A rewrite",
+            "confidence": 0.8,
+            "rewrite_source": "merged",
+        })
+
+        _mock_analyzer_apis(analyzer, claude_resp, gpt_resp, synth_resp)
+        result = await analyzer.analyze("test message")
+
+        # No rubric → no self-grading
+        assert "rubric" not in result or result.get("rubric") is None
+        assert result.get("refinement_passes") is None or result.get("refinement_passes") == 0
+
 
 class TestStylePreservation:
     """Voice samples are included in synthesizer prompt for style matching."""
