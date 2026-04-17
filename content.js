@@ -188,19 +188,47 @@
 
   currentPlatform = PLATFORMS[SITE] || PLATFORMS.generic;
 
-  // Set up overlay decision callback
+  // Set up overlay decision callback.
+  //
+  // Returns { ok: bool, error?: string }. overlay.js forwards this as the
+  // decision_ack back to the iframe so the iframe paints success only when
+  // the action actually succeeded.
   function setupOverlay() {
     if (!window.__toneGuard) return;
     window.__toneGuard.setOnDecision((decision) => {
-      if (!pendingEditor) return;
-
-      if (decision.action === "use_suggestion" && decision.suggestion) {
-        currentPlatform.replaceEditorText(pendingEditor, decision.suggestion);
+      if (!pendingEditor) {
+        return { ok: false, error: "no pending compose" };
+      }
+      if (!pendingEditor.isConnected) {
+        // Editor was detached (Gmail re-rendered the compose). releaseSend
+        // might still hit a live Send button, but we can't insert the
+        // rewrite safely — fail loud.
+        pendingText = null;
+        pendingEditor = null;
+        return { ok: false, error: "compose editor was detached from the page" };
       }
 
-      currentPlatform.releaseSend(pendingEditor);
-      pendingText = null;
-      pendingEditor = null;
+      try {
+        if (decision.action === "use_suggestion" && decision.suggestion) {
+          currentPlatform.replaceEditorText(pendingEditor, decision.suggestion);
+          // Verify the insert actually landed — execCommand can silently
+          // no-op if focus transfer failed. If the editor content doesn't
+          // match, nack so the iframe can surface a manual-paste fallback.
+          const after = currentPlatform.getEditorText(pendingEditor);
+          if ((after || "").trim() !== decision.suggestion.trim()) {
+            return { ok: false, error: "editor did not accept the rewrite" };
+          }
+        }
+
+        currentPlatform.releaseSend(pendingEditor);
+        pendingText = null;
+        pendingEditor = null;
+        return { ok: true };
+      } catch (err) {
+        pendingText = null;
+        pendingEditor = null;
+        return { ok: false, error: err && err.message ? err.message : String(err) };
+      }
     });
   }
 
