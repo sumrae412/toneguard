@@ -58,7 +58,12 @@
     submitAnswersBtn: document.getElementById("tgSubmitAnswers"),
     refining: document.getElementById("tgRefining"),
     useSuggestionBtn: document.getElementById("tgUseSuggestion"),
-    sendOriginalBtn: document.getElementById("tgSendOriginal")
+    sendOriginalBtn: document.getElementById("tgSendOriginal"),
+    landingPanel: document.getElementById("tgLandingPanel"),
+    landingTakeaway: document.getElementById("tgLandingTakeaway"),
+    landingTone: document.getElementById("tgLandingTone"),
+    landingAction: document.getElementById("tgLandingAction"),
+    landingActionRow: document.getElementById("tgLandingActionRow")
   };
 
   // --- postMessage helpers ---
@@ -196,6 +201,13 @@
     if (oldReplace) oldReplace.remove();
     const diffEl = els.drawer.querySelector(".tg-diff");
     if (diffEl) diffEl.remove();
+    if (els.landingPanel) {
+      els.landingPanel.style.display = "none";
+      els.landingPanel.open = false;
+    }
+    if (els.landingTakeaway) els.landingTakeaway.textContent = "";
+    if (els.landingTone) els.landingTone.textContent = "";
+    if (els.landingAction) els.landingAction.textContent = "";
     clearToast();
   }
 
@@ -375,10 +387,36 @@
       els.questionsSection.style.display = "none";
     }
 
+    // Landing view — "If they only skim..." panel. Shown only when the
+    // analyzer returned a non-null takeaway (short messages and failures
+    // both return null fields — hide in both cases).
+    renderLanding(result.landing);
+
     els.loading.style.display = "none";
     els.empty.style.display = "none";
     els.content.style.display = "block";
     openDrawer();
+  }
+
+  function renderLanding(landing) {
+    if (!els.landingPanel) return;
+    if (!landing || (!landing.takeaway && !landing.tone_felt && !landing.next_action)) {
+      els.landingPanel.style.display = "none";
+      els.landingPanel.open = false;
+      return;
+    }
+    els.landingTakeaway.textContent = landing.takeaway || "—";
+    els.landingTone.textContent = landing.tone_felt || "—";
+    if (landing.next_action) {
+      els.landingAction.textContent = landing.next_action;
+      if (els.landingActionRow) els.landingActionRow.style.display = "";
+    } else if (els.landingActionRow) {
+      els.landingActionRow.style.display = "none";
+    }
+    els.landingPanel.style.display = "block";
+    // Auto-expand for flagged messages so the user sees the landing info
+    // without an extra click. They can collapse it if desired.
+    els.landingPanel.open = true;
   }
 
   function showPassed() {

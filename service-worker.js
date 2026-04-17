@@ -334,20 +334,31 @@ async function handleAnalyze(text, context, site) {
   };
 
   try {
-    let response;
-    for (let attempt = 0; attempt < 3; attempt++) {
-      response = await fetch(CLAUDE_API_URL, {
-        method: "POST",
-        headers: requestHeaders,
-        body: requestBody
-      });
-
-      if (response.status === 401 || response.status === 400 || response.status === 403) break;
-      if (response.ok || response.status < 500) break;
-
-      const delay = Math.pow(2, attempt) * 500;
-      await new Promise((r) => setTimeout(r, delay));
-    }
+    // Run the main tone/clarity analysis and the landing critic in parallel.
+    // Landing is descriptive ("how this reads on a skim"), Haiku-tier, and
+    // must NOT block the main result — a landing failure returns null and
+    // the rewrite path keeps working.
+    const [response, landing] = await Promise.all([
+      (async () => {
+        let r;
+        for (let attempt = 0; attempt < 3; attempt++) {
+          r = await fetch(CLAUDE_API_URL, {
+            method: "POST",
+            headers: requestHeaders,
+            body: requestBody
+          });
+          if (r.status === 401 || r.status === 400 || r.status === 403) break;
+          if (r.ok || r.status < 500) break;
+          const delay = Math.pow(2, attempt) * 500;
+          await new Promise((rs) => setTimeout(rs, delay));
+        }
+        return r;
+      })(),
+      callLandingCritic(text, context, apiKey).catch((err) => {
+        console.warn("ToneGuard landing critic failed:", err && err.message ? err.message : err);
+        return null;
+      })
+    ]);
 
     if (!response.ok) {
       const errBody = await response.text();
@@ -374,6 +385,10 @@ async function handleAnalyze(text, context, site) {
       await saveVoiceSample(text);
     }
 
+    // Attach landing view. Null when the call failed or the message was
+    // too short — the overlay hides the panel in both cases.
+    if (landing) result.landing = landing;
+
     return result;
 
   } catch (err) {
@@ -383,6 +398,71 @@ async function handleAnalyze(text, context, site) {
     }
     return { flagged: false, error: err.message };
   }
+}
+
+// Landing critic — descriptive "how does this read on a skim" analysis.
+// Runs in parallel with handleAnalyze's main Claude call. Haiku-tier,
+// ~$0.002 per call. Returns {takeaway, tone_felt, next_action} (any
+// may be null) or null on failure / short message.
+//
+// The prompt mirrors critics/landing.md in the MCP server — keep them
+// in sync if this one changes.
+const LANDING_SYSTEM_PROMPT = (
+  "You are a 'message landing' analyst. Read a message as if you were the " +
+  "recipient skimming it once — no re-reads, no charitable interpretation — " +
+  "and report what they'd actually walk away with.\n\n" +
+  "This is NOT a rewrite or critique. You do NOT flag issues.\n\n" +
+  "Return JSON with exactly three fields:\n" +
+  "- takeaway: one short sentence (<=20 words), the single idea the " +
+  "recipient would carry away\n" +
+  "- tone_felt: 2-3 words (e.g. 'rushed and curt', 'warm but vague')\n" +
+  "- next_action: what the recipient would think they're being asked to do " +
+  "next, OR null if nothing is being asked. Phrase as an imperative from " +
+  "their POV ('approve the PR', 'reply with a time', 'just read it').\n\n" +
+  "Rules: Report how it LANDS, not how it was INTENDED. Do not praise. " +
+  "Do not suggest improvements. For messages <10 words, return " +
+  '{"takeaway": null, "tone_felt": null, "next_action": null}.\n\n' +
+  "Return ONLY the JSON object, no prefatory text, no markdown fences."
+);
+
+async function callLandingCritic(text, context, apiKey) {
+  if (!text || text.trim().split(/\s+/).length < 10) {
+    return { takeaway: null, tone_felt: null, next_action: null };
+  }
+
+  const userContent =
+    "## Message\n\n" + text + (context ? "\n\n## Context\n\n" + context : "");
+
+  const response = await fetch(CLAUDE_API_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+      "anthropic-dangerous-direct-browser-access": "true"
+    },
+    body: JSON.stringify({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 256,
+      system: LANDING_SYSTEM_PROMPT,
+      messages: [{ role: "user", content: userContent }]
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error("landing api " + response.status);
+  }
+
+  const data = await response.json();
+  const raw = (data.content && data.content[0] && data.content[0].text) || "";
+  const parsed = parseApiResponse(raw);
+  if (!parsed) return null;
+  // Normalize: only keep the three known fields
+  return {
+    takeaway: parsed.takeaway || null,
+    tone_felt: parsed.tone_felt || null,
+    next_action: parsed.next_action || null
+  };
 }
 
 function getFriendlyApiError(status, body) {
