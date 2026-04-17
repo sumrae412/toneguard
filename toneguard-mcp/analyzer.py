@@ -200,25 +200,106 @@ class ToneAnalyzer:
         )
         return self._parse_json(resp.choices[0].message.content or "")
 
+    async def generate_fingerprint(
+        self, samples: list[str] | None = None
+    ) -> str:
+        """Compress a set of user writing samples into a style fingerprint.
+
+        If `samples` is None, uses all trained voice_samples from the store.
+        Returns a ~200-token markdown block with sections for tone defaults,
+        preferred phrasings, avoided phrasings, formality register, and
+        opening/closing patterns. Pure text — designed to drop straight into
+        the synthesizer prompt via `_build_voice_section`.
+
+        Uses Claude Sonnet (higher signal than Haiku for this one-shot
+        summarization; called infrequently so cost is negligible).
+        """
+        if samples is None:
+            stored = self.store.get("voice_samples") or []
+            samples = [
+                s.get("text", "")
+                for s in stored
+                if s.get("source") == "trained" and s.get("text")
+            ]
+        samples = [s for s in samples if s and len(s.strip()) >= 10]
+        if len(samples) < 3:
+            raise ValueError(
+                f"fingerprint needs >=3 trained samples, got {len(samples)}"
+            )
+
+        samples_block = "\n\n".join(f"---\n{s.strip()}\n---" for s in samples)
+
+        prompt = (
+            "You are a writing coach analyzing samples of one person's writing "
+            "to extract their personal style. Produce a compact, reusable style "
+            "fingerprint that another writer could follow to sound like this "
+            "person.\n\n"
+            f"## Samples\n\n{samples_block}\n\n"
+            "## Your Task\n\n"
+            "Return ONLY a markdown block with these exact section headings, "
+            "each filled with 1-3 bullet observations grounded in the samples. "
+            "No preamble, no explanations, no hedging. If a section genuinely "
+            "has no signal from the samples, write `- (no clear pattern)` — "
+            "don't invent patterns.\n\n"
+            "### Tone defaults\n"
+            "### Preferred phrasings\n"
+            "### Avoided phrasings\n"
+            "### Formality register\n"
+            "### Opening and closing patterns"
+        )
+
+        resp = await self._anthropic.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=1024,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return resp.content[0].text.strip()
+
+    def _build_voice_section(self) -> str:
+        """Render the voice-personalization section of the synthesizer prompt.
+
+        Preference order:
+          1. voice_fingerprint (compressed, ~200 tokens) — user has explicitly
+             trained and regenerated. Highest signal-to-token ratio.
+          2. raw voice samples — up to 5, trained-first via get_learning_context.
+             Used when no fingerprint exists yet, or when trained count <3
+             (too sparse for a reliable fingerprint).
+          3. empty string — user has no samples at all.
+        """
+        fingerprint = self.store.get("voice_fingerprint")
+        learning = self.store.get_learning_context(limit=5)
+        all_samples = self.store.get("voice_samples") or []
+        trained_count = sum(1 for s in all_samples if s.get("source") == "trained")
+
+        if fingerprint and fingerprint.get("text") and trained_count >= 3:
+            return (
+                "\n## User Voice Fingerprint (match this style in the rewrite)\n\n"
+                f"{fingerprint['text']}\n"
+            )
+
+        samples = learning.get("voice_samples") or []
+        if samples:
+            samples_text = "\n".join(f"- {s.get('text', '')}" for s in samples)
+            return (
+                "\n## User Voice Samples (match this style in the rewrite)\n\n"
+                f"{samples_text}\n"
+            )
+        return ""
+
     def _build_synthesizer_prompt(
         self,
         original: str,
         claude_result: dict,
         gpt_result: dict,
     ) -> str:
-        """Build the synthesizer prompt with rubric scoring and rewrite competition."""
-        voice_samples = self.store.get_learning_context(limit=5).get(
-            "voice_samples", []
-        )
-        voice_section = ""
-        if voice_samples:
-            samples_text = "\n".join(
-                f"- {s.get('text', '')}" for s in voice_samples
-            )
-            voice_section = (
-                f"\n## User Voice Samples (match this style in the rewrite)\n\n"
-                f"{samples_text}\n"
-            )
+        """Build the synthesizer prompt with rubric scoring and rewrite competition.
+
+        Voice personalization preference order (highest signal first):
+          1. voice_fingerprint — compressed derived style profile (trained samples only)
+          2. raw voice samples — if fingerprint is missing or has <3 samples
+          3. no voice section — zero samples ever collected
+        """
+        voice_section = self._build_voice_section()
 
         return (
             "You are a synthesis judge and writing coach. Two critics analyzed a "

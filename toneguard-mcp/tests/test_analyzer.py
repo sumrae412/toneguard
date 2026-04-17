@@ -549,3 +549,72 @@ class TestStylePreservation:
             {"flagged": False, "issues": []},
         )
         assert "Voice Samples" not in prompt
+        assert "Voice Fingerprint" not in prompt
+
+
+class TestVoiceFingerprintPreference:
+    """Fingerprint replaces raw samples when the user has explicitly trained."""
+
+    def test_fingerprint_used_when_3plus_trained_samples_present(self, analyzer):
+        analyzer.store.set("voice_fingerprint", {
+            "text": "### Tone defaults\n- terse\n### Preferred phrasings\n- em-dashes",
+            "updatedAt": "2026-04-16T10:00:00Z",
+            "sample_count": 5,
+        })
+        analyzer.store.set("voice_samples", [
+            {"text": "sample A text here", "source": "trained",
+             "timestamp": "2026-04-16T00:00:00Z"},
+            {"text": "sample B text here", "source": "trained",
+             "timestamp": "2026-04-16T00:01:00Z"},
+            {"text": "sample C text here", "source": "trained",
+             "timestamp": "2026-04-16T00:02:00Z"},
+        ])
+        prompt = analyzer._build_synthesizer_prompt(
+            "test",
+            {"flagged": True, "issues": [], "rewrite": "x"},
+            {"flagged": True, "issues": [], "rewrite": "y"},
+        )
+        assert "Voice Fingerprint" in prompt
+        assert "em-dashes" in prompt
+        # Raw samples NOT injected when fingerprint is used
+        assert "Voice Samples" not in prompt
+
+    def test_falls_back_to_raw_when_trained_count_below_3(self, analyzer):
+        """<3 trained samples: fingerprint skipped even if present (too sparse)."""
+        analyzer.store.set("voice_fingerprint", {
+            "text": "some fingerprint",
+            "updatedAt": "2026-04-16T10:00:00Z",
+            "sample_count": 2,
+        })
+        analyzer.store.set("voice_samples", [
+            {"text": "only two trained samples here", "source": "trained",
+             "timestamp": "2026-04-16T00:00:00Z"},
+            {"text": "second trained sample here", "source": "trained",
+             "timestamp": "2026-04-16T00:01:00Z"},
+        ])
+        prompt = analyzer._build_synthesizer_prompt(
+            "test",
+            {"flagged": True, "issues": [], "rewrite": "x"},
+            {"flagged": True, "issues": [], "rewrite": "y"},
+        )
+        assert "Voice Fingerprint" not in prompt
+        assert "Voice Samples" in prompt
+
+    def test_no_fingerprint_raw_samples_used(self, analyzer):
+        """No fingerprint set → fall back to raw samples."""
+        analyzer.store.set("voice_samples", [
+            {"text": "auto sample text here"},
+        ])
+        prompt = analyzer._build_synthesizer_prompt(
+            "test",
+            {"flagged": True, "issues": [], "rewrite": "x"},
+            {"flagged": True, "issues": [], "rewrite": "y"},
+        )
+        assert "Voice Samples" in prompt
+        assert "Voice Fingerprint" not in prompt
+
+    async def test_generate_fingerprint_rejects_sparse_input(self, analyzer):
+        """Fewer than 3 samples → raise ValueError (no partial fingerprint)."""
+        import pytest
+        with pytest.raises(ValueError, match="needs >=3"):
+            await analyzer.generate_fingerprint(samples=["just one"])

@@ -1,6 +1,8 @@
 """ToneGuard MCP Server — multi-agent tone analysis for Claude Code.
 
-4 tools: analyze_message, log_decision, get_history, sync_status
+7 tools:
+  analyze_message, log_decision, get_history, sync_status,
+  train_voice, regenerate_fingerprint, get_voice_profile
 """
 
 from __future__ import annotations
@@ -8,6 +10,7 @@ from __future__ import annotations
 import logging
 import os
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastmcp import FastMCP
@@ -103,6 +106,108 @@ async def sync_status() -> dict:
     return {
         "connected": sync_manager.connected,
         "last_sync": sync_manager.last_sync_at,
+    }
+
+
+@mcp.tool()
+async def train_voice(samples: list[str]) -> dict:
+    """Register pasted writing samples as the user's explicit voice training set.
+
+    Each sample is stored with source="trained" (distinguishing it from
+    auto-collected samples). Rejects samples shorter than 30 chars. Dedupes
+    by text content. Trained samples are preferred over auto samples when
+    the synthesizer prompt is built.
+
+    Args:
+        samples: List of message texts the user wants the rewriter to mimic.
+
+    Returns:
+        { accepted: int, rejected: int, trained_total: int }
+    """
+    if not isinstance(samples, list):
+        return {"error": "samples must be a list of strings"}
+    accepted = 0
+    rejected = 0
+    for text in samples:
+        if not isinstance(text, str):
+            rejected += 1
+            continue
+        if learning_store.add_voice_sample(text, source="trained"):
+            accepted += 1
+        else:
+            rejected += 1
+    sync_manager.schedule_push("voice_samples")
+    stored = learning_store.get("voice_samples") or []
+    trained_total = sum(1 for s in stored if s.get("source") == "trained")
+    return {
+        "accepted": accepted,
+        "rejected": rejected,
+        "trained_total": trained_total,
+    }
+
+
+@mcp.tool()
+async def regenerate_fingerprint() -> dict:
+    """Compress the user's trained voice samples into a style fingerprint.
+
+    The fingerprint is a ~200-token markdown block (tone defaults, preferred
+    phrasings, avoided phrasings, formality register, opening/closing
+    patterns). Stored as voice_fingerprint and synced. Once present (with
+    >=3 trained samples), the analyzer injects it into the synthesizer
+    prompt in place of raw samples — sharper signal, lower token cost.
+
+    Returns:
+        { ok: bool, fingerprint?: str, sample_count?: int, error?: str }
+    """
+    try:
+        text = await analyzer.generate_fingerprint()
+    except ValueError as err:
+        return {"ok": False, "error": str(err)}
+    except Exception as err:
+        logger.exception("fingerprint generation failed")
+        return {"ok": False, "error": str(err)}
+
+    stored = learning_store.get("voice_samples") or []
+    sample_count = sum(1 for s in stored if s.get("source") == "trained")
+    fingerprint = {
+        "text": text,
+        "updatedAt": datetime.now(timezone.utc).isoformat(),
+        "sample_count": sample_count,
+    }
+    learning_store.set("voice_fingerprint", fingerprint)
+    sync_manager.schedule_push("voice_fingerprint")
+    return {"ok": True, "fingerprint": text, "sample_count": sample_count}
+
+
+@mcp.tool()
+async def get_voice_profile() -> dict:
+    """Return the user's current voice training state.
+
+    Useful for the options page (show what the user has trained, when the
+    fingerprint was last regenerated, whether it's stale).
+
+    Returns:
+        {
+          trained_samples: [{text, timestamp}],
+          auto_samples: [{text, timestamp}],
+          fingerprint: {text, updatedAt, sample_count} | null,
+        }
+    """
+    stored = learning_store.get("voice_samples") or []
+    trained = [
+        {"text": s.get("text", ""), "timestamp": s.get("timestamp", "")}
+        for s in stored
+        if s.get("source") == "trained"
+    ]
+    auto = [
+        {"text": s.get("text", ""), "timestamp": s.get("timestamp", "")}
+        for s in stored
+        if s.get("source") != "trained"
+    ]
+    return {
+        "trained_samples": trained,
+        "auto_samples": auto,
+        "fingerprint": learning_store.get("voice_fingerprint"),
     }
 
 
