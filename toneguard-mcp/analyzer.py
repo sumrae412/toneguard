@@ -89,8 +89,10 @@ class ToneAnalyzer:
     def _load_critic_prompts(self) -> None:
         claude_path = CRITICS_DIR / "claude-tone.md"
         gpt_path = CRITICS_DIR / "gpt-tone.md"
+        landing_path = CRITICS_DIR / "landing.md"
         self._claude_prompt = claude_path.read_text() if claude_path.exists() else ""
         self._gpt_prompt = gpt_path.read_text() if gpt_path.exists() else ""
+        self._landing_prompt = landing_path.read_text() if landing_path.exists() else ""
 
     def _reload_style_rules(self) -> None:
         try:
@@ -146,19 +148,24 @@ class ToneAnalyzer:
         context: str = "",
         recipient: str = "",
     ) -> dict[str, Any]:
-        """Run both critics in parallel, synthesize, then self-grade."""
+        """Run tone + clarity critics and the landing analyzer in parallel,
+        synthesize the rewrite, self-grade, attach the landing view, and return.
+        """
         user_context = self._build_context(message, context, recipient)
 
-        # Run critics in parallel
-        claude_result, gpt_result = await asyncio.gather(
+        # Run tone + clarity + landing critics in parallel. Landing failure
+        # must NOT block the rewrite path — it's descriptive, not prescriptive.
+        claude_result, gpt_result, landing_result = await asyncio.gather(
             self._call_claude(user_context),
             self._call_gpt(user_context),
+            self._call_landing(message, context),
             return_exceptions=True,
         )
 
         # Handle partial failures
         claude_ok = not isinstance(claude_result, Exception)
         gpt_ok = not isinstance(gpt_result, Exception)
+        landing_ok = not isinstance(landing_result, Exception)
 
         if not claude_ok:
             logger.error("Claude critic failed: %s", claude_result)
@@ -166,19 +173,61 @@ class ToneAnalyzer:
         if not gpt_ok:
             logger.error("GPT critic failed: %s", gpt_result)
             gpt_result = _empty_critic_result()
+        if not landing_ok:
+            logger.warning("Landing critic failed: %s", landing_result)
+            landing_result = None
 
         # Synthesize with rubric scoring and competing rewrites
         synthesis = await self._synthesize(message, claude_result, gpt_result)
         synthesis["agents"] = {
             "claude": "ok" if claude_ok else "error",
             "gpt": "ok" if gpt_ok else "error",
+            "landing": "ok" if landing_ok else "error",
         }
 
         # Self-grade loop: refine if any rubric dimension < B
         if synthesis.get("flagged") and synthesis.get("rubric"):
             synthesis = await self._self_grade(message, synthesis)
 
+        # Attach landing view. May be None (failure or too-short); the
+        # extension hides the panel when fields are null.
+        synthesis["landing"] = landing_result
+
         return synthesis
+
+    async def _call_landing(
+        self, message: str, context: str = ""
+    ) -> dict[str, Any] | None:
+        """Ask Haiku what the message reads as on a single skim.
+
+        Returns a dict with {takeaway, tone_felt, next_action} (any of which
+        may be None for very-short messages), or None if the call fails or
+        the prompt is missing. Cost ≈ $0.002 per call.
+        """
+        if not self._landing_prompt:
+            return None
+        # Skip for trivial messages — mirrors the prompt's own rule so we
+        # don't waste a round trip.
+        if len((message or "").split()) < 10:
+            return {"takeaway": None, "tone_felt": None, "next_action": None}
+
+        user_content = f"## Message\n\n{message}"
+        if context:
+            user_content += f"\n\n## Context\n\n{context}"
+
+        resp = await self._anthropic.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=256,
+            system=self._landing_prompt,
+            messages=[{"role": "user", "content": user_content}],
+        )
+        parsed = self._parse_json(resp.content[0].text)
+        # Normalize: only keep the three known fields, coerce missing to None
+        return {
+            "takeaway": parsed.get("takeaway") or None,
+            "tone_felt": parsed.get("tone_felt") or None,
+            "next_action": parsed.get("next_action") or None,
+        }
 
     async def _call_claude(self, user_context: str) -> dict[str, Any]:
         resp = await self._anthropic.messages.create(
@@ -200,25 +249,106 @@ class ToneAnalyzer:
         )
         return self._parse_json(resp.choices[0].message.content or "")
 
+    async def generate_fingerprint(
+        self, samples: list[str] | None = None
+    ) -> str:
+        """Compress a set of user writing samples into a style fingerprint.
+
+        If `samples` is None, uses all trained voice_samples from the store.
+        Returns a ~200-token markdown block with sections for tone defaults,
+        preferred phrasings, avoided phrasings, formality register, and
+        opening/closing patterns. Pure text — designed to drop straight into
+        the synthesizer prompt via `_build_voice_section`.
+
+        Uses Claude Sonnet (higher signal than Haiku for this one-shot
+        summarization; called infrequently so cost is negligible).
+        """
+        if samples is None:
+            stored = self.store.get("voice_samples") or []
+            samples = [
+                s.get("text", "")
+                for s in stored
+                if s.get("source") == "trained" and s.get("text")
+            ]
+        samples = [s for s in samples if s and len(s.strip()) >= 10]
+        if len(samples) < 3:
+            raise ValueError(
+                f"fingerprint needs >=3 trained samples, got {len(samples)}"
+            )
+
+        samples_block = "\n\n".join(f"---\n{s.strip()}\n---" for s in samples)
+
+        prompt = (
+            "You are a writing coach analyzing samples of one person's writing "
+            "to extract their personal style. Produce a compact, reusable style "
+            "fingerprint that another writer could follow to sound like this "
+            "person.\n\n"
+            f"## Samples\n\n{samples_block}\n\n"
+            "## Your Task\n\n"
+            "Return ONLY a markdown block with these exact section headings, "
+            "each filled with 1-3 bullet observations grounded in the samples. "
+            "No preamble, no explanations, no hedging. If a section genuinely "
+            "has no signal from the samples, write `- (no clear pattern)` — "
+            "don't invent patterns.\n\n"
+            "### Tone defaults\n"
+            "### Preferred phrasings\n"
+            "### Avoided phrasings\n"
+            "### Formality register\n"
+            "### Opening and closing patterns"
+        )
+
+        resp = await self._anthropic.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=1024,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return resp.content[0].text.strip()
+
+    def _build_voice_section(self) -> str:
+        """Render the voice-personalization section of the synthesizer prompt.
+
+        Preference order:
+          1. voice_fingerprint (compressed, ~200 tokens) — user has explicitly
+             trained and regenerated. Highest signal-to-token ratio.
+          2. raw voice samples — up to 5, trained-first via get_learning_context.
+             Used when no fingerprint exists yet, or when trained count <3
+             (too sparse for a reliable fingerprint).
+          3. empty string — user has no samples at all.
+        """
+        fingerprint = self.store.get("voice_fingerprint")
+        learning = self.store.get_learning_context(limit=5)
+        all_samples = self.store.get("voice_samples") or []
+        trained_count = sum(1 for s in all_samples if s.get("source") == "trained")
+
+        if fingerprint and fingerprint.get("text") and trained_count >= 3:
+            return (
+                "\n## User Voice Fingerprint (match this style in the rewrite)\n\n"
+                f"{fingerprint['text']}\n"
+            )
+
+        samples = learning.get("voice_samples") or []
+        if samples:
+            samples_text = "\n".join(f"- {s.get('text', '')}" for s in samples)
+            return (
+                "\n## User Voice Samples (match this style in the rewrite)\n\n"
+                f"{samples_text}\n"
+            )
+        return ""
+
     def _build_synthesizer_prompt(
         self,
         original: str,
         claude_result: dict,
         gpt_result: dict,
     ) -> str:
-        """Build the synthesizer prompt with rubric scoring and rewrite competition."""
-        voice_samples = self.store.get_learning_context(limit=5).get(
-            "voice_samples", []
-        )
-        voice_section = ""
-        if voice_samples:
-            samples_text = "\n".join(
-                f"- {s.get('text', '')}" for s in voice_samples
-            )
-            voice_section = (
-                f"\n## User Voice Samples (match this style in the rewrite)\n\n"
-                f"{samples_text}\n"
-            )
+        """Build the synthesizer prompt with rubric scoring and rewrite competition.
+
+        Voice personalization preference order (highest signal first):
+          1. voice_fingerprint — compressed derived style profile (trained samples only)
+          2. raw voice samples — if fingerprint is missing or has <3 samples
+          3. no voice section — zero samples ever collected
+        """
+        voice_section = self._build_voice_section()
 
         return (
             "You are a synthesis judge and writing coach. Two critics analyzed a "

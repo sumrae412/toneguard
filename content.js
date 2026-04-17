@@ -476,7 +476,8 @@
           red_flags: result.red_flags || [],
           categories: result.categories || [],
           has_questions: result.has_questions || false,
-          questions: result.questions || []
+          questions: result.questions || [],
+          landing: result.landing || null
         });
       }
 
@@ -630,7 +631,8 @@
           red_flags: result.red_flags || [],
           categories: result.categories || [],
           has_questions: result.has_questions || false,
-          questions: result.questions || []
+          questions: result.questions || [],
+          landing: result.landing || null
         });
       }
 

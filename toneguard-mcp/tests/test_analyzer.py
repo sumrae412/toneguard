@@ -549,3 +549,194 @@ class TestStylePreservation:
             {"flagged": False, "issues": []},
         )
         assert "Voice Samples" not in prompt
+        assert "Voice Fingerprint" not in prompt
+
+
+class TestVoiceFingerprintPreference:
+    """Fingerprint replaces raw samples when the user has explicitly trained."""
+
+    def test_fingerprint_used_when_3plus_trained_samples_present(self, analyzer):
+        analyzer.store.set("voice_fingerprint", {
+            "text": "### Tone defaults\n- terse\n### Preferred phrasings\n- em-dashes",
+            "updatedAt": "2026-04-16T10:00:00Z",
+            "sample_count": 5,
+        })
+        analyzer.store.set("voice_samples", [
+            {"text": "sample A text here", "source": "trained",
+             "timestamp": "2026-04-16T00:00:00Z"},
+            {"text": "sample B text here", "source": "trained",
+             "timestamp": "2026-04-16T00:01:00Z"},
+            {"text": "sample C text here", "source": "trained",
+             "timestamp": "2026-04-16T00:02:00Z"},
+        ])
+        prompt = analyzer._build_synthesizer_prompt(
+            "test",
+            {"flagged": True, "issues": [], "rewrite": "x"},
+            {"flagged": True, "issues": [], "rewrite": "y"},
+        )
+        assert "Voice Fingerprint" in prompt
+        assert "em-dashes" in prompt
+        # Raw samples NOT injected when fingerprint is used
+        assert "Voice Samples" not in prompt
+
+    def test_falls_back_to_raw_when_trained_count_below_3(self, analyzer):
+        """<3 trained samples: fingerprint skipped even if present (too sparse)."""
+        analyzer.store.set("voice_fingerprint", {
+            "text": "some fingerprint",
+            "updatedAt": "2026-04-16T10:00:00Z",
+            "sample_count": 2,
+        })
+        analyzer.store.set("voice_samples", [
+            {"text": "only two trained samples here", "source": "trained",
+             "timestamp": "2026-04-16T00:00:00Z"},
+            {"text": "second trained sample here", "source": "trained",
+             "timestamp": "2026-04-16T00:01:00Z"},
+        ])
+        prompt = analyzer._build_synthesizer_prompt(
+            "test",
+            {"flagged": True, "issues": [], "rewrite": "x"},
+            {"flagged": True, "issues": [], "rewrite": "y"},
+        )
+        assert "Voice Fingerprint" not in prompt
+        assert "Voice Samples" in prompt
+
+    def test_no_fingerprint_raw_samples_used(self, analyzer):
+        """No fingerprint set → fall back to raw samples."""
+        analyzer.store.set("voice_samples", [
+            {"text": "auto sample text here"},
+        ])
+        prompt = analyzer._build_synthesizer_prompt(
+            "test",
+            {"flagged": True, "issues": [], "rewrite": "x"},
+            {"flagged": True, "issues": [], "rewrite": "y"},
+        )
+        assert "Voice Samples" in prompt
+        assert "Voice Fingerprint" not in prompt
+
+    async def test_generate_fingerprint_rejects_sparse_input(self, analyzer):
+        """Fewer than 3 samples → raise ValueError (no partial fingerprint)."""
+        import pytest
+        with pytest.raises(ValueError, match="needs >=3"):
+            await analyzer.generate_fingerprint(samples=["just one"])
+
+
+class TestLandingCritic:
+    """Descriptive landing view runs in parallel with tone/clarity critics."""
+
+    @pytest.mark.asyncio
+    async def test_landing_skipped_for_short_messages(self, analyzer):
+        """Short messages (<10 words) short-circuit to null fields — no API call."""
+        result = await analyzer._call_landing("hey quick question", context="")
+        assert result == {
+            "takeaway": None,
+            "tone_felt": None,
+            "next_action": None,
+        }
+
+    @pytest.mark.asyncio
+    async def test_landing_parses_structured_response(self, analyzer):
+        """Haiku returns the three-field JSON; parser normalizes to fields."""
+        landing_json = (
+            '{"takeaway": "They want a status update", '
+            '"tone_felt": "urgent, terse", '
+            '"next_action": "send a status update"}'
+        )
+
+        async def mock_create(**kwargs):
+            msg = MagicMock()
+            msg.content = [MagicMock(text=landing_json)]
+            return msg
+
+        analyzer._anthropic.messages.create = mock_create
+        result = await analyzer._call_landing(
+            "Hey — what's going on with the deploy? Haven't heard a peep all day.",
+            context="",
+        )
+        assert result["takeaway"] == "They want a status update"
+        assert result["tone_felt"] == "urgent, terse"
+        assert result["next_action"] == "send a status update"
+
+    @pytest.mark.asyncio
+    async def test_analyze_attaches_landing_to_result(self, analyzer):
+        """Full analyze() pipeline surfaces landing in synthesis['landing']."""
+        claude_resp = _make_critic_response()
+        gpt_resp = _make_critic_response()
+        synth_resp = _make_synthesis_response()
+        landing_json = (
+            '{"takeaway": "They need the doc today", '
+            '"tone_felt": "rushed, polite", '
+            '"next_action": "share the doc"}'
+        )
+
+        # Route Haiku calls: the tone critic gets the normal critic response,
+        # landing gets the landing JSON — distinguished by system prompt.
+        async def mock_claude_create(**kwargs):
+            msg = MagicMock()
+            system = kwargs.get("system", "") or ""
+            model = kwargs.get("model", "")
+            if "claude-haiku" in model and "landing" in system.lower():
+                msg.content = [MagicMock(text=landing_json)]
+            elif "claude-haiku" in model:
+                msg.content = [MagicMock(text=claude_resp)]
+            else:
+                # Sonnet (synthesizer)
+                msg.content = [MagicMock(text=synth_resp)]
+            return msg
+
+        mock_gpt_choice = MagicMock()
+        mock_gpt_choice.message.content = gpt_resp
+        mock_gpt_resp = MagicMock()
+        mock_gpt_resp.choices = [mock_gpt_choice]
+
+        async def mock_gpt_create(**kwargs):
+            return mock_gpt_resp
+
+        analyzer._anthropic.messages.create = mock_claude_create
+        analyzer._openai.chat.completions.create = mock_gpt_create
+
+        result = await analyzer.analyze(
+            "Can you send me the doc today? Need it before the meeting please.",
+            context="",
+        )
+        assert result["landing"]["takeaway"] == "They need the doc today"
+        assert result["landing"]["tone_felt"] == "rushed, polite"
+        assert result["agents"]["landing"] == "ok"
+
+    @pytest.mark.asyncio
+    async def test_landing_failure_does_not_block_rewrite(self, analyzer):
+        """Landing throwing must not fail the overall analyze() call."""
+        claude_resp = _make_critic_response()
+        gpt_resp = _make_critic_response()
+        synth_resp = _make_synthesis_response()
+
+        async def mock_claude_create(**kwargs):
+            system = kwargs.get("system", "") or ""
+            model = kwargs.get("model", "")
+            if "claude-haiku" in model and "landing" in system.lower():
+                raise RuntimeError("landing api down")
+            msg = MagicMock()
+            if "claude-haiku" in model:
+                msg.content = [MagicMock(text=claude_resp)]
+            else:
+                msg.content = [MagicMock(text=synth_resp)]
+            return msg
+
+        mock_gpt_choice = MagicMock()
+        mock_gpt_choice.message.content = gpt_resp
+        mock_gpt_resp = MagicMock()
+        mock_gpt_resp.choices = [mock_gpt_choice]
+
+        async def mock_gpt_create(**kwargs):
+            return mock_gpt_resp
+
+        analyzer._anthropic.messages.create = mock_claude_create
+        analyzer._openai.chat.completions.create = mock_gpt_create
+
+        result = await analyzer.analyze(
+            "Please send me the document today if you can manage it.",
+            context="",
+        )
+        # Landing absent or null but analysis still returned a valid rewrite
+        assert result.get("landing") is None
+        assert result["agents"]["landing"] == "error"
+        assert result.get("rewrite")

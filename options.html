@@ -207,6 +207,50 @@
       border-radius: 6px;
       margin-top: 8px;
     }
+
+    .tg-voice-sample-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      padding: 8px 10px;
+      border: 1px solid #eee;
+      border-radius: 6px;
+      margin-bottom: 6px;
+      background: #fafafa;
+    }
+    .tg-voice-sample-text {
+      flex: 1;
+      font-size: 13px;
+      color: #333;
+      line-height: 1.4;
+    }
+    .tg-voice-source-badge {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      padding: 2px 6px;
+      border-radius: 10px;
+      flex-shrink: 0;
+    }
+    .tg-voice-source-badge.trained {
+      background: #E8F5E9;
+      color: #2E7D32;
+    }
+    .tg-voice-source-badge.auto {
+      background: #F5F5F5;
+      color: #757575;
+    }
+    .tg-voice-delete-btn {
+      background: transparent;
+      color: #999;
+      border: none;
+      cursor: pointer;
+      font-size: 16px;
+      padding: 0 4px;
+      line-height: 1;
+    }
+    .tg-voice-delete-btn:hover { color: #e53935; }
   </style>
 </head>
 <body>
@@ -249,6 +293,22 @@
       <button class="btn btn-primary" id="saveRules">Save rules</button>
       <span class="status" id="rulesStatus"></span>
     </div>
+  </div>
+
+  <div class="section">
+    <h2>Train Your Voice</h2>
+    <p>Paste 5&ndash;10 messages you'd be happy to send as-is. ToneGuard will learn your style and match it in rewrites. Separate samples with a blank line.</p>
+    <textarea id="voiceTraining" placeholder="Hey team — shipping the fix this afternoon. Will ping when it's up.&#10;&#10;Quick heads up that the deploy is taking longer than expected. Update by 4pm.&#10;&#10;Thanks for sending these over. I'll review tonight and get back with notes tomorrow."></textarea>
+    <div class="btn-row">
+      <button class="btn btn-primary" id="saveTraining">Save training samples</button>
+      <button class="btn" id="regenerateFingerprint" style="margin-left:8px;">Regenerate style profile</button>
+      <span class="status" id="voiceStatus"></span>
+    </div>
+    <div id="voiceSamplesList" style="margin-top:12px;"></div>
+    <details style="margin-top:8px;">
+      <summary style="cursor:pointer; font-size:12px; color:#666;">Current style profile</summary>
+      <pre id="voiceFingerprintView" style="margin-top:8px; padding:10px; background:#f5f5f5; border-radius:6px; font-size:12px; white-space:pre-wrap;">No profile generated yet &mdash; add 3+ trained samples and hit "Regenerate".</pre>
+    </details>
   </div>
 
   <div class="section">

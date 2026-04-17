@@ -18,6 +18,7 @@ from learning_store import LearningStore, STORAGE_KEYS
 from merge import (
     merge_decisions,
     merge_voice_samples,
+    merge_voice_fingerprint,
     merge_relationships,
     merge_custom_rules,
     merge_stats_history,
@@ -31,7 +32,7 @@ TABLE = "sync_data"
 DEBOUNCE_SECONDS = 5.0
 POLL_INTERVAL_SECONDS = 300  # 5 minutes
 
-DATA_TYPES = ["decisions", "voice_samples", "relationships", "custom_rules", "stats_history"]
+DATA_TYPES = ["decisions", "voice_samples", "voice_fingerprint", "relationships", "custom_rules", "stats_history"]
 
 
 def hash_api_key(api_key: str) -> str:
@@ -214,6 +215,8 @@ class SyncManager:
             return merge_decisions(local, remote)
         elif data_type == "voice_samples":
             return merge_voice_samples(local, remote)
+        elif data_type == "voice_fingerprint":
+            return merge_voice_fingerprint(local, remote)
         elif data_type == "relationships":
             return merge_relationships(local, remote)
         elif data_type == "custom_rules":

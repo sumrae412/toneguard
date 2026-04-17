@@ -138,3 +138,82 @@ class TestGetLearningContext:
         ctx = store.get_learning_context(limit=5)
         assert len(ctx["recent_decisions"]) == 1
         assert len(ctx["voice_samples"]) == 2
+
+
+class TestVoiceSampleSource:
+    def test_add_voice_sample_defaults_to_auto_source(self, store):
+        store.add_voice_sample("This is an example of my writing style for testing.")
+        samples = store.get("voice_samples")
+        assert len(samples) == 1
+        assert samples[0]["source"] == "auto"
+
+    def test_add_voice_sample_accepts_trained_source(self, store):
+        store.add_voice_sample(
+            "A carefully curated sample paragraph from me.", source="trained"
+        )
+        samples = store.get("voice_samples")
+        assert samples[0]["source"] == "trained"
+
+    def test_add_voice_sample_rejects_too_short(self, store):
+        # <30 chars should not be stored
+        result = store.add_voice_sample("too short")
+        assert result is False
+        assert (store.get("voice_samples") or []) == []
+
+    def test_add_voice_sample_dedupes_existing_text(self, store):
+        text = "Identical sample text that is long enough to qualify."
+        store.add_voice_sample(text, source="auto")
+        store.add_voice_sample(text, source="trained")
+        samples = store.get("voice_samples")
+        assert len(samples) == 1
+        # Trained upgrade: when same text is re-added as trained, source upgrades
+        assert samples[0]["source"] == "trained"
+
+    def test_trained_samples_capped_at_15(self, store):
+        for i in range(20):
+            store.add_voice_sample(
+                f"Trained sample number {i} with enough characters to pass the gate.",
+                source="trained",
+            )
+        samples = [s for s in store.get("voice_samples") if s.get("source") == "trained"]
+        assert len(samples) == 15
+
+    def test_auto_samples_capped_at_30(self, store):
+        for i in range(40):
+            store.add_voice_sample(
+                f"Auto sample number {i} with enough characters to qualify for storage."
+            )
+        samples = [s for s in store.get("voice_samples") if s.get("source") == "auto"]
+        assert len(samples) == 30
+
+    def test_get_learning_context_prefers_trained(self, store):
+        # 5 auto + 3 trained — context should return trained first
+        for i in range(5):
+            store.add_voice_sample(f"Auto sample {i} with plenty of text content here.")
+        for i in range(3):
+            store.add_voice_sample(
+                f"Trained sample {i} is carefully written by the user.",
+                source="trained",
+            )
+        ctx = store.get_learning_context(limit=5)
+        sources = [s.get("source") for s in ctx["voice_samples"]]
+        # Trained first (up to 5), then auto
+        assert sources.count("trained") == 3
+        assert sources.count("auto") == 2
+
+
+class TestVoiceFingerprint:
+    def test_set_and_get_fingerprint(self, store):
+        fp = {
+            "text": "Terse, declarative, avoids exclamation marks.",
+            "updatedAt": "2026-04-16T10:00:00Z",
+            "sample_count": 5,
+        }
+        store.set("voice_fingerprint", fp)
+        store.load()
+        assert store.get("voice_fingerprint") == fp
+
+    def test_clear_fingerprint(self, store):
+        store.set("voice_fingerprint", {"text": "x", "updatedAt": "2026-04-16T10:00:00Z"})
+        store.set("voice_fingerprint", None)
+        assert store.get("voice_fingerprint") is None
