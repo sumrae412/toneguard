@@ -81,6 +81,36 @@
     }
   }
 
+  // Forward a decision to content.js's onDecision callback and ack the iframe
+  // with ok/error based on what the callback returned or threw.
+  //
+  // onDecision may:
+  //   - return undefined / void (legacy) → treated as ok:true
+  //   - return an object { ok: bool, error?: string } → use as-is
+  //   - return a Promise resolving to either of the above → await it
+  //   - throw synchronously or reject → ok:false with the error message
+  async function handleDecision(msg) {
+    const id = msg.id;
+    if (!onDecision) {
+      sendAck(id, false, "no decision handler bound");
+      return;
+    }
+    try {
+      const result = await onDecision(msg.decision);
+      if (result && typeof result === "object" && "ok" in result) {
+        sendAck(id, !!result.ok, result.error);
+      } else {
+        sendAck(id, true);
+      }
+    } catch (err) {
+      sendAck(id, false, err && err.message ? err.message : String(err));
+    }
+  }
+
+  function sendAck(id, ok, error) {
+    postToFrame({ type: "decision_ack", id, ok, error: error || undefined });
+  }
+
   window.addEventListener("message", (e) => {
     // Only accept messages from our own iframe
     if (!iframe || e.source !== iframe.contentWindow) return;
@@ -101,7 +131,7 @@
         break;
 
       case "decision":
-        if (onDecision) onDecision(msg.decision);
+        handleDecision(msg);
         break;
 
       case "replace_selection":

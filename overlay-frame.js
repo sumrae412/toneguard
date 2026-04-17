@@ -8,12 +8,18 @@
 //     { type: "show_passed" }
 //     { type: "show_stale" }
 //     { type: "hide" }
+//     { type: "decision_ack", id, ok, error? }   // confirms the parent acted
 //
 //   frame → parent:
 //     { type: "ready" }                                    // sent on load
 //     { type: "size", open: bool }                         // ask parent to enable/disable pointer events
-//     { type: "decision", decision: { action, suggestion? } }
+//     { type: "decision", id, decision: { action, suggestion? } }
 //     { type: "replace_selection", text }                  // for context-menu selection mode
+//
+// ACK/NACK contract: every "decision" carries a unique id. The parent acts,
+// then replies with "decision_ack" {id, ok, error?}. The iframe paints the
+// success toast ONLY on ok:true; on ok:false (or timeout) it shows an error
+// state so the user is never told success when the action silently failed.
 
 (function () {
   "use strict";
@@ -22,6 +28,11 @@
   let suggestionWasEdited = false;
   let undoTimer = null;
   let undoInterval = null;
+
+  // Pending decisions awaiting parent ack: id → { resolve, reject, timer }
+  const pendingDecisions = new Map();
+  let nextDecisionId = 0;
+  const DECISION_ACK_TIMEOUT_MS = 5000;
 
   const els = {
     drawer: document.getElementById("tgDrawer"),
@@ -56,8 +67,29 @@
     window.parent.postMessage({ source: "toneguard-frame", ...msg }, "*");
   }
 
+  // Send a decision to the parent and wait for its ack. Resolves on ok:true,
+  // rejects on ok:false or timeout. Callers paint success only on resolve.
   function notifyDecision(decision) {
-    sendToParent({ type: "decision", decision });
+    const id = ++nextDecisionId;
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        if (pendingDecisions.has(id)) {
+          pendingDecisions.delete(id);
+          reject(new Error("decision_ack timeout"));
+        }
+      }, DECISION_ACK_TIMEOUT_MS);
+      pendingDecisions.set(id, { resolve, reject, timer });
+      sendToParent({ type: "decision", id, decision });
+    });
+  }
+
+  function handleDecisionAck(msg) {
+    const pending = pendingDecisions.get(msg.id);
+    if (!pending) return; // stale ack (already timed out) — ignore
+    clearTimeout(pending.timer);
+    pendingDecisions.delete(msg.id);
+    if (msg.ok) pending.resolve();
+    else pending.reject(new Error(msg.error || "action failed"));
   }
 
   // --- DOM helpers ---
@@ -398,7 +430,7 @@
 
   // --- Action handlers ---
 
-  function handleSendOriginal() {
+  async function handleSendOriginal() {
     if (!currentResult) {
       hide();
       return;
@@ -411,8 +443,12 @@
       reasoning: currentResult.reasoning,
       wasEdited: false
     });
-    notifyDecision({ action: "send_original" });
-    showSent("Sent as-is.");
+    try {
+      await notifyDecision({ action: "send_original" });
+      showSent("Sent as-is.");
+    } catch (err) {
+      showActionError("Couldn't send — try again from your compose window.", err);
+    }
   }
 
   function showUndoCountdown(finalText, wasEdited) {
@@ -436,7 +472,7 @@
       if (secondsLeft > 0) countdownText.textContent = "Sending in " + secondsLeft + "...";
     }, 1000);
 
-    undoTimer = setTimeout(() => {
+    undoTimer = setTimeout(async () => {
       clearInterval(undoInterval);
       toast.remove();
       logDecision({
@@ -447,8 +483,16 @@
         reasoning: savedResult.reasoning,
         wasEdited
       });
-      notifyDecision({ action: "use_suggestion", suggestion: finalText });
-      showSent(wasEdited ? "Edited version sent!" : "Suggestion applied!");
+      try {
+        await notifyDecision({ action: "use_suggestion", suggestion: finalText });
+        showSent(wasEdited ? "Edited version sent!" : "Suggestion applied!");
+      } catch (err) {
+        // Parent couldn't insert/send — tell the user the truth so they can
+        // paste the rewrite manually. Preserve it on the clipboard as a last-
+        // ditch affordance.
+        try { navigator.clipboard.writeText(finalText); } catch (_) { /* ignore */ }
+        showActionError("Couldn't apply the rewrite — it's on your clipboard. Paste and send manually.", err);
+      }
     }, 3000);
 
     undoBtn.addEventListener("click", () => {
@@ -470,6 +514,31 @@
       sent.remove();
       hide();
     }, 2000);
+  }
+
+  function showActionError(message, err) {
+    // Distinct from showSent: warn-styled, longer visible, preserves a close
+    // action. Logged to console so it's not silent during dev.
+    if (err) console.warn("ToneGuard:", err && err.message ? err.message : err);
+    clearToast();
+    els.content.style.display = "none";
+    const warn = el("div", { className: "tg-stale-notice" });
+    warn.appendChild(el("div", { className: "tg-stale-icon", textContent: "\u26A0" }));
+    warn.appendChild(el("div", { className: "tg-stale-title", textContent: "Couldn't finish that action" }));
+    warn.appendChild(el("div", { className: "tg-stale-msg", textContent: message }));
+    const closeBtn = el("button", {
+      className: "tg-btn tg-btn-primary",
+      textContent: "Close",
+      type: "button"
+    });
+    closeBtn.addEventListener("click", () => {
+      warn.remove();
+      hide();
+    });
+    warn.appendChild(closeBtn);
+    els.drawer.appendChild(warn);
+    openDrawer();
+    setTimeout(() => { if (warn.isConnected) { warn.remove(); hide(); } }, 8000);
   }
 
   async function submitAnswers() {
@@ -594,11 +663,12 @@
     const msg = e.data;
     if (!msg || msg.source !== "toneguard-content") return;
     switch (msg.type) {
-      case "show_loading": showLoading(); break;
-      case "show_result":  showResult(msg.result); break;
-      case "show_passed":  showPassed(); break;
-      case "show_stale":   showStale(); break;
-      case "hide":         hide(); break;
+      case "show_loading":  showLoading(); break;
+      case "show_result":   showResult(msg.result); break;
+      case "show_passed":   showPassed(); break;
+      case "show_stale":    showStale(); break;
+      case "hide":          hide(); break;
+      case "decision_ack":  handleDecisionAck(msg); break;
     }
   });
 
