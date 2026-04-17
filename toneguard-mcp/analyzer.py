@@ -89,8 +89,10 @@ class ToneAnalyzer:
     def _load_critic_prompts(self) -> None:
         claude_path = CRITICS_DIR / "claude-tone.md"
         gpt_path = CRITICS_DIR / "gpt-tone.md"
+        landing_path = CRITICS_DIR / "landing.md"
         self._claude_prompt = claude_path.read_text() if claude_path.exists() else ""
         self._gpt_prompt = gpt_path.read_text() if gpt_path.exists() else ""
+        self._landing_prompt = landing_path.read_text() if landing_path.exists() else ""
 
     def _reload_style_rules(self) -> None:
         try:
@@ -146,19 +148,24 @@ class ToneAnalyzer:
         context: str = "",
         recipient: str = "",
     ) -> dict[str, Any]:
-        """Run both critics in parallel, synthesize, then self-grade."""
+        """Run tone + clarity critics and the landing analyzer in parallel,
+        synthesize the rewrite, self-grade, attach the landing view, and return.
+        """
         user_context = self._build_context(message, context, recipient)
 
-        # Run critics in parallel
-        claude_result, gpt_result = await asyncio.gather(
+        # Run tone + clarity + landing critics in parallel. Landing failure
+        # must NOT block the rewrite path — it's descriptive, not prescriptive.
+        claude_result, gpt_result, landing_result = await asyncio.gather(
             self._call_claude(user_context),
             self._call_gpt(user_context),
+            self._call_landing(message, context),
             return_exceptions=True,
         )
 
         # Handle partial failures
         claude_ok = not isinstance(claude_result, Exception)
         gpt_ok = not isinstance(gpt_result, Exception)
+        landing_ok = not isinstance(landing_result, Exception)
 
         if not claude_ok:
             logger.error("Claude critic failed: %s", claude_result)
@@ -166,19 +173,61 @@ class ToneAnalyzer:
         if not gpt_ok:
             logger.error("GPT critic failed: %s", gpt_result)
             gpt_result = _empty_critic_result()
+        if not landing_ok:
+            logger.warning("Landing critic failed: %s", landing_result)
+            landing_result = None
 
         # Synthesize with rubric scoring and competing rewrites
         synthesis = await self._synthesize(message, claude_result, gpt_result)
         synthesis["agents"] = {
             "claude": "ok" if claude_ok else "error",
             "gpt": "ok" if gpt_ok else "error",
+            "landing": "ok" if landing_ok else "error",
         }
 
         # Self-grade loop: refine if any rubric dimension < B
         if synthesis.get("flagged") and synthesis.get("rubric"):
             synthesis = await self._self_grade(message, synthesis)
 
+        # Attach landing view. May be None (failure or too-short); the
+        # extension hides the panel when fields are null.
+        synthesis["landing"] = landing_result
+
         return synthesis
+
+    async def _call_landing(
+        self, message: str, context: str = ""
+    ) -> dict[str, Any] | None:
+        """Ask Haiku what the message reads as on a single skim.
+
+        Returns a dict with {takeaway, tone_felt, next_action} (any of which
+        may be None for very-short messages), or None if the call fails or
+        the prompt is missing. Cost ≈ $0.002 per call.
+        """
+        if not self._landing_prompt:
+            return None
+        # Skip for trivial messages — mirrors the prompt's own rule so we
+        # don't waste a round trip.
+        if len((message or "").split()) < 10:
+            return {"takeaway": None, "tone_felt": None, "next_action": None}
+
+        user_content = f"## Message\n\n{message}"
+        if context:
+            user_content += f"\n\n## Context\n\n{context}"
+
+        resp = await self._anthropic.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=256,
+            system=self._landing_prompt,
+            messages=[{"role": "user", "content": user_content}],
+        )
+        parsed = self._parse_json(resp.content[0].text)
+        # Normalize: only keep the three known fields, coerce missing to None
+        return {
+            "takeaway": parsed.get("takeaway") or None,
+            "tone_felt": parsed.get("tone_felt") or None,
+            "next_action": parsed.get("next_action") or None,
+        }
 
     async def _call_claude(self, user_context: str) -> dict[str, Any]:
         resp = await self._anthropic.messages.create(

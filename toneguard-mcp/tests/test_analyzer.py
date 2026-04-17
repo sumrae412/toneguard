@@ -618,3 +618,125 @@ class TestVoiceFingerprintPreference:
         import pytest
         with pytest.raises(ValueError, match="needs >=3"):
             await analyzer.generate_fingerprint(samples=["just one"])
+
+
+class TestLandingCritic:
+    """Descriptive landing view runs in parallel with tone/clarity critics."""
+
+    @pytest.mark.asyncio
+    async def test_landing_skipped_for_short_messages(self, analyzer):
+        """Short messages (<10 words) short-circuit to null fields — no API call."""
+        result = await analyzer._call_landing("hey quick question", context="")
+        assert result == {
+            "takeaway": None,
+            "tone_felt": None,
+            "next_action": None,
+        }
+
+    @pytest.mark.asyncio
+    async def test_landing_parses_structured_response(self, analyzer):
+        """Haiku returns the three-field JSON; parser normalizes to fields."""
+        landing_json = (
+            '{"takeaway": "They want a status update", '
+            '"tone_felt": "urgent, terse", '
+            '"next_action": "send a status update"}'
+        )
+
+        async def mock_create(**kwargs):
+            msg = MagicMock()
+            msg.content = [MagicMock(text=landing_json)]
+            return msg
+
+        analyzer._anthropic.messages.create = mock_create
+        result = await analyzer._call_landing(
+            "Hey — what's going on with the deploy? Haven't heard a peep all day.",
+            context="",
+        )
+        assert result["takeaway"] == "They want a status update"
+        assert result["tone_felt"] == "urgent, terse"
+        assert result["next_action"] == "send a status update"
+
+    @pytest.mark.asyncio
+    async def test_analyze_attaches_landing_to_result(self, analyzer):
+        """Full analyze() pipeline surfaces landing in synthesis['landing']."""
+        claude_resp = _make_critic_response()
+        gpt_resp = _make_critic_response()
+        synth_resp = _make_synthesis_response()
+        landing_json = (
+            '{"takeaway": "They need the doc today", '
+            '"tone_felt": "rushed, polite", '
+            '"next_action": "share the doc"}'
+        )
+
+        # Route Haiku calls: the tone critic gets the normal critic response,
+        # landing gets the landing JSON — distinguished by system prompt.
+        async def mock_claude_create(**kwargs):
+            msg = MagicMock()
+            system = kwargs.get("system", "") or ""
+            model = kwargs.get("model", "")
+            if "claude-haiku" in model and "landing" in system.lower():
+                msg.content = [MagicMock(text=landing_json)]
+            elif "claude-haiku" in model:
+                msg.content = [MagicMock(text=claude_resp)]
+            else:
+                # Sonnet (synthesizer)
+                msg.content = [MagicMock(text=synth_resp)]
+            return msg
+
+        mock_gpt_choice = MagicMock()
+        mock_gpt_choice.message.content = gpt_resp
+        mock_gpt_resp = MagicMock()
+        mock_gpt_resp.choices = [mock_gpt_choice]
+
+        async def mock_gpt_create(**kwargs):
+            return mock_gpt_resp
+
+        analyzer._anthropic.messages.create = mock_claude_create
+        analyzer._openai.chat.completions.create = mock_gpt_create
+
+        result = await analyzer.analyze(
+            "Can you send me the doc today? Need it before the meeting please.",
+            context="",
+        )
+        assert result["landing"]["takeaway"] == "They need the doc today"
+        assert result["landing"]["tone_felt"] == "rushed, polite"
+        assert result["agents"]["landing"] == "ok"
+
+    @pytest.mark.asyncio
+    async def test_landing_failure_does_not_block_rewrite(self, analyzer):
+        """Landing throwing must not fail the overall analyze() call."""
+        claude_resp = _make_critic_response()
+        gpt_resp = _make_critic_response()
+        synth_resp = _make_synthesis_response()
+
+        async def mock_claude_create(**kwargs):
+            system = kwargs.get("system", "") or ""
+            model = kwargs.get("model", "")
+            if "claude-haiku" in model and "landing" in system.lower():
+                raise RuntimeError("landing api down")
+            msg = MagicMock()
+            if "claude-haiku" in model:
+                msg.content = [MagicMock(text=claude_resp)]
+            else:
+                msg.content = [MagicMock(text=synth_resp)]
+            return msg
+
+        mock_gpt_choice = MagicMock()
+        mock_gpt_choice.message.content = gpt_resp
+        mock_gpt_resp = MagicMock()
+        mock_gpt_resp.choices = [mock_gpt_choice]
+
+        async def mock_gpt_create(**kwargs):
+            return mock_gpt_resp
+
+        analyzer._anthropic.messages.create = mock_claude_create
+        analyzer._openai.chat.completions.create = mock_gpt_create
+
+        result = await analyzer.analyze(
+            "Please send me the document today if you can manage it.",
+            context="",
+        )
+        # Landing absent or null but analysis still returned a valid rewrite
+        assert result.get("landing") is None
+        assert result["agents"]["landing"] == "error"
+        assert result.get("rewrite")
