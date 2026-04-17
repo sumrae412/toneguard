@@ -216,6 +216,11 @@
           // match, nack so the iframe can surface a manual-paste fallback.
           const after = currentPlatform.getEditorText(pendingEditor);
           if ((after || "").trim() !== decision.suggestion.trim()) {
+            // Must clear state before returning — otherwise the pendingEditor
+            // concurrency guard in analyzeAndIntercept blocks every future
+            // send until the tab is reloaded.
+            pendingText = null;
+            pendingEditor = null;
             return { ok: false, error: "editor did not accept the rewrite" };
           }
         }
