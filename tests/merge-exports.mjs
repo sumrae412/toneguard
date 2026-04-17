@@ -19,6 +19,7 @@ const merge = sandbox.globalThis.__toneGuardMerge;
 
 export const mergeDecisions = merge.mergeDecisions;
 export const mergeVoiceSamples = merge.mergeVoiceSamples;
+export const mergeVoiceFingerprint = merge.mergeVoiceFingerprint;
 export const mergeRelationships = merge.mergeRelationships;
 export const mergeCustomRules = merge.mergeCustomRules;
 export const mergeStatsHistory = merge.mergeStatsHistory;

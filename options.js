@@ -196,3 +196,152 @@ clearHistoryBtn.addEventListener("click", () => {
     });
   }
 });
+
+// --- Train Your Voice ---
+//
+// "Paste 5-10 messages you'd be happy to send as-is" flow. Samples are
+// tagged source="trained" in storage and take precedence over auto-collected
+// ones. Users can also regenerate a derived style fingerprint (see
+// MCP tool regenerate_fingerprint; here we just display the current one).
+
+const voiceTrainingEl = document.getElementById("voiceTraining");
+const saveTrainingBtn = document.getElementById("saveTraining");
+const regenerateFingerprintBtn = document.getElementById("regenerateFingerprint");
+const voiceStatusEl = document.getElementById("voiceStatus");
+const voiceSamplesListEl = document.getElementById("voiceSamplesList");
+const voiceFingerprintViewEl = document.getElementById("voiceFingerprintView");
+
+function setVoiceStatus(msg, color) {
+  voiceStatusEl.textContent = msg || "";
+  voiceStatusEl.style.color = color || "#4CAF50";
+  if (msg) setTimeout(() => { voiceStatusEl.textContent = ""; }, 3000);
+}
+
+function splitTrainingInput(raw) {
+  // Blank-line separated blocks; trim each; drop empties.
+  return (raw || "")
+    .split(/\n\s*\n/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+async function refreshVoiceProfile() {
+  const resp = await chrome.runtime.sendMessage({ type: "GET_VOICE_PROFILE" });
+  renderVoiceSamples(resp);
+  renderFingerprint(resp && resp.fingerprint);
+}
+
+function renderVoiceSamples(profile) {
+  voiceSamplesListEl.textContent = "";
+  if (!profile) return;
+
+  const samples = [...(profile.trained_samples || []), ...(profile.auto_samples || [])];
+  if (samples.length === 0) {
+    const empty = document.createElement("div");
+    empty.style.cssText = "padding:10px; color:#999; font-size:13px;";
+    empty.textContent = "No voice samples yet. Add training samples above, or keep using ToneGuard and it'll learn from your sent messages.";
+    voiceSamplesListEl.appendChild(empty);
+    return;
+  }
+
+  // Sort newest first
+  samples.sort((a, b) => (b.timestamp || "").localeCompare(a.timestamp || ""));
+
+  for (const s of samples) {
+    const item = document.createElement("div");
+    item.className = "tg-voice-sample-item";
+
+    const textEl = document.createElement("div");
+    textEl.className = "tg-voice-sample-text";
+    textEl.textContent = s.text || "";
+    item.appendChild(textEl);
+
+    const source = s.source || "auto";
+    const badge = document.createElement("span");
+    badge.className = "tg-voice-source-badge " + (source === "trained" ? "trained" : "auto");
+    badge.textContent = source;
+    item.appendChild(badge);
+
+    const del = document.createElement("button");
+    del.className = "tg-voice-delete-btn";
+    del.title = "Remove this sample";
+    del.textContent = "\u00D7"; // multiplication sign
+    del.addEventListener("click", async () => {
+      if (!s.timestamp) return;
+      const resp = await chrome.runtime.sendMessage({
+        type: "DELETE_VOICE_SAMPLE",
+        timestamp: s.timestamp
+      });
+      if (resp && resp.ok) refreshVoiceProfile();
+    });
+    item.appendChild(del);
+
+    voiceSamplesListEl.appendChild(item);
+  }
+}
+
+function renderFingerprint(fingerprint) {
+  if (!fingerprint || !fingerprint.text) {
+    voiceFingerprintViewEl.textContent = "No profile generated yet \u2014 add 3+ trained samples and hit \"Regenerate style profile\".";
+    return;
+  }
+  const updated = fingerprint.updatedAt
+    ? new Date(fingerprint.updatedAt).toLocaleString()
+    : "unknown";
+  voiceFingerprintViewEl.textContent =
+    "Generated " + updated + " from " + (fingerprint.sample_count || 0) + " samples\n\n" +
+    fingerprint.text;
+}
+
+saveTrainingBtn.addEventListener("click", async () => {
+  const samples = splitTrainingInput(voiceTrainingEl.value);
+  if (!samples.length) {
+    setVoiceStatus("Paste at least one sample (separated by blank lines).", "#e53935");
+    return;
+  }
+  saveTrainingBtn.disabled = true;
+  try {
+    const resp = await chrome.runtime.sendMessage({ type: "TRAIN_VOICE", samples });
+    if (!resp) throw new Error("no response from background");
+    const parts = [];
+    if (resp.accepted) parts.push(resp.accepted + " saved");
+    if (resp.rejected) parts.push(resp.rejected + " rejected (too short or duplicate)");
+    setVoiceStatus(parts.join(", "), resp.accepted ? "#4CAF50" : "#FF9800");
+    voiceTrainingEl.value = "";
+    refreshVoiceProfile();
+  } catch (err) {
+    setVoiceStatus("Couldn't save: " + (err.message || err), "#e53935");
+  } finally {
+    saveTrainingBtn.disabled = false;
+  }
+});
+
+regenerateFingerprintBtn.addEventListener("click", async () => {
+  regenerateFingerprintBtn.disabled = true;
+  setVoiceStatus("Generating style profile\u2026", "#2196F3");
+  try {
+    // Fingerprint generation lives in the MCP server, not the service worker
+    // (needs API access and the analyzer's Sonnet call). The extension's
+    // service worker doesn't have that pipeline today; wire a
+    // REGENERATE_FINGERPRINT message so users see the error path clearly
+    // until the extension-side generator lands.
+    const resp = await chrome.runtime.sendMessage({ type: "REGENERATE_FINGERPRINT" });
+    if (resp && resp.ok) {
+      setVoiceStatus("Style profile regenerated.", "#4CAF50");
+      refreshVoiceProfile();
+    } else {
+      setVoiceStatus(
+        (resp && resp.error) ||
+          "Fingerprint generation is only available via the MCP server for now.",
+        "#FF9800"
+      );
+    }
+  } catch (err) {
+    setVoiceStatus("Couldn't regenerate: " + (err.message || err), "#e53935");
+  } finally {
+    regenerateFingerprintBtn.disabled = false;
+  }
+});
+
+// Initial load
+refreshVoiceProfile();

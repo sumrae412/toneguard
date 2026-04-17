@@ -1,11 +1,12 @@
 // ToneGuard SyncManager — orchestrates local-first sync with Supabase.
 // Init with API key → auto-pairs via hash → pull/push/subscribe.
 
-const DATA_TYPES = ["decisions", "voice_samples", "relationships", "custom_rules", "stats_history"];
+const DATA_TYPES = ["decisions", "voice_samples", "voice_fingerprint", "relationships", "custom_rules", "stats_history"];
 
 const STORAGE_KEYS = {
   decisions: "tg_decisions",
   voice_samples: "tg_voice_samples",
+  voice_fingerprint: "tg_voice_fingerprint",
   relationships: "tg_relationships",
   custom_rules: "tg_custom_rules",
   stats_history: "tg_stats_history"
@@ -134,6 +135,8 @@ class SyncManager {
         return this.merge.mergeDecisions(local, remote);
       case "voice_samples":
         return this.merge.mergeVoiceSamples(local, remote);
+      case "voice_fingerprint":
+        return this.merge.mergeVoiceFingerprint(local, remote);
       case "relationships":
         return this.merge.mergeRelationships(local, remote);
       case "custom_rules": {

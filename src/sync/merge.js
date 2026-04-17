@@ -130,10 +130,23 @@ function mergeByMode(a, b) {
   return merged;
 }
 
+// Last-write-wins on updatedAt. Unlike raw voice_samples (CRDT-union),
+// the fingerprint is a derived artifact regenerated on demand, so newest
+// wins is the right semantics. Returns null when both sides are null.
+function mergeVoiceFingerprint(local, remote) {
+  if (local == null && remote == null) return null;
+  if (local == null) return remote;
+  if (remote == null) return local;
+  const localAt = local.updatedAt || "";
+  const remoteAt = remote.updatedAt || "";
+  return remoteAt > localAt ? remote : local;
+}
+
 if (typeof globalThis !== "undefined") {
   globalThis.__toneGuardMerge = {
     mergeDecisions,
     mergeVoiceSamples,
+    mergeVoiceFingerprint,
     mergeRelationships,
     mergeCustomRules,
     mergeStatsHistory

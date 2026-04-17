@@ -207,6 +207,54 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       .catch((err) => sendResponse({ error: err.message }));
     return true; // async response
   }
+
+  if (message.type === "TRAIN_VOICE") {
+    // Batch-insert pasted samples as source="trained". Called from
+    // options.js when the user hits "Save training samples".
+    (async () => {
+      const samples = Array.isArray(message.samples) ? message.samples : [];
+      let accepted = 0;
+      let rejected = 0;
+      for (const text of samples) {
+        if (typeof text !== "string") { rejected++; continue; }
+        const ok = await saveVoiceSample(text, "trained");
+        if (ok) accepted++; else rejected++;
+      }
+      const stored = await getVoiceSamples();
+      const trainedTotal = stored.filter((s) => s.source === "trained").length;
+      sendResponse({ accepted, rejected, trained_total: trainedTotal });
+    })();
+    return true;
+  }
+
+  if (message.type === "GET_VOICE_PROFILE") {
+    (async () => {
+      const samples = await getVoiceSamples();
+      const { tg_voice_fingerprint: fingerprint } = await chrome.storage.local.get([
+        "tg_voice_fingerprint"
+      ]);
+      sendResponse({
+        trained_samples: samples.filter((s) => s.source === "trained"),
+        auto_samples: samples.filter((s) => s.source !== "trained"),
+        fingerprint: fingerprint || null
+      });
+    })();
+    return true;
+  }
+
+  if (message.type === "DELETE_VOICE_SAMPLE") {
+    deleteVoiceSample(message.timestamp)
+      .then((ok) => sendResponse({ ok }))
+      .catch((err) => sendResponse({ ok: false, error: err.message }));
+    return true;
+  }
+
+  if (message.type === "REGENERATE_FINGERPRINT") {
+    regenerateVoiceFingerprint()
+      .then(sendResponse)
+      .catch((err) => sendResponse({ ok: false, error: err.message }));
+    return true;
+  }
 });
 
 async function handleAnalyze(text, context, site) {
@@ -399,33 +447,169 @@ async function getCustomRules() {
   return rules || "";
 }
 
-async function saveVoiceSample(text) {
-  if (!text || text.length < 30) return;
+// Voice sample storage with per-source caps.
+//
+// Two sources:
+//   - "auto": silently collected from user's accepted messages (background call)
+//   - "trained": pasted via the options-page "Train your voice" section
+// Trained samples take precedence in the rewriter's context (see
+// getVoiceContext below and the MCP analyzer's _build_voice_section).
+const VOICE_SAMPLE_MIN_CHARS = 30;
+const VOICE_SAMPLE_CAP_TRAINED = 15;
+const VOICE_SAMPLE_CAP_AUTO = 30;
+
+async function saveVoiceSample(text, source = "auto") {
+  if (!text || text.length < VOICE_SAMPLE_MIN_CHARS) return false;
+  if (source !== "trained") source = "auto";
 
   const { tg_voice_samples: existing } = await chrome.storage.local.get(["tg_voice_samples"]);
   const samples = existing || [];
 
-  samples.push({
-    text: text.slice(0, 300),
-    timestamp: new Date().toISOString()
-  });
-
-  if (samples.length > 30) {
-    samples.splice(0, samples.length - 30);
+  // Dedupe on text content. Trained upgrades over auto; same-source just
+  // refreshes the timestamp.
+  const trimmed = text.slice(0, 300).trim();
+  const existingSample = samples.find((s) => (s.text || "").trim() === trimmed);
+  const now = new Date().toISOString();
+  if (existingSample) {
+    if (source === "trained" || existingSample.source === "trained") {
+      existingSample.source = "trained";
+    } else if (!existingSample.source) {
+      existingSample.source = "auto";
+    }
+    existingSample.timestamp = now;
+  } else {
+    samples.push({ text: trimmed, source, timestamp: now });
   }
 
-  await chrome.storage.local.set({ tg_voice_samples: samples });
+  // Per-source eviction (oldest-first within each source bucket). Keeps
+  // trained samples safe from auto-collection churn.
+  const trained = samples.filter((s) => s.source === "trained");
+  const auto = samples.filter((s) => s.source !== "trained");
+  trained.sort((a, b) => (a.timestamp || "").localeCompare(b.timestamp || ""));
+  auto.sort((a, b) => (a.timestamp || "").localeCompare(b.timestamp || ""));
+  const keptTrained = trained.slice(-VOICE_SAMPLE_CAP_TRAINED);
+  const keptAuto = auto.slice(-VOICE_SAMPLE_CAP_AUTO);
+  const merged = [...keptTrained, ...keptAuto].sort(
+    (a, b) => (a.timestamp || "").localeCompare(b.timestamp || "")
+  );
+
+  await chrome.storage.local.set({ tg_voice_samples: merged });
 
   if (syncManager) syncManager.schedulePush("voice_samples");
+  return true;
+}
+
+async function getVoiceSamples() {
+  const { tg_voice_samples: samples } = await chrome.storage.local.get(["tg_voice_samples"]);
+  return samples || [];
+}
+
+async function deleteVoiceSample(timestamp) {
+  const samples = await getVoiceSamples();
+  const filtered = samples.filter((s) => s.timestamp !== timestamp);
+  await chrome.storage.local.set({ tg_voice_samples: filtered });
+  if (syncManager) syncManager.schedulePush("voice_samples");
+  return filtered.length !== samples.length;
+}
+
+// Generate a compressed style fingerprint from the user's trained samples.
+// Sonnet-tier (one-shot summarization called infrequently, so cost is low).
+// Mirrors toneguard-mcp/analyzer.py:generate_fingerprint — keep the prompt
+// in sync between the two if this one changes.
+async function regenerateVoiceFingerprint() {
+  const { tg_api_key: apiKey } = await chrome.storage.sync.get(["tg_api_key"]);
+  if (!apiKey) return { ok: false, error: "No API key set. Open the popup to add one." };
+
+  const samples = await getVoiceSamples();
+  const trained = samples
+    .filter((s) => s.source === "trained" && s.text && s.text.trim().length >= 10)
+    .map((s) => s.text.trim());
+  if (trained.length < 3) {
+    return {
+      ok: false,
+      error: "Add at least 3 trained samples before generating a style profile (currently " + trained.length + ")."
+    };
+  }
+
+  const samplesBlock = trained.map((t) => "---\n" + t + "\n---").join("\n\n");
+  const prompt =
+    "You are a writing coach analyzing samples of one person's writing " +
+    "to extract their personal style. Produce a compact, reusable style " +
+    "fingerprint that another writer could follow to sound like this person.\n\n" +
+    "## Samples\n\n" + samplesBlock + "\n\n" +
+    "## Your Task\n\n" +
+    "Return ONLY a markdown block with these exact section headings, each " +
+    "filled with 1-3 bullet observations grounded in the samples. No preamble, " +
+    "no explanations, no hedging. If a section genuinely has no signal from " +
+    "the samples, write `- (no clear pattern)` \u2014 don't invent patterns.\n\n" +
+    "### Tone defaults\n### Preferred phrasings\n### Avoided phrasings\n" +
+    "### Formality register\n### Opening and closing patterns";
+
+  try {
+    const response = await fetch(CLAUDE_API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true"
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 1024,
+        messages: [{ role: "user", content: prompt }]
+      })
+    });
+
+    if (!response.ok) {
+      const body = await response.text();
+      return { ok: false, error: "API error " + response.status + ": " + body.slice(0, 200) };
+    }
+
+    const data = await response.json();
+    const text = ((data.content && data.content[0] && data.content[0].text) || "").trim();
+    if (!text) return { ok: false, error: "Empty fingerprint response" };
+
+    const fingerprint = {
+      text,
+      updatedAt: new Date().toISOString(),
+      sample_count: trained.length
+    };
+    await chrome.storage.local.set({ tg_voice_fingerprint: fingerprint });
+    if (syncManager) syncManager.schedulePush("voice_fingerprint");
+
+    return { ok: true, fingerprint: text, sample_count: trained.length };
+  } catch (err) {
+    return { ok: false, error: err.message || String(err) };
+  }
 }
 
 async function getVoiceContext() {
-  const { tg_voice_samples: samples } = await chrome.storage.local.get(["tg_voice_samples"]);
-  if (!samples || samples.length < 5) return "";
+  const samples = await getVoiceSamples();
+  if (!samples.length) return "";
 
-  const picked = samples.slice(-5);
+  // If a derived fingerprint exists and the user has ≥3 trained samples,
+  // prefer the fingerprint (sharper signal, ~200 tokens) over raw samples.
+  const { tg_voice_fingerprint: fingerprint } = await chrome.storage.local.get([
+    "tg_voice_fingerprint"
+  ]);
+  const trainedCount = samples.filter((s) => s.source === "trained").length;
+  if (fingerprint && fingerprint.text && trainedCount >= 3) {
+    return "VOICE FINGERPRINT (match this style in rewrites):\n" + fingerprint.text;
+  }
+
+  // Trained samples take priority up to 5; fill with auto from the tail.
+  const trained = samples.filter((s) => s.source === "trained");
+  const auto = samples.filter((s) => s.source !== "trained");
+  const pickedTrained = trained.slice(-5);
+  const remaining = Math.max(0, 5 - pickedTrained.length);
+  const pickedAuto = remaining ? auto.slice(-remaining) : [];
+  const picked = [...pickedTrained, ...pickedAuto];
+
+  // Fall back to the old "need 5" threshold for auto-only users.
+  if (pickedTrained.length === 0 && picked.length < 5) return "";
+
   const voiceExamples = picked.map((s) => '  "' + s.text + '"').join("\n");
-
   return "VOICE SAMPLES (match this writing style in rewrites):\n" + voiceExamples;
 }
 
