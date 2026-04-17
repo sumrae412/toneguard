@@ -90,6 +90,24 @@ def _merge_by_mode(a: dict | None, b: dict | None) -> dict:
     return merged
 
 
+def merge_voice_fingerprint(local: dict | None, remote: dict | None) -> dict | None:
+    """Merge derived voice fingerprint: last-write-wins on updatedAt.
+
+    Unlike raw voice_samples (CRDT-union), the fingerprint is a derived
+    artifact regenerated on demand — newest-wins is the right semantics.
+    Returns None when both sides are None.
+    """
+    if local is None and remote is None:
+        return None
+    if local is None:
+        return remote
+    if remote is None:
+        return local
+    if (remote.get("updatedAt") or "") > (local.get("updatedAt") or ""):
+        return remote
+    return local
+
+
 def merge_stats_history(local: list | None, remote: list | None) -> list:
     """Merge stats history: union by weekStart, take higher counts per week, trim to 12."""
     local_arr = local or []

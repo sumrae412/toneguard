@@ -6,6 +6,7 @@ from merge import (
     merge_relationships,
     merge_custom_rules,
     merge_stats_history,
+    merge_voice_fingerprint,
 )
 
 
@@ -208,3 +209,29 @@ class TestMergeStatsHistory:
     def test_handles_empty_null(self):
         assert merge_stats_history(None, None) == []
         assert merge_stats_history([], []) == []
+
+
+# --- mergeVoiceFingerprint ---
+
+
+class TestMergeVoiceFingerprint:
+    def test_takes_remote_when_newer(self):
+        local = {"text": "old fp", "updatedAt": "2026-04-01T10:00:00Z", "sample_count": 3}
+        remote = {"text": "new fp", "updatedAt": "2026-04-02T10:00:00Z", "sample_count": 5}
+        result = merge_voice_fingerprint(local, remote)
+        assert result["text"] == "new fp"
+        assert result["sample_count"] == 5
+
+    def test_keeps_local_when_newer(self):
+        local = {"text": "local fp", "updatedAt": "2026-04-03T10:00:00Z", "sample_count": 4}
+        remote = {"text": "remote fp", "updatedAt": "2026-04-02T10:00:00Z", "sample_count": 2}
+        result = merge_voice_fingerprint(local, remote)
+        assert result["text"] == "local fp"
+
+    def test_handles_none(self):
+        assert merge_voice_fingerprint(None, None) is None
+
+    def test_handles_one_side_none(self):
+        local = {"text": "only local", "updatedAt": "2026-04-01T10:00:00Z"}
+        assert merge_voice_fingerprint(local, None) == local
+        assert merge_voice_fingerprint(None, local) == local
