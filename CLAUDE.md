@@ -24,6 +24,7 @@ Chrome extension + MCP server for tone analysis. Analyzes messages for professio
 - Haiku model ID: `claude-haiku-4-5-20251001`
 - Build backend: `hatchling`, not legacy setuptools
 - The `.env` file must be sourced into the shell for live integration tests (not just present on disk)
+- **Dual code paths: MCP + extension.** Prompts/behaviors live twice — `toneguard-mcp/critics/*.md` (MCP analyzer) AND inline constants in `service-worker.js` (extension calls Anthropic directly, not through MCP). Known pairs: landing critic (`critics/landing.md` ↔ `LANDING_SYSTEM_PROMPT`), fingerprint (`analyzer.py:generate_fingerprint` ↔ `regenerateVoiceFingerprint`). Any change to one must update the other.
 
 ## Chrome Extension Dev Loop
 
