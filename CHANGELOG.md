@@ -2,6 +2,54 @@
 
 All notable changes to ToneGuard will be documented in this file.
 
+## [0.3.1] - 2026-04-18
+
+### Fixed
+- **"Use suggestion" no longer falsely reports failure.** The parent-side
+  verification in `content.js` compared inserted text to the suggestion via
+  strict equality after a simple trim. Editors normalize content in ways
+  that broke the match even when the insert succeeded: Gmail appends the
+  signature below the body, Slack's Quill fallback pads empty paragraphs
+  with zero-width spaces, and various platforms convert NBSP/CRLF or
+  collapse newlines. The result was a nack every time, an ⚠ "Couldn't
+  apply the rewrite — it's on your clipboard" dialog, and a drawer the
+  user couldn't easily dismiss. Verification now normalizes both sides
+  (strip zero-width chars, NBSP → space, collapse whitespace, LF
+  endings) and accepts either exact match or the suggestion being *newly
+  present* in the editor (Gmail signature case). A suggestion that was
+  already a substring of the original draft no longer counts as
+  verification — that would falsely pass a silent no-op. Silent no-ops
+  still fail loudly. New `verifyInsertedText` helper in `lib.js` with 12
+  unit tests, including the before-contains-suggestion edge case.
+- **Error dialog no longer stacks or traps the drawer.** `clearToast()`
+  didn't remove `.tg-stale-notice` panels, so an older error could stay
+  on top of a fresh state. Backdrop click during a terminal toast
+  (`.tg-stale-notice`, `.tg-stale`, or `.tg-passed`) also re-entered
+  `handleSendOriginal()` and got a second nack ("no pending compose"),
+  stacking another error dialog. Both paths now clean up correctly.
+- **Fix applies to custom sites and the context-menu path too.**
+  `service-worker.js` now injects `lib.js` alongside `overlay.js` and
+  `content.js` in all three scripting paths (static manifest,
+  `registerContentScripts` for user-added sites, `executeScript` for
+  context-menu "Check tone with ToneGuard"). Without this, the verify
+  helper was absent on those paths and the old strict-equality check
+  would still fire.
+- **Missing verify helper now fails loudly instead of silently falling
+  back.** If `globalThis.__toneGuardLib.verifyInsertedText` is ever
+  absent at runtime (bad load order, shipping regression), the decision
+  callback logs `[ToneGuard:diag]` and returns a nack with a distinct
+  error — rather than re-entering the strict-equality path that
+  motivated this release.
+
+### Security
+- **Iframe message handler now asserts the sender is our parent window.**
+  `overlay-frame.js`'s `message` handler previously validated only the
+  sender-set `msg.source` field. A script on the host page could spoof
+  that tag. The handler now also requires `e.source === window.parent`,
+  rejecting cross-origin / subframe messages before they reach
+  `showResult` or the decision plumbing. Pre-existing gap closed as part
+  of this release since new message-triggered branches were added.
+
 ## [0.3.0] - 2026-04-16
 
 ### Added

@@ -210,12 +210,28 @@
 
       try {
         if (decision.action === "use_suggestion" && decision.suggestion) {
+          const lib = globalThis.__toneGuardLib;
+          if (!lib || typeof lib.verifyInsertedText !== "function") {
+            // lib.js is shipped in every content-script injection path
+            // (manifest content_scripts + service-worker's executeScript
+            // and registerContentScripts calls). Missing it means a build
+            // or load-order bug — nack honestly instead of silently
+            // falling back to strict-equality and reintroducing the
+            // false-negative paste-fallback bug we fixed in 0.3.1.
+            console.warn("[ToneGuard:diag] lib.verifyInsertedText missing; aborting insert");
+            pendingText = null;
+            pendingEditor = null;
+            return { ok: false, error: "verification helper missing" };
+          }
+          const before = currentPlatform.getEditorText(pendingEditor) || "";
           currentPlatform.replaceEditorText(pendingEditor, decision.suggestion);
           // Verify the insert actually landed — execCommand can silently
-          // no-op if focus transfer failed. If the editor content doesn't
-          // match, nack so the iframe can surface a manual-paste fallback.
-          const after = currentPlatform.getEditorText(pendingEditor);
-          if ((after || "").trim() !== decision.suggestion.trim()) {
+          // no-op if focus transfer failed. Normalize the comparison so
+          // editor-specific whitespace quirks (Gmail signature appended
+          // below the body, Slack Quill's zero-width-space padding,
+          // NBSP/CRLF normalization) don't produce false negatives.
+          const after = currentPlatform.getEditorText(pendingEditor) || "";
+          if (!lib.verifyInsertedText(before, after, decision.suggestion)) {
             // Must clear state before returning — otherwise the pendingEditor
             // concurrency guard in analyzeAndIntercept blocks every future
             // send until the tab is reloaded.

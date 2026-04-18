@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "ToneGuard",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Checks your messages for tone and clarity before sending. Only interrupts when it matters.",
 
   "permissions": [
@@ -35,7 +35,7 @@
         "https://www.linkedin.com/*",
         "https://*.turbotenant.com/*"
       ],
-      "js": ["overlay.js", "content.js"],
+      "js": ["lib.js", "overlay.js", "content.js"],
       "run_at": "document_idle"
     }
   ],

@@ -9,7 +9,8 @@ import {
   getConfidenceClass,
   shouldAnalyze,
   truncate,
-  extractMentions
+  extractMentions,
+  verifyInsertedText
 } from "./lib-exports.mjs";
 
 describe("detectPlatform", () => {
@@ -269,5 +270,72 @@ describe("extractMentions", () => {
   it("returns empty for null/undefined", () => {
     expect(extractMentions(null)).toEqual([]);
     expect(extractMentions(undefined)).toEqual([]);
+  });
+});
+
+describe("verifyInsertedText", () => {
+  const before = "Hey can you get this done ASAP or else";
+  const suggestion = "Hi, could you finish this by end of day? Thanks.";
+
+  it("passes on an exact match", () => {
+    expect(verifyInsertedText(before, suggestion, suggestion)).toBe(true);
+  });
+
+  it("passes when editor content is suggestion + trailing newline (execCommand quirk)", () => {
+    expect(verifyInsertedText(before, suggestion + "\n", suggestion)).toBe(true);
+  });
+
+  it("passes on Gmail-style signature appended after the insert", () => {
+    const after = suggestion + "\n\n-- \nSummer Rae\nEng Manager";
+    expect(verifyInsertedText(before, after, suggestion)).toBe(true);
+  });
+
+  it("passes when Slack Quill fallback injects zero-width spaces in empty lines", () => {
+    const multiline = "Line one\n\nLine two";
+    const afterWithZwsp = "Line one\n\u200B\nLine two";
+    expect(verifyInsertedText(before, afterWithZwsp, multiline)).toBe(true);
+  });
+
+  it("passes when editor normalizes NBSP to regular spaces (or vice versa)", () => {
+    const afterWithNbsp = "Hi,\u00A0could you finish this by end of day? Thanks.";
+    expect(verifyInsertedText(before, afterWithNbsp, suggestion)).toBe(true);
+  });
+
+  it("passes on CRLF vs LF normalization", () => {
+    const multi = "Line one\nLine two";
+    const afterCrlf = "Line one\r\nLine two";
+    expect(verifyInsertedText("old", afterCrlf, multi)).toBe(true);
+  });
+
+  it("fails on a silent no-op (editor unchanged)", () => {
+    expect(verifyInsertedText(before, before, suggestion)).toBe(false);
+  });
+
+  it("fails when editor content is empty after insert", () => {
+    expect(verifyInsertedText(before, "", suggestion)).toBe(false);
+  });
+
+  it("fails when editor contains unrelated text (not the suggestion)", () => {
+    expect(verifyInsertedText(before, "Some unrelated content", suggestion)).toBe(false);
+  });
+
+  it("fails when only a fragment of the suggestion is present", () => {
+    expect(verifyInsertedText(before, "Hi, could you", suggestion)).toBe(false);
+  });
+
+  it("fails when the suggestion was already present in the before text (silent no-op)", () => {
+    // Rewrites often preserve spans of the original. If the draft already
+    // contained the suggestion string, a post-insert `includes` check can
+    // pass even when execCommand silently no-oped. Require the suggestion
+    // to be newly present.
+    const draftWithSuggestion = "Hi, could you finish this by end of day? Thanks. PS lunch?";
+    const afterCursorShift = draftWithSuggestion + " "; // minor change, no real insert
+    expect(verifyInsertedText(draftWithSuggestion, afterCursorShift, suggestion)).toBe(false);
+  });
+
+  it("passes when the suggestion replaced the original and neither overlapped", () => {
+    // Baseline: before contains only the original, after contains only the
+    // suggestion. Exact match branch.
+    expect(verifyInsertedText("Original draft", suggestion, suggestion)).toBe(true);
   });
 });

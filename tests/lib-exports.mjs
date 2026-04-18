@@ -29,3 +29,4 @@ export const getConfidenceClass = lib.getConfidenceClass;
 export const shouldAnalyze = lib.shouldAnalyze;
 export const truncate = lib.truncate;
 export const extractMentions = lib.extractMentions;
+export const verifyInsertedText = lib.verifyInsertedText;
