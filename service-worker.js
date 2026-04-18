@@ -99,7 +99,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   try {
     await chrome.scripting.executeScript({
       target: { tabId: tab.id },
-      files: ["overlay.js", "content.js"]
+      files: ["lib.js", "overlay.js", "content.js"]
     });
   } catch (_) {
     // Scripts may already be injected — that's fine
@@ -132,7 +132,7 @@ async function registerCustomSites() {
     await chrome.scripting.registerContentScripts([{
       id: "tg-custom-sites",
       matches: patterns,
-      js: ["overlay.js", "content.js"],
+      js: ["lib.js", "overlay.js", "content.js"],
       runAt: "document_idle"
     }]);
   } catch (err) {
@@ -146,7 +146,7 @@ async function registerCustomSites() {
     for (const tab of tabs) {
       chrome.scripting.executeScript({
         target: { tabId: tab.id },
-        files: ["overlay.js", "content.js"]
+        files: ["lib.js", "overlay.js", "content.js"]
       }).catch(() => {
         // Tab may not be injectable (e.g., chrome:// pages)
       });

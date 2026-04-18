@@ -218,6 +218,10 @@
     if (stale) stale.remove();
     const undo = els.drawer.querySelector(".tg-undo-toast");
     if (undo) undo.remove();
+    // Action-error warn panels also belong here so a lingering "Couldn't
+    // finish that action" dialog doesn't stack on top of the next state.
+    const warn = els.drawer.querySelector(".tg-stale-notice");
+    if (warn) warn.remove();
   }
 
   function openDrawer() {
@@ -655,8 +659,23 @@
 
   // --- Event bindings ---
 
-  els.closeBtn.addEventListener("click", () => handleSendOriginal());
-  els.backdrop.addEventListener("click", () => handleSendOriginal());
+  // When the drawer is already showing a terminal toast — action-error
+  // (.tg-stale-notice), stale-context prompt (.tg-stale), or the 2-second
+  // "Sent!" / "Suggestion applied!" confirmation (.tg-passed) — the
+  // decision flow has already completed and pendingEditor is null on the
+  // parent side. Clicking the backdrop should just dismiss; otherwise
+  // handleSendOriginal fires another decision, gets a "no pending compose"
+  // nack, and stacks an error dialog on top of the existing toast.
+  function dismissOrSendOriginal() {
+    if (els.drawer.querySelector(".tg-stale-notice, .tg-stale, .tg-passed")) {
+      hide();
+      return;
+    }
+    handleSendOriginal();
+  }
+
+  els.closeBtn.addEventListener("click", dismissOrSendOriginal);
+  els.backdrop.addEventListener("click", dismissOrSendOriginal);
 
   els.useSuggestionBtn.addEventListener("click", () => {
     // Skip if a selection-mode override is bound
@@ -697,7 +716,13 @@
 
   // --- Parent message handler ---
 
+  // Parent origin = this iframe's top window, which runs overlay.js in the
+  // host page (Slack/Gmail/LinkedIn/custom). Accept messages only from that
+  // window AND with our own source tag — sender-set fields can be spoofed
+  // by any page script, so pair the two checks. Cross-origin messages from
+  // embedded ads or subframes are rejected here too.
   window.addEventListener("message", (e) => {
+    if (e.source !== window.parent) return;
     const msg = e.data;
     if (!msg || msg.source !== "toneguard-content") return;
     switch (msg.type) {

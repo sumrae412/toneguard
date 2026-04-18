@@ -167,6 +167,59 @@ async function hashApiKey(apiKey) {
 }
 
 /**
+ * Normalize editor text for comparison.
+ *
+ * Strips zero-width chars, converts NBSPs to regular spaces, collapses
+ * whitespace runs, and normalizes line endings. Used before comparing
+ * inserted text against a target suggestion, since different editors
+ * (Gmail contenteditable, Slack Quill fallback, LinkedIn) introduce
+ * their own whitespace and invisible characters around inserted content.
+ */
+function normalizeEditorText(text) {
+  if (!text) return "";
+  return String(text)
+    .replace(/[\u200B\u200C\u200D\u2060\uFEFF]/g, "")
+    .replace(/\u00A0/g, " ")
+    .replace(/\r\n/g, "\n")
+    .replace(/[ \t]+/g, " ")
+    .replace(/ ?\n ?/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+/**
+ * Verify that a suggestion was actually inserted into the editor.
+ *
+ * Returns true when normalized editor content changed from `before` AND
+ * either equals the normalized suggestion or contains it (e.g. Gmail
+ * signatures appended below the body). Returns false on silent no-op
+ * (focus transfer failed, execCommand rejected) or when the suggestion
+ * is absent.
+ *
+ * Keep the check tolerant to editor whitespace quirks so we don't nack
+ * successful inserts and tell the user to paste manually — that was the
+ * motivating bug. But still catch true no-ops so we don't lie about
+ * success.
+ */
+function verifyInsertedText(before, after, suggestion) {
+  const nBefore = normalizeEditorText(before);
+  const nAfter = normalizeEditorText(after);
+  const nSuggestion = normalizeEditorText(suggestion);
+  if (!nSuggestion) return false;
+  // Silent no-op (focus transfer failed, execCommand rejected).
+  if (nAfter === nBefore) return false;
+  // Exact match is always OK.
+  if (nAfter === nSuggestion) return true;
+  // Containment is the Gmail-signature-appended case. But if the ORIGINAL
+  // draft already contained the suggestion as a substring, `includes` can
+  // pass while the actual insert silently failed (cursor moved, ZWSP
+  // inserted elsewhere). Require the suggestion to be *newly present* —
+  // not in `before` but in `after`.
+  if (nBefore.includes(nSuggestion)) return false;
+  return nAfter.includes(nSuggestion);
+}
+
+/**
  * Extract @mentions from text.
  */
 function extractMentions(text) {
@@ -194,6 +247,8 @@ if (typeof globalThis !== "undefined") {
     shouldAnalyze,
     truncate,
     extractMentions,
-    hashApiKey
+    hashApiKey,
+    normalizeEditorText,
+    verifyInsertedText
   };
 }
