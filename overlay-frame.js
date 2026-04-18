@@ -59,6 +59,7 @@
     refining: document.getElementById("tgRefining"),
     useSuggestionBtn: document.getElementById("tgUseSuggestion"),
     sendOriginalBtn: document.getElementById("tgSendOriginal"),
+    cancelBtn: document.getElementById("tgCancel"),
     landingPanel: document.getElementById("tgLandingPanel"),
     landingTakeaway: document.getElementById("tgLandingTakeaway"),
     landingTone: document.getElementById("tgLandingTone"),
@@ -197,6 +198,7 @@
     els.sendOriginalBtn.appendChild(el("span", { className: "tg-kbd", textContent: "Esc" }));
     els.useSuggestionBtn.onclick = null;
     els.sendOriginalBtn.onclick = null;
+    els.cancelBtn.style.display = "";
     const oldReplace = els.drawer.querySelector(".tg-replace-btn");
     if (oldReplace) oldReplace.remove();
     const diffEl = els.drawer.querySelector(".tg-diff");
@@ -263,8 +265,10 @@
     const oldReplace = els.drawer.querySelector(".tg-replace-btn");
     if (oldReplace) oldReplace.remove();
 
-    // Selection mode (context menu): Copy / Replace / Dismiss
+    // Selection mode (context menu): Copy / Replace / Dismiss.
+    // Hide Cancel — Dismiss already covers that intent for selection flows.
     if (result.selectionMode) {
+      els.cancelBtn.style.display = "none";
       els.useSuggestionBtn.textContent = "Copy rewrite";
       els.sendOriginalBtn.textContent = "Dismiss";
 
@@ -471,6 +475,24 @@
   }
 
   // --- Action handlers ---
+
+  // Cancel: dismiss the overlay without sending or modifying the editor.
+  // Tells the parent to clear pending state so the next send isn't blocked
+  // by the concurrency guard, then hides silently — no toast, since nothing
+  // was sent. Always resolves in hide() even if the parent nacks (we still
+  // want the user out of the drawer; worst case, they refresh the tab).
+  async function handleCancel() {
+    if (!currentResult) {
+      hide();
+      return;
+    }
+    try {
+      await notifyDecision({ action: "cancel" });
+    } catch (err) {
+      console.warn("ToneGuard:", err && err.message ? err.message : err);
+    }
+    hide();
+  }
 
   async function handleSendOriginal() {
     if (!currentResult) {
@@ -689,6 +711,8 @@
     if (els.sendOriginalBtn.onclick) return;
     handleSendOriginal();
   });
+
+  els.cancelBtn.addEventListener("click", handleCancel);
 
   els.suggestion.addEventListener("input", () => {
     suggestionWasEdited = true;

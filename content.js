@@ -196,6 +196,16 @@
   function setupOverlay() {
     if (!window.__toneGuard) return;
     window.__toneGuard.setOnDecision((decision) => {
+      // Cancel always succeeds: it just clears the concurrency guard and
+      // leaves the editor untouched so the user can keep editing. Handle
+      // before the pendingEditor checks so a stale-state cancel still acks
+      // ok (the user just wants out of the drawer).
+      if (decision.action === "cancel") {
+        pendingText = null;
+        pendingEditor = null;
+        return { ok: true };
+      }
+
       if (!pendingEditor) {
         return { ok: false, error: "no pending compose" };
       }
