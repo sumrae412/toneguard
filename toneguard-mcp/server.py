@@ -102,7 +102,7 @@ async def get_history(
 
 @mcp.tool()
 async def sync_status() -> dict:
-    """Check Supabase sync health."""
+    """Check sync backend health."""
     return {
         "connected": sync_manager.connected,
         "last_sync": sync_manager.last_sync_at,

@@ -1,4 +1,4 @@
-// ToneGuard SyncManager — orchestrates local-first sync with Supabase.
+// ToneGuard SyncManager — orchestrates local-first sync with the Railway sync server.
 // Init with API key → auto-pairs via hash → pull/push/subscribe.
 
 const DATA_TYPES = ["decisions", "voice_samples", "voice_fingerprint", "relationships", "custom_rules", "stats_history"];
@@ -16,9 +16,9 @@ const DEBOUNCE_MS = 5000;
 const POLL_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 
 class SyncManager {
-  constructor(storage, supabase, merge) {
+  constructor(storage, client, merge) {
     this.storage = storage;
-    this.supabase = supabase;
+    this.client = client;
     this.merge = merge;
     this.userHash = null;
     this.remoteVersions = {};
@@ -39,7 +39,7 @@ class SyncManager {
     this.userHash = await hashApiKey(apiKey);
 
     try {
-      await this.supabase.authenticate(this.userHash);
+      await this.client.authenticate(this.userHash);
       await this.pull();
       this._startSubscription();
       this._startPolling();
@@ -57,7 +57,7 @@ class SyncManager {
 
     let remoteData;
     try {
-      remoteData = await this.supabase.pull(this.userHash);
+      remoteData = await this.client.pull(this.userHash);
     } catch (err) {
       console.error("ToneGuard sync pull failed:", err.message);
       return;
@@ -95,7 +95,7 @@ class SyncManager {
   }
 
   /**
-   * Push all pending data types to Supabase.
+   * Push all pending data types to the sync server.
    */
   async _flushPush() {
     if (!this.userHash) return;
@@ -114,7 +114,7 @@ class SyncManager {
         }
 
         const version = this.remoteVersions[dataType] || 0;
-        await this.supabase.push(this.userHash, dataType, payload, version);
+        await this.client.push(this.userHash, dataType, payload, version);
         this.remoteVersions[dataType] = version + 1;
       } catch (err) {
         console.error("ToneGuard sync push failed for " + dataType + ":", err.message);
@@ -165,7 +165,7 @@ class SyncManager {
       this.subscription.close();
     }
 
-    this.subscription = this.supabase.subscribeToChanges(
+    this.subscription = this.client.subscribeToChanges(
       this.userHash,
       async (dataType, payload) => {
         const storageKey = STORAGE_KEYS[dataType];

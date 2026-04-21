@@ -119,48 +119,28 @@ Tests cover utility functions, manifest integrity, and JavaScript syntax validat
 
 ## Cross-Platform Sync
 
-ToneGuard syncs learning data (decisions, voice samples, relationships, custom rules, stats) across the Chrome extension and PWA using Supabase. Same API key on two devices = automatic pairing.
+ToneGuard syncs learning data (decisions, voice samples, relationships, custom rules, stats) across the Chrome extension, PWA, and Android app via a tiny self-hosted service on Railway. Same API key on two devices = automatic pairing.
 
 ### How it works
 
 - Your Anthropic API key is hashed (SHA-256) client-side — the raw key never leaves your device
 - The hash acts as your identity: same key on two devices means they share data
-- Data syncs in real-time via Supabase Realtime, with a 5-minute poll as fallback
+- The sync server mints a short-lived JWT scoped to that hash; clients push/pull via HTTPS and receive realtime updates via WebSocket
+- A 5-minute poll runs as a fallback for missed events
 - Everything works offline — sync is opportunistic
-
-### Supabase credentials
-
-Three types of keys are involved. All are found in the [Supabase dashboard](https://supabase.com/dashboard):
-
-| Key | Where to find it | What it's for |
-|-----|-------------------|---------------|
-| **Publishable key** (`sb_publishable_...`) | Settings → API → Project API keys → `anon` `public` | Embedded in client code (`supabase-client.js`). Safe to expose — RLS protects data. |
-| **Secret key** (`sb_secret_...`) | Settings → API → Project API keys → `service_role` `secret` | Backend-only. Bypasses RLS. Never put in client code. |
-| **CLI access token** (`sbp_...`) | [Account → Access Tokens](https://supabase.com/dashboard/account/tokens) | Authenticates the `supabase` CLI for migrations and function deploys. Store in `~/.zshrc` as `SUPABASE_ACCESS_TOKEN`. |
 
 ### Managing the sync backend
 
-Install the Supabase CLI:
-```bash
-curl -sSL https://github.com/supabase/cli/releases/latest/download/supabase_darwin_arm64.tar.gz | tar -xz -C /usr/local/bin
-```
+All config and deploy steps live in [`sync-server/README.md`](sync-server/README.md). Summary:
 
-Link to the project and run migrations:
-```bash
-supabase link --project-ref <project-id>
-supabase db push
-```
-
-Deploy the auth Edge Function:
-```bash
-supabase functions deploy auth-by-hash --no-verify-jwt
-```
-
-The project ref is the subdomain of your Supabase URL (e.g., `jimjfaaaccqtcbbxsrys` from `https://jimjfaaaccqtcbbxsrys.supabase.co`).
+- Node/Express + Postgres + `ws`, deployed to Railway
+- Two env vars: `DATABASE_URL` (auto-injected by Railway's Postgres plugin) and `JWT_SECRET`
+- Schema in `sync-server/schema.sql`, applied once via `npm run db:init`
+- Total cost: ~$5/month on Railway Hobby
 
 ## Privacy
 
-ToneGuard uses your own Claude API key — there is no intermediary server. Messages go directly from your browser to the Anthropic API. All settings, learning history, and voice samples are stored locally on your device. When sync is enabled, learning data is also stored in Supabase, isolated per user via Row Level Security.
+ToneGuard uses your own Claude API key — there is no intermediary server. Messages go directly from your browser to the Anthropic API. All settings, learning history, and voice samples are stored locally on your device. When sync is enabled, learning data is also stored on the Railway sync server, isolated per user by the JWT-scoped hash.
 
 See [PRIVACY.md](PRIVACY.md) for the full privacy policy.
 

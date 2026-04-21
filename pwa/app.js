@@ -14,10 +14,10 @@ async function initPwaSync() {
 
   try {
     const storage = new globalThis.__toneGuardStorage.WebStorageAdapter();
-    const supabase = new globalThis.__toneGuardSupabase.ToneGuardSupabase();
+    const syncClient = new globalThis.__toneGuardSyncClient.ToneGuardSyncClient();
     const merge = globalThis.__toneGuardMerge;
 
-    pwaSyncManager = new globalThis.__toneGuardSync.SyncManager(storage, supabase, merge);
+    pwaSyncManager = new globalThis.__toneGuardSync.SyncManager(storage, syncClient, merge);
     await pwaSyncManager.init(apiKey);
   } catch (err) {
     console.warn("ToneGuard PWA: sync init failed", err.message);
