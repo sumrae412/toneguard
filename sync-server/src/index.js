@@ -17,6 +17,14 @@ const pool = new pg.Pool({
   ssl: DATABASE_URL.includes("localhost") ? false : { rejectUnauthorized: false },
 });
 
+// pg.Pool crashes the process on unhandled idle-client errors without a listener.
+pool.on("error", (err) => {
+  console.error("Postgres pool error:", err.message);
+});
+
+// Express 4 doesn't auto-catch async route rejections; wrap to avoid hung requests.
+const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
+
 const app = express();
 app.use(express.json({ limit: "2mb" }));
 app.use((req, res, next) => {
@@ -76,7 +84,7 @@ app.post("/auth", (req, res) => {
   res.json({ token });
 });
 
-app.get("/sync", async (req, res) => {
+app.get("/sync", wrap(async (req, res) => {
   const claims = verifyBearer(req);
   if (!claims) return res.status(401).json({ error: "Unauthorized" });
 
@@ -92,9 +100,9 @@ app.get("/sync", async (req, res) => {
       updated_at: r.updated_at instanceof Date ? r.updated_at.toISOString() : r.updated_at,
     }))
   );
-});
+}));
 
-app.post("/sync", async (req, res) => {
+app.post("/sync", wrap(async (req, res) => {
   const claims = verifyBearer(req);
   if (!claims) return res.status(401).json({ error: "Unauthorized" });
 
@@ -128,6 +136,13 @@ app.post("/sync", async (req, res) => {
   });
 
   res.json({ ok: true, version: newVersion, updated_at: updatedAt });
+}));
+
+// Global error handler — converts thrown errors to 500 JSON instead of hung requests.
+app.use((err, _req, res, _next) => {
+  console.error("Request error:", err.message);
+  if (res.headersSent) return;
+  res.status(500).json({ error: "Internal error" });
 });
 
 // ── HTTP + WebSocket server ──
