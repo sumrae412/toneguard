@@ -19,7 +19,7 @@ class SyncManager(private val store: LearningStore) {
 
     companion object {
         private const val TAG = "ToneGuardSync"
-        private const val SYNC_SERVER_URL = "https://toneguard-sync.up.railway.app"
+        private const val SYNC_SERVER_URL = "https://sync-server-production-3a24.up.railway.app"
         private const val DEBOUNCE_MS = 5000L
         private const val POLL_INTERVAL_MS = 5 * 60 * 1000L // 5 minutes
 

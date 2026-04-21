@@ -26,7 +26,7 @@ Replaces the Supabase backend. Tiny Node/Express + `ws` server backed by Railway
    ```
    DATABASE_URL='<railway postgres url>' npm run db:init
    ```
-6. **Grab the public URL** (e.g. `https://toneguard-sync.up.railway.app`) and paste it into the 3 client constants:
+6. **Grab the public URL** (e.g. `https://sync-server-production-3a24.up.railway.app`) and paste it into the 3 client constants:
    - `src/sync/sync-client.js` → `SYNC_SERVER_URL`
    - `toneguard-mcp/sync.py` → `SYNC_SERVER_URL` (or set `TONEGUARD_SYNC_URL` env var)
    - `android/app/src/main/java/com/toneguard/SyncManager.kt` → `SYNC_SERVER_URL`
