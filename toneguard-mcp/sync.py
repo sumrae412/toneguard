@@ -30,7 +30,7 @@ logger = logging.getLogger("toneguard.sync")
 
 SYNC_SERVER_URL = os.environ.get(
     "TONEGUARD_SYNC_URL",
-    "https://toneguard-sync.up.railway.app",
+    "https://sync-server-production-3a24.up.railway.app",
 )
 DEBOUNCE_SECONDS = 5.0
 POLL_INTERVAL_SECONDS = 300  # 5 minutes

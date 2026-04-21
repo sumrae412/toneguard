@@ -1,7 +1,7 @@
 // ToneGuard sync client — talks to the Railway-hosted sync server.
 // Replaces the old Supabase client. Same surface: authenticate/pull/push/subscribeToChanges.
 
-const SYNC_SERVER_URL = "https://toneguard-sync.up.railway.app";
+const SYNC_SERVER_URL = "https://sync-server-production-3a24.up.railway.app";
 
 class ToneGuardSyncClient {
   constructor(url) {
