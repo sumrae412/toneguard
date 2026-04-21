@@ -13,16 +13,13 @@ import java.security.MessageDigest
 
 /**
  * Sync orchestrator for cross-platform learning data.
- * Mirrors src/sync/sync-manager.js behavior exactly.
- * Uses OkHttp for Supabase REST calls and WebSocket for Realtime.
+ * Talks to the Railway-hosted sync server via JSON HTTP + WebSocket.
  */
 class SyncManager(private val store: LearningStore) {
 
     companion object {
         private const val TAG = "ToneGuardSync"
-        private const val SUPABASE_URL = "https://jimjfaaaccqtcbbxsrys.supabase.co"
-        private const val SUPABASE_ANON_KEY = "sb_publishable_NyUr9I9amTiVVWT5H8ysvg_lB054qK0"
-        private const val TABLE = "sync_data"
+        private const val SYNC_SERVER_URL = "https://toneguard-sync.up.railway.app"
         private const val DEBOUNCE_MS = 5000L
         private const val POLL_INTERVAL_MS = 5 * 60 * 1000L // 5 minutes
 
@@ -56,7 +53,6 @@ class SyncManager(private val store: LearningStore) {
     private var debounceRunnable: Runnable? = null
     private var pollRunnable: Runnable? = null
     private var realtimeWs: WebSocket? = null
-    private var heartbeatRunnable: Runnable? = null
 
     var lastSyncAt: String? = null
         private set
@@ -66,9 +62,6 @@ class SyncManager(private val store: LearningStore) {
 
     var onSyncStatusChanged: ((connected: Boolean, lastSync: String?) -> Unit)? = null
 
-    /**
-     * Initialize sync: hash API key, authenticate, pull, subscribe.
-     */
     fun init(apiKey: String) {
         if (apiKey.isBlank()) return
 
@@ -86,14 +79,10 @@ class SyncManager(private val store: LearningStore) {
                 Log.e(TAG, "Sync init failed: ${e.message}")
                 isConnected = false
                 notifyStatus()
-                // Sync is optional — app works offline
             }
         }.start()
     }
 
-    /**
-     * Mark a data type as dirty and schedule a debounced push.
-     */
     fun schedulePush(dataType: String) {
         synchronized(pendingPush) {
             pendingPush.add(dataType)
@@ -106,14 +95,9 @@ class SyncManager(private val store: LearningStore) {
         handler.postDelayed(debounceRunnable!!, DEBOUNCE_MS)
     }
 
-    /**
-     * Clean shutdown.
-     */
     fun destroy() {
         realtimeWs?.close(1000, "shutdown")
         realtimeWs = null
-        heartbeatRunnable?.let { handler.removeCallbacks(it) }
-        heartbeatRunnable = null
         debounceRunnable?.let { handler.removeCallbacks(it) }
         pollRunnable?.let { handler.removeCallbacks(it) }
     }
@@ -125,9 +109,8 @@ class SyncManager(private val store: LearningStore) {
         val body = JSONObject().apply { put("hash", hash) }
 
         val request = Request.Builder()
-            .url("$SUPABASE_URL/functions/v1/auth-by-hash")
+            .url("$SYNC_SERVER_URL/auth")
             .addHeader("Content-Type", "application/json")
-            .addHeader("Authorization", "Bearer $SUPABASE_ANON_KEY")
             .post(body.toString().toRequestBody("application/json".toMediaType()))
             .build()
 
@@ -143,12 +126,9 @@ class SyncManager(private val store: LearningStore) {
     // --- Pull ---
 
     private fun pull() {
-        val hash = userHash ?: return
-
-        val url = "$SUPABASE_URL/rest/v1/$TABLE?user_hash=eq.$hash&select=data_type,payload,version,updated_at"
         val request = Request.Builder()
-            .url(url)
-            .headers(buildHeaders())
+            .url("$SYNC_SERVER_URL/sync")
+            .headers(authHeaders())
             .get()
             .build()
 
@@ -181,8 +161,6 @@ class SyncManager(private val store: LearningStore) {
     // --- Push ---
 
     private fun flushPush() {
-        val hash = userHash ?: return
-
         val types: List<String>
         synchronized(pendingPush) {
             types = pendingPush.toList()
@@ -194,7 +172,6 @@ class SyncManager(private val store: LearningStore) {
                 val storageKey = STORAGE_KEYS[dataType] ?: continue
                 var payload = store.getRawJson(storageKey)
 
-                // Wrap custom_rules with updatedAt for LWW
                 if (dataType == "custom_rules" && payload is String) {
                     payload = JSONObject().apply {
                         put("rules", payload)
@@ -205,18 +182,14 @@ class SyncManager(private val store: LearningStore) {
                 val version = synchronized(versionsLock) { remoteVersions[dataType] ?: 0 }
 
                 val body = JSONObject().apply {
-                    put("user_hash", hash)
                     put("data_type", dataType)
                     put("payload", payload)
-                    put("version", version + 1)
-                    put("updated_at", java.time.Instant.now().toString())
+                    put("version", version)
                 }
 
                 val request = Request.Builder()
-                    .url("$SUPABASE_URL/rest/v1/$TABLE")
-                    .headers(buildHeaders().newBuilder()
-                        .add("Prefer", "resolution=merge-duplicates")
-                        .build())
+                    .url("$SYNC_SERVER_URL/sync")
+                    .headers(authHeaders())
                     .post(body.toString().toRequestBody("application/json".toMediaType()))
                     .build()
 
@@ -273,53 +246,19 @@ class SyncManager(private val store: LearningStore) {
     private fun startSubscription() {
         realtimeWs?.close(1000, "reconnect")
 
-        val hash = userHash ?: return
-        val wsUrl = SUPABASE_URL.replace("https://", "wss://") +
-            "/realtime/v1/websocket?apikey=$SUPABASE_ANON_KEY"
+        val token = jwt ?: return
+        val wsUrl = SYNC_SERVER_URL.replace("https://", "wss://") +
+            "/ws?token=" + java.net.URLEncoder.encode(token, "UTF-8")
 
         val request = Request.Builder().url(wsUrl).build()
 
         realtimeWs = client.newWebSocket(request, object : WebSocketListener() {
-            override fun onOpen(webSocket: WebSocket, response: Response) {
-                val joinMsg = JSONObject().apply {
-                    put("topic", "realtime:$TABLE:user_hash=eq.$hash")
-                    put("event", "phx_join")
-                    put("payload", JSONObject().apply {
-                        put("config", JSONObject().apply {
-                            put("broadcast", JSONObject().apply { put("self", false) })
-                        })
-                    })
-                    put("ref", "1")
-                }
-                webSocket.send(joinMsg.toString())
-
-                // Start heartbeat (tracked for cleanup in destroy())
-                heartbeatRunnable?.let { handler.removeCallbacks(it) }
-                heartbeatRunnable = object : Runnable {
-                    override fun run() {
-                        try {
-                            val hb = JSONObject().apply {
-                                put("topic", "phoenix")
-                                put("event", "heartbeat")
-                                put("payload", JSONObject())
-                                put("ref", System.currentTimeMillis().toString())
-                            }
-                            webSocket.send(hb.toString())
-                            handler.postDelayed(this, 30000)
-                        } catch (_: Exception) { /* ws closed */ }
-                    }
-                }
-                handler.postDelayed(heartbeatRunnable!!, 30000)
-            }
-
             override fun onMessage(webSocket: WebSocket, text: String) {
                 try {
                     val msg = JSONObject(text)
-                    val event = msg.optString("event")
-                    if (event == "INSERT" || event == "UPDATE") {
-                        val record = msg.optJSONObject("payload")?.optJSONObject("record") ?: return
-                        val dataType = record.optString("data_type")
-                        val payload = record.opt("payload")
+                    if (msg.optString("event") == "UPDATE") {
+                        val dataType = msg.optString("data_type")
+                        val payload = msg.opt("payload")
                         val storageKey = STORAGE_KEYS[dataType] ?: return
 
                         val localData = store.getRawJson(storageKey)
@@ -329,7 +268,7 @@ class SyncManager(private val store: LearningStore) {
                         }
                     }
                 } catch (_: Exception) {
-                    // Ignore parse errors from heartbeats etc.
+                    // Ignore parse errors.
                 }
             }
 
@@ -358,11 +297,11 @@ class SyncManager(private val store: LearningStore) {
 
     // --- Helpers ---
 
-    private fun buildHeaders(): Headers {
+    private fun authHeaders(): Headers {
+        val token = jwt ?: throw IOException("Not authenticated")
         return Headers.Builder()
             .add("Content-Type", "application/json")
-            .add("apikey", SUPABASE_ANON_KEY)
-            .add("Authorization", "Bearer ${jwt ?: SUPABASE_ANON_KEY}")
+            .add("Authorization", "Bearer $token")
             .build()
     }
 

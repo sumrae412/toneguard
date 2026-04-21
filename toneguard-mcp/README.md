@@ -76,7 +76,7 @@ action_filter: "used_suggestion"
 
 ### `sync_status`
 
-Check Supabase sync health (connected, last sync time).
+Check sync backend health (connected, last sync time).
 
 ## Cost
 
@@ -96,8 +96,8 @@ server.py       -> FastMCP server (4 tools)
 analyzer.py     -> 2 critics in parallel -> synthesizer
 learning_store.py -> JSON file at ~/.toneguard/learning.json
 merge.py        -> Conflict resolution (parity with JS Chrome extension)
-sync.py         -> Supabase REST sync (poll-based)
+sync.py         -> Railway sync server client (poll-based)
 critics/        -> Markdown prompt files for each critic
 ```
 
-Learning data syncs across Chrome extension, Android app, and MCP server via Supabase.
+Learning data syncs across Chrome extension, Android app, and MCP server via the Railway-hosted sync service (`sync-server/`).

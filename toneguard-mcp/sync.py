@@ -1,7 +1,8 @@
-"""ToneGuard Supabase sync client — async httpx-based.
+"""ToneGuard sync client — talks to the Railway-hosted sync server.
 
-Port of src/sync/supabase-client.js + src/sync/sync-manager.js.
-No WebSocket subscription (poll-only for MCP server simplicity).
+Replaces the old Supabase client. Same surface as before (authenticate/pull/push),
+with JWT-bearer auth and JSON endpoints. No WebSocket subscription — poll-only,
+matching the previous MCP server behavior.
 """
 
 from __future__ import annotations
@@ -9,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import logging
+import os
 from datetime import datetime, timezone
 from typing import Any, Optional
 
@@ -26,9 +28,10 @@ from merge import (
 
 logger = logging.getLogger("toneguard.sync")
 
-SUPABASE_URL = "https://jimjfaaaccqtcbbxsrys.supabase.co"
-SUPABASE_ANON_KEY = "sb_publishable_NyUr9I9amTiVVWT5H8ysvg_lB054qK0"
-TABLE = "sync_data"
+SYNC_SERVER_URL = os.environ.get(
+    "TONEGUARD_SYNC_URL",
+    "https://toneguard-sync.up.railway.app",
+)
 DEBOUNCE_SECONDS = 5.0
 POLL_INTERVAL_SECONDS = 300  # 5 minutes
 
@@ -41,29 +44,26 @@ def hash_api_key(api_key: str) -> str:
 
 
 class SyncClient:
-    """Lightweight Supabase REST client using httpx."""
+    """HTTP client for the Railway sync server."""
 
-    def __init__(self, url: str = SUPABASE_URL, anon_key: str = SUPABASE_ANON_KEY):
+    def __init__(self, url: str = SYNC_SERVER_URL):
         self.url = url
-        self.anon_key = anon_key
         self.jwt: Optional[str] = None
         self._client = httpx.AsyncClient(timeout=30.0)
 
-    def _headers(self) -> dict[str, str]:
+    def _auth_headers(self) -> dict[str, str]:
+        if not self.jwt:
+            raise RuntimeError("Sync client not authenticated")
         return {
             "Content-Type": "application/json",
-            "apikey": self.anon_key,
-            "Authorization": f"Bearer {self.jwt or self.anon_key}",
+            "Authorization": f"Bearer {self.jwt}",
         }
 
     async def authenticate(self, api_key_hash: str) -> str:
-        """POST to /functions/v1/auth-by-hash, store JWT."""
+        """POST to /auth, store JWT."""
         resp = await self._client.post(
-            f"{self.url}/functions/v1/auth-by-hash",
-            headers={
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {self.anon_key}",
-            },
+            f"{self.url}/auth",
+            headers={"Content-Type": "application/json"},
             json={"hash": api_key_hash},
         )
         if resp.status_code >= 400:
@@ -72,17 +72,9 @@ class SyncClient:
         self.jwt = data["token"]
         return self.jwt
 
-    async def pull(self, user_hash: str) -> dict[str, dict]:
-        """GET from REST API, return {data_type: {payload, version, updatedAt}}."""
-        params = {
-            "user_hash": f"eq.{user_hash}",
-            "select": "data_type,payload,version,updated_at",
-        }
-        resp = await self._client.get(
-            f"{self.url}/rest/v1/{TABLE}",
-            headers=self._headers(),
-            params=params,
-        )
+    async def pull(self, _user_hash: str) -> dict[str, dict]:
+        """GET /sync, return {data_type: {payload, version, updatedAt}}."""
+        resp = await self._client.get(f"{self.url}/sync", headers=self._auth_headers())
         if resp.status_code >= 400:
             raise RuntimeError(f"Sync pull failed: {resp.status_code}")
 
@@ -96,20 +88,15 @@ class SyncClient:
             }
         return result
 
-    async def push(self, user_hash: str, data_type: str, payload: Any, version: int) -> None:
-        """POST with Prefer: resolution=merge-duplicates."""
+    async def push(self, _user_hash: str, data_type: str, payload: Any, version: int) -> None:
+        """POST /sync."""
         resp = await self._client.post(
-            f"{self.url}/rest/v1/{TABLE}",
-            headers={
-                **self._headers(),
-                "Prefer": "resolution=merge-duplicates",
-            },
+            f"{self.url}/sync",
+            headers=self._auth_headers(),
             json={
-                "user_hash": user_hash,
                 "data_type": data_type,
                 "payload": payload,
-                "version": (version or 0) + 1,
-                "updated_at": datetime.now(timezone.utc).isoformat(),
+                "version": version or 0,
             },
         )
         if resp.status_code >= 400:
@@ -120,7 +107,7 @@ class SyncClient:
 
 
 class SyncManager:
-    """Orchestrates local-first sync with Supabase (poll-based, no WebSocket)."""
+    """Orchestrates local-first sync with the Railway server (poll-based, no WebSocket)."""
 
     def __init__(self, learning_store: LearningStore, client: Optional[SyncClient] = None):
         self.store = learning_store
@@ -170,7 +157,6 @@ class SyncManager:
             if not remote:
                 continue
             self._remote_versions[data_type] = remote["version"]
-            storage_key = STORAGE_KEYS.get(data_type, data_type)
             local_data = self.store.get(data_type)
             merged = self._merge(data_type, local_data, remote["payload"])
             if merged is not None:
@@ -197,7 +183,6 @@ class SyncManager:
 
         for data_type in types:
             try:
-                storage_key = STORAGE_KEYS.get(data_type, data_type)
                 payload = self.store.get(data_type)
                 if data_type == "custom_rules" and isinstance(payload, str):
                     payload = {"rules": payload, "updatedAt": datetime.now(timezone.utc).isoformat()}

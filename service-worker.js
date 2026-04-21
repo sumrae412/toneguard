@@ -6,7 +6,7 @@ importScripts(
   "lib.js",
   "src/sync/merge.js",
   "src/sync/storage-adapter.js",
-  "src/sync/supabase-client.js",
+  "src/sync/sync-client.js",
   "src/sync/sync-manager.js"
 );
 
@@ -26,10 +26,10 @@ async function initSync() {
   if (!apiKey) return;
 
   const storage = new globalThis.__toneGuardStorage.ChromeStorageAdapter();
-  const supabase = new globalThis.__toneGuardSupabase.ToneGuardSupabase();
+  const syncClient = new globalThis.__toneGuardSyncClient.ToneGuardSyncClient();
   const merge = globalThis.__toneGuardMerge;
 
-  syncManager = new globalThis.__toneGuardSync.SyncManager(storage, supabase, merge);
+  syncManager = new globalThis.__toneGuardSync.SyncManager(storage, syncClient, merge);
   syncManager.onConflict = (type, msg) => {
     console.log("ToneGuard sync conflict:", type, msg);
   };

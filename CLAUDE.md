@@ -8,7 +8,7 @@ Chrome extension + MCP server for tone analysis. Analyzes messages for professio
 - `toneguard-mcp/`: Python MCP server (FastMCP, multi-model analysis)
 - `android/`: Native Kotlin Android app with accessibility service
 - `pwa/`: Progressive Web App for mobile share sheet
-- `supabase/`: Backend infrastructure (migrations, Edge Functions)
+- `sync-server/`: Railway-hosted Node/Express + Postgres + WebSocket sync backend
 
 ## Dev Setup
 
@@ -25,6 +25,7 @@ Chrome extension + MCP server for tone analysis. Analyzes messages for professio
 - Build backend: `hatchling`, not legacy setuptools
 - The `.env` file must be sourced into the shell for live integration tests (not just present on disk)
 - **Dual code paths: MCP + extension.** Prompts/behaviors live twice — `toneguard-mcp/critics/*.md` (MCP analyzer) AND inline constants in `service-worker.js` (extension calls Anthropic directly, not through MCP). Known pairs: landing critic (`critics/landing.md` ↔ `LANDING_SYSTEM_PROMPT`), fingerprint (`analyzer.py:generate_fingerprint` ↔ `regenerateVoiceFingerprint`). Any change to one must update the other.
+- **Sync backend lives in 4 clients.** The same sync protocol is implemented in `src/sync/sync-client.js` (Chrome ext + PWA), `toneguard-mcp/sync.py` (MCP server, poll-only), and `android/.../SyncManager.kt` (Android). If you change the server API in `sync-server/src/index.js`, update all three. The server URL is hardcoded in each client — bump together when the Railway hostname changes.
 
 ## Chrome Extension Dev Loop
 
