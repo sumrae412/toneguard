@@ -8,6 +8,11 @@ ToneGuard is a Chrome extension that uses Claude AI to analyze your messages on 
 
 - **Smart interception** — catches tone, clarity, and professionalism issues in real time
 - **Word-level diffs** — see exactly what changed between your original and the suggestion
+- **Explainable issue cards** — see the phrase, category, and reason behind each warning
+- **Intent modes** — tune rewrites for professional, warm, direct, de-escalating, boundary-setting, or concise delivery
+- **Voice preservation controls** — choose how strongly rewrites should preserve your wording and rhythm
+- **Smart local routing** — obvious short acknowledgments pass locally without an API call
+- **Recoverable failures** — retry, send as-is, or copy non-sensitive diagnostics when analysis fails
 - **Learns your style** — adapts to your writing voice and learns from your decisions
 - **Per-site strictness** — set different sensitivity levels for Slack vs. Gmail vs. LinkedIn
 - **Custom rules** — add your own rules in plain English ("never use the word 'urgent'")
@@ -61,7 +66,7 @@ Once installed and configured:
 4. If ToneGuard detects an issue, a drawer appears with:
    - Your original message
    - A suggested rewrite with changes highlighted
-   - An explanation of what was flagged and why
+   - Issue cards explaining what was flagged and why
 5. Choose one of three actions:
    - **Use suggestion** — sends the rewritten version
    - **Send as-is** — sends your original message unchanged
@@ -109,13 +114,26 @@ npm test
 
 Tests cover utility functions, manifest integrity, and JavaScript syntax validation.
 
+### Shared Artifacts
+
+Prompts and analysis contracts live under `shared/`. After editing shared prompt
+or schema files, regenerate packaged client artifacts:
+
+```bash
+node scripts/generate_shared_artifacts.mjs
+```
+
+`npm test` fails if generated artifacts are stale.
+
 ## How It Works
 
 1. **Content scripts** (`content.js`, `overlay.js`) are injected into supported sites
 2. When you press Send, the content script intercepts the action and sends the message text to the **service worker**
 3. The service worker calls the **Claude API** with a detailed system prompt covering tone, clarity, and professionalism rules
-4. If the message is flagged, the overlay shows results; otherwise the send proceeds silently
-5. Your decisions (accepted/dismissed/edited) are stored locally and fed back to Claude in future analyses to improve accuracy
+4. A conservative pre-check skips the API only for obvious safe acknowledgments; risky messages still go through model analysis
+5. If the message is flagged, the overlay shows results; otherwise the send proceeds silently
+6. Your decisions (accepted/dismissed/edited) are stored locally and fed back to Claude in future analyses to improve accuracy
+7. Local telemetry summaries store routes, outcomes, and diagnostic codes only. They do not store raw messages, prompts, recipients, API keys, emails, phone numbers, or URLs.
 
 ## Cross-Platform Sync
 

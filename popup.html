@@ -97,6 +97,21 @@
       border-color: #4CAF50;
     }
 
+    .field select {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 13px;
+      background: white;
+      color: #1a1a1a;
+    }
+
+    .field select:focus {
+      outline: none;
+      border-color: #4CAF50;
+    }
+
     .btn {
       width: 100%;
       padding: 8px;
@@ -309,6 +324,28 @@
       <input type="range" id="strictness" min="1" max="3" value="2" step="1">
       <span class="strictness-label" id="strictnessLabel">Balanced</span>
     </div>
+  </div>
+
+  <div class="field">
+    <label for="intentMode">Default rewrite mode</label>
+    <select id="intentMode">
+      <option value="professional">Professional</option>
+      <option value="warm">Warm</option>
+      <option value="direct">Direct</option>
+      <option value="deescalating">De-escalating</option>
+      <option value="boundary">Boundary</option>
+      <option value="concise">Concise</option>
+    </select>
+  </div>
+
+  <div class="field">
+    <label for="voiceStrength">Voice preservation</label>
+    <select id="voiceStrength">
+      <option value="preserve">Preserve</option>
+      <option value="balanced">Balanced</option>
+      <option value="polish">Polish</option>
+      <option value="rewrite">Rewrite</option>
+    </select>
   </div>
 
   <div class="site-strictness" id="siteStrictness"></div>

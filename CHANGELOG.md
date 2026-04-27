@@ -2,6 +2,19 @@
 
 All notable changes to ToneGuard will be documented in this file.
 
+## [0.3.4] - 2026-04-27
+
+### Added
+- Shared analysis schema, categories, modes, prompt sources, and generated artifacts with freshness tests.
+- Synthetic golden analysis corpus shared by JS and MCP contract tests.
+- Deterministic pre-check routing for local pass, standard, deep, and blocked-error paths.
+- Explainable issue cards in Chrome overlay and PWA.
+- Intent modes, voice preservation controls, site profiles, typed failure diagnostics, and local-only telemetry summaries.
+
+### Changed
+- Chrome landing prompt now loads from a generated prompt artifact instead of an inline service-worker constant.
+- Failures no longer silently release sends. Users can retry, send as-is, or copy non-sensitive diagnostics.
+
 ## [0.3.1] - 2026-04-18
 
 ### Fixed

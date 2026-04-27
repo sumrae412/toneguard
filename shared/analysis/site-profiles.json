@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "profiles": {
+    "slack": {
+      "label": "Slack",
+      "issue_card_limit": 2,
+      "prompt": "Slack profile: keep feedback compact, prefer concise rewrites, and use numbered lists when they help replies."
+    },
+    "gmail": {
+      "label": "Gmail",
+      "issue_card_limit": 3,
+      "prompt": "Gmail profile: check professionalism more strongly, preserve email formatting, and make reasoning complete enough for a longer message."
+    },
+    "linkedin": {
+      "label": "LinkedIn",
+      "issue_card_limit": 2,
+      "prompt": "LinkedIn profile: keep public-facing rewrites concise, professional, and not overfamiliar."
+    },
+    "turbotenant": {
+      "label": "TurboTenant",
+      "issue_card_limit": 3,
+      "prompt": "TurboTenant profile: keep landlord and tenant communication specific, professional, and action-oriented."
+    },
+    "pwa": {
+      "label": "PWA",
+      "issue_card_limit": 3,
+      "prompt": "PWA profile: assume copy-first use with no auto-send behavior."
+    },
+    "android": {
+      "label": "Android",
+      "issue_card_limit": 2,
+      "prompt": "Android profile: keep explanations short and overlay-friendly."
+    },
+    "generic": {
+      "label": "Generic",
+      "issue_card_limit": 3,
+      "prompt": "Generic profile: use balanced default workplace guidance."
+    }
+  }
+}

@@ -16,6 +16,7 @@
 //   window.__toneGuard.showResult(result)
 //   window.__toneGuard.showPassed()
 //   window.__toneGuard.showStale()
+//   window.__toneGuard.showError(error)
 //   window.__toneGuard.hide()
 //   window.__toneGuard.setOnDecision(fn)
 
@@ -176,6 +177,10 @@
     showStale() {
       ensureIframe();
       postToFrame({ type: "show_stale" });
+    },
+    showError(error) {
+      ensureIframe();
+      postToFrame({ type: "show_error", error });
     },
     hide() {
       if (!iframe) return;

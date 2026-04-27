@@ -1,0 +1,191 @@
+{
+  "version": 1,
+  "privacy": {
+    "source": "synthetic",
+    "contains_real_user_text": false,
+    "notes": "Fixtures are invented examples for contract tests. Do not add real user messages, recipients, emails, phone numbers, API keys, URLs, or prompts."
+  },
+  "fixtures": [
+    {
+      "id": "safe_short_ack",
+      "synthetic": true,
+      "platform": "slack",
+      "message": "sounds good",
+      "expected": {
+        "flagged": false,
+        "confidence": 0,
+        "mode": "",
+        "readability": 0,
+        "red_flags": [],
+        "categories": [],
+        "reasoning": "",
+        "suggestion": "",
+        "has_questions": false,
+        "questions": []
+      },
+      "model_response": "{\"flagged\": false, \"confidence\": 0.0, \"mode\": \"\", \"readability\": 0, \"red_flags\": [], \"categories\": [], \"reasoning\": \"\", \"suggestion\": \"\", \"has_questions\": false, \"questions\": []}"
+    },
+    {
+      "id": "passive_aggressive",
+      "synthetic": true,
+      "platform": "email",
+      "message": "Per my last note, this still has not been handled.",
+      "expected": {
+        "flagged": true,
+        "confidence": 0.91,
+        "mode": "tone",
+        "readability": 8,
+        "red_flags": ["Per my last note"],
+        "categories": ["tone"],
+        "issues": [
+          {
+            "quote": "Per my last note",
+            "category": "tone",
+            "severity": "medium",
+            "explanation": "This can read as impatience with the recipient.",
+            "suggested_fix": "Follow up without implying they ignored you.",
+            "quote_confidence": "exact"
+          }
+        ],
+        "reasoning": "The opening can read as impatient and blame-focused.",
+        "suggestion": "Following up on this. Can you handle it today?",
+        "has_questions": false,
+        "questions": []
+      },
+      "model_response": "```json\n{\"flagged\": true, \"confidence\": 0.91, \"mode\": \"tone\", \"readability\": 8, \"red_flags\": [\"Per my last note\"], \"categories\": [\"tone\"], \"issues\": [{\"quote\": \"Per my last note\", \"category\": \"tone\", \"severity\": \"medium\", \"explanation\": \"This can read as impatience with the recipient.\", \"suggested_fix\": \"Follow up without implying they ignored you.\", \"quote_confidence\": \"exact\"}], \"reasoning\": \"The opening can read as impatient and blame-focused.\", \"suggestion\": \"Following up on this. Can you handle it today?\", \"has_questions\": false, \"questions\": []}\n```"
+    },
+    {
+      "id": "defensive",
+      "synthetic": true,
+      "platform": "slack",
+      "message": "I do not know why this is so hard to understand.",
+      "expected": {
+        "flagged": true,
+        "confidence": 0.94,
+        "mode": "tone",
+        "readability": 7,
+        "red_flags": ["why this is so hard"],
+        "categories": ["tone"],
+        "reasoning": "This sounds frustrated with the reader instead of focused on the issue.",
+        "suggestion": "I want to make sure I am explaining this clearly. Here is the key point.",
+        "has_questions": false,
+        "questions": []
+      },
+      "model_response": "{\"flagged\": true, \"confidence\": 0.94, \"mode\": \"tone\", \"readability\": 7, \"red_flags\": [\"why this is so hard\"], \"categories\": [\"tone\"], \"reasoning\": \"This sounds frustrated with the reader instead of focused on the issue.\", \"suggestion\": \"I want to make sure I am explaining this clearly. Here is the key point.\", \"has_questions\": false, \"questions\": []}"
+    },
+    {
+      "id": "unclear_ask",
+      "synthetic": true,
+      "platform": "slack",
+      "message": "Can you handle the thing from earlier when you get a chance?",
+      "expected": {
+        "flagged": true,
+        "confidence": 0.88,
+        "mode": "polish",
+        "readability": 6,
+        "red_flags": ["the thing from earlier"],
+        "categories": ["clarity"],
+        "reasoning": "The request is too vague for the recipient to act on confidently.",
+        "suggestion": "Can you handle the draft review from earlier by this afternoon?",
+        "has_questions": true,
+        "questions": ["What task are you referring to?", "What deadline should the recipient use?"]
+      },
+      "model_response": "{\"flagged\": true, \"confidence\": 0.88, \"mode\": \"polish\", \"readability\": 6, \"red_flags\": [\"the thing from earlier\"], \"categories\": [\"clarity\"], \"reasoning\": \"The request is too vague for the recipient to act on confidently.\", \"suggestion\": \"Can you handle the draft review from earlier by this afternoon?\", \"has_questions\": true, \"questions\": [\"What task are you referring to?\", \"What deadline should the recipient use?\"]}"
+    },
+    {
+      "id": "hedged",
+      "synthetic": true,
+      "platform": "email",
+      "message": "I just maybe wanted to see if perhaps we could possibly adjust the timeline.",
+      "expected": {
+        "flagged": true,
+        "confidence": 0.86,
+        "mode": "polish",
+        "readability": 10,
+        "red_flags": ["just maybe", "perhaps", "possibly"],
+        "categories": ["hedging", "wordy"],
+        "reasoning": "Stacked qualifiers bury the actual request.",
+        "suggestion": "Can we adjust the timeline?",
+        "has_questions": false,
+        "questions": []
+      },
+      "model_response": "{\"flagged\": true, \"confidence\": 0.86, \"mode\": \"polish\", \"readability\": 10, \"red_flags\": [\"just maybe\", \"perhaps\", \"possibly\"], \"categories\": [\"hedging\", \"wordy\"], \"reasoning\": \"Stacked qualifiers bury the actual request.\", \"suggestion\": \"Can we adjust the timeline?\", \"has_questions\": false, \"questions\": []}"
+    },
+    {
+      "id": "high_stakes_conflict",
+      "synthetic": true,
+      "platform": "email",
+      "message": "This cannot keep happening. I need a clear owner and a recovery plan by tomorrow.",
+      "expected": {
+        "flagged": true,
+        "confidence": 0.72,
+        "mode": "both",
+        "readability": 8,
+        "red_flags": ["This cannot keep happening"],
+        "categories": ["tone", "clarity"],
+        "reasoning": "The message is direct but could land as blame without enough shared-goal framing.",
+        "suggestion": "I want to get this back on track. Please send the owner and recovery plan by tomorrow.",
+        "has_questions": false,
+        "questions": []
+      },
+      "model_response": "{\n  \"flagged\": true,\n  \"confidence\": 0.72,\n  \"mode\": \"both\",\n  \"readability\": 8,\n  \"red_flags\": [\"This cannot keep happening\"],\n  \"categories\": [\"tone\", \"clarity\"],\n  \"reasoning\": \"The message is direct but could land as blame without enough shared-goal framing.\",\n  \"suggestion\": \"I want to get this back on track. Please send the owner and recovery plan by tomorrow.\",\n  \"has_questions\": false,\n  \"questions\": []\n}"
+    },
+    {
+      "id": "boundary_setting",
+      "synthetic": true,
+      "platform": "slack",
+      "message": "I cannot take on another review today, but I can look tomorrow morning.",
+      "expected": {
+        "flagged": false,
+        "confidence": 0.08,
+        "mode": "",
+        "readability": 7,
+        "red_flags": [],
+        "categories": [],
+        "reasoning": "",
+        "suggestion": "",
+        "has_questions": false,
+        "questions": []
+      },
+      "model_response": "{\"flagged\": false, \"confidence\": 0.08, \"mode\": \"\", \"readability\": 7, \"red_flags\": [], \"categories\": [], \"reasoning\": \"\", \"suggestion\": \"\", \"has_questions\": false, \"questions\": []}"
+    },
+    {
+      "id": "parse_edge",
+      "synthetic": true,
+      "platform": "generic",
+      "message": "Here is the draft:\\n\\\"Please approve item two\\\"",
+      "expected": {
+        "flagged": true,
+        "confidence": 0.67,
+        "mode": "polish",
+        "readability": 5,
+        "red_flags": ["item two"],
+        "categories": ["clarity"],
+        "reasoning": "The referenced item may not be clear outside the sender's context.",
+        "suggestion": "Please approve the second checklist item.",
+        "has_questions": false,
+        "questions": []
+      },
+      "model_response": "Result follows:\n```json\n{\n  \"flagged\": true,\n  \"confidence\": 0.67,\n  \"mode\": \"polish\",\n  \"readability\": 5,\n  \"red_flags\": [\"item two\"],\n  \"categories\": [\"clarity\"],\n  \"reasoning\": \"The referenced item may not be clear outside the sender's context.\",\n  \"suggestion\": \"Please approve the second checklist item.\",\n  \"has_questions\": false,\n  \"questions\": []\n}\n```\nDone."
+    },
+    {
+      "id": "non_issue_casual",
+      "synthetic": true,
+      "platform": "slack",
+      "message": "Nice, that works for me. Thanks for moving it forward.",
+      "expected": {
+        "flagged": false,
+        "confidence": 0.03,
+        "mode": "",
+        "readability": 5,
+        "red_flags": [],
+        "categories": [],
+        "reasoning": "",
+        "suggestion": "",
+        "has_questions": false,
+        "questions": []
+      },
+      "model_response": "{\"flagged\": false, \"confidence\": 0.03, \"mode\": \"\", \"readability\": 5, \"red_flags\": [], \"categories\": [], \"reasoning\": \"\", \"suggestion\": \"\", \"has_questions\": false, \"questions\": []}"
+    }
+  ]
+}

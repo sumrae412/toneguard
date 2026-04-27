@@ -206,6 +206,17 @@
         return { ok: true };
       }
 
+      if (decision.action === "retry") {
+        const editor = pendingEditor;
+        pendingText = null;
+        pendingEditor = null;
+        if (editor && editor.isConnected) {
+          setTimeout(() => analyzeAndIntercept(editor), 0);
+          return { ok: true };
+        }
+        return { ok: false, error: "no pending compose to retry" };
+      }
+
       if (!pendingEditor) {
         return { ok: false, error: "no pending compose" };
       }
@@ -472,10 +483,7 @@
 
       if (result.error) {
         console.warn("ToneGuard:", result.error);
-        if (window.__toneGuard) window.__toneGuard.hide();
-        currentPlatform.releaseSend(editor);
-        pendingEditor = null;
-        pendingText = null;
+        if (window.__toneGuard) window.__toneGuard.showError(result.error);
         return;
       }
 
@@ -501,6 +509,9 @@
           readability: result.readability || 0,
           red_flags: result.red_flags || [],
           categories: result.categories || [],
+          issues: result.issues || [],
+          intent_mode: result.intent_mode || "professional",
+          site_profile: result.site_profile || null,
           has_questions: result.has_questions || false,
           questions: result.questions || [],
           landing: result.landing || null
@@ -640,7 +651,7 @@
 
       if (result.error) {
         console.warn("ToneGuard:", result.error);
-        if (window.__toneGuard) window.__toneGuard.hide();
+        if (window.__toneGuard) window.__toneGuard.showError(result.error);
         return;
       }
 
@@ -656,6 +667,9 @@
           readability: result.readability || 0,
           red_flags: result.red_flags || [],
           categories: result.categories || [],
+          issues: result.issues || [],
+          intent_mode: result.intent_mode || "professional",
+          site_profile: result.site_profile || null,
           has_questions: result.has_questions || false,
           questions: result.questions || [],
           landing: result.landing || null
@@ -706,7 +720,7 @@
 
       if (result.error) {
         console.warn("ToneGuard:", result.error);
-        if (window.__toneGuard) window.__toneGuard.hide();
+        if (window.__toneGuard) window.__toneGuard.showError(result.error);
         return;
       }
 
@@ -722,6 +736,9 @@
           readability: result.readability || 0,
           red_flags: result.red_flags || [],
           categories: result.categories || [],
+          issues: result.issues || [],
+          intent_mode: result.intent_mode || "professional",
+          site_profile: result.site_profile || null,
           has_questions: result.has_questions || false,
           questions: result.questions || [],
           selectionMode: true // Tells overlay to show Copy/Replace instead of Send

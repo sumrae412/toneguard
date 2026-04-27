@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "response_modes": [
+    {
+      "id": "",
+      "label": "None",
+      "description": "No rewrite mode applies because the message passed."
+    },
+    {
+      "id": "tone",
+      "label": "Tone",
+      "description": "The message needs tone or delivery changes."
+    },
+    {
+      "id": "polish",
+      "label": "Polish",
+      "description": "The tone is fine, but the writing needs cleanup."
+    },
+    {
+      "id": "both",
+      "label": "Tone and polish",
+      "description": "The message needs both delivery and writing changes."
+    }
+  ],
+  "intent_modes": [
+    {
+      "id": "professional",
+      "label": "Professional",
+      "description": "Default polished workplace tone."
+    },
+    {
+      "id": "warm",
+      "label": "Warm",
+      "description": "Friendlier and more relational."
+    },
+    {
+      "id": "direct",
+      "label": "Direct",
+      "description": "Shorter, clearer, and less softened."
+    },
+    {
+      "id": "deescalating",
+      "label": "De-escalating",
+      "description": "Lowers conflict without avoiding the issue."
+    },
+    {
+      "id": "boundary",
+      "label": "Boundary",
+      "description": "Firm, explicit limits with respectful framing."
+    },
+    {
+      "id": "concise",
+      "label": "Concise",
+      "description": "Preserves meaning with minimum words."
+    }
+  ]
+}

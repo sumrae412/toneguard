@@ -146,6 +146,239 @@ function shouldAnalyze(text) {
   return text && text.trim().length >= 10;
 }
 
+const PRECHECK_RULES = {
+  local_pass_max_words: 4,
+  local_pass_phrases: [
+    "sounds good",
+    "thanks",
+    "thank you",
+    "got it",
+    "ok",
+    "okay",
+    "will do"
+  ],
+  escalation_phrases: [
+    "what the heck",
+    "what the hell",
+    "are you serious",
+    "i can't believe",
+    "per my last email",
+    "as i already said",
+    "why this is so hard"
+  ],
+  high_stakes_intent_modes: ["deescalating", "boundary"]
+};
+
+function normalizeForPrecheck(text) {
+  return String(text || "")
+    .toLowerCase()
+    .replace(/[^\w\s']/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Conservative deterministic analysis routing.
+ *
+ * This does not rewrite or classify tone. It only passes obvious short
+ * acknowledgments locally and marks high-risk messages for deeper analysis.
+ */
+function precheckAnalysis(text, options = {}) {
+  if (options.error) {
+    return {
+      route: "blocked_error",
+      precheck_hits: ["error:" + options.error],
+      should_call_model: false
+    };
+  }
+
+  const normalized = normalizeForPrecheck(text);
+  const words = normalized ? normalized.split(" ") : [];
+  if (!normalized) {
+    return {
+      route: "local_pass",
+      precheck_hits: ["empty"],
+      should_call_model: false
+    };
+  }
+
+  const escalationHits = PRECHECK_RULES.escalation_phrases
+    .filter((phrase) => normalized.includes(phrase))
+    .map((phrase) => "phrase:" + phrase);
+  const mode = options.intent_mode || options.intentMode || "";
+  if (PRECHECK_RULES.high_stakes_intent_modes.includes(mode)) {
+    escalationHits.push("intent:" + mode);
+  }
+  if (escalationHits.length > 0) {
+    return {
+      route: "deep",
+      precheck_hits: escalationHits,
+      should_call_model: true
+    };
+  }
+
+  const isShortSafePhrase =
+    words.length <= PRECHECK_RULES.local_pass_max_words &&
+    PRECHECK_RULES.local_pass_phrases.includes(normalized);
+  if (isShortSafePhrase) {
+    return {
+      route: "local_pass",
+      precheck_hits: ["phrase:" + normalized],
+      should_call_model: false
+    };
+  }
+
+  return {
+    route: "standard",
+    precheck_hits: [],
+    should_call_model: true
+  };
+}
+
+const ANALYSIS_ERROR_MAP = {
+  missing_api_key: {
+    type: "auth_error",
+    message: "No API key set. Open ToneGuard settings to add one.",
+    retryable: false,
+    diagnostic_code: "TG_AUTH_001"
+  },
+  parse: {
+    type: "parse_error",
+    message: "ToneGuard could not read the model response.",
+    retryable: true,
+    diagnostic_code: "TG_PARSE_001"
+  },
+  network: {
+    type: "network_error",
+    message: "Network error. Check your connection and try again.",
+    retryable: true,
+    diagnostic_code: "TG_NET_001"
+  },
+  runtime: {
+    type: "runtime_error",
+    message: "ToneGuard hit an unexpected error.",
+    retryable: true,
+    diagnostic_code: "TG_RUNTIME_001"
+  }
+};
+
+const SITE_PROFILES = {
+  slack: {
+    label: "Slack",
+    issue_card_limit: 2,
+    prompt: "Slack profile: keep feedback compact, prefer concise rewrites, and use numbered lists when they help replies."
+  },
+  gmail: {
+    label: "Gmail",
+    issue_card_limit: 3,
+    prompt: "Gmail profile: check professionalism more strongly, preserve email formatting, and make reasoning complete enough for a longer message."
+  },
+  linkedin: {
+    label: "LinkedIn",
+    issue_card_limit: 2,
+    prompt: "LinkedIn profile: keep public-facing rewrites concise, professional, and not overfamiliar."
+  },
+  turbotenant: {
+    label: "TurboTenant",
+    issue_card_limit: 3,
+    prompt: "TurboTenant profile: keep landlord and tenant communication specific, professional, and action-oriented."
+  },
+  pwa: {
+    label: "PWA",
+    issue_card_limit: 3,
+    prompt: "PWA profile: assume copy-first use with no auto-send behavior."
+  },
+  android: {
+    label: "Android",
+    issue_card_limit: 2,
+    prompt: "Android profile: keep explanations short and overlay-friendly."
+  },
+  generic: {
+    label: "Generic",
+    issue_card_limit: 3,
+    prompt: "Generic profile: use balanced default workplace guidance."
+  }
+};
+
+function getSiteProfile(platform) {
+  const key = SITE_PROFILES[platform] ? platform : "generic";
+  return { id: key, ...SITE_PROFILES[key] };
+}
+
+const TELEMETRY_ALLOWED_FIELDS = new Set([
+  "event",
+  "timestamp",
+  "platform",
+  "site_profile",
+  "route",
+  "model",
+  "latency_bucket",
+  "token_estimate_bucket",
+  "failure_diagnostic_code",
+  "issue_categories",
+  "outcome"
+]);
+const TELEMETRY_EVENTS = new Set([
+  "analysis_started",
+  "analysis_completed",
+  "analysis_failed",
+  "route_selected",
+  "rewrite_accepted",
+  "rewrite_edited",
+  "send_as_is",
+  "retry_clicked",
+  "mode_changed",
+  "voice_strength_changed"
+]);
+const TELEMETRY_PRIVATE_PATTERNS = [
+  /sk-ant-[A-Za-z0-9_-]+/,
+  /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i,
+  /\b(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b/,
+  /https?:\/\//i
+];
+
+function sanitizeTelemetryEvent(event) {
+  if (!event || typeof event !== "object") {
+    return { ok: false, error: "invalid_event" };
+  }
+  const sanitized = {};
+  for (const [key, value] of Object.entries(event)) {
+    if (!TELEMETRY_ALLOWED_FIELDS.has(key)) {
+      return { ok: false, error: "disallowed_field:" + key };
+    }
+    if (typeof value === "string") {
+      for (const pattern of TELEMETRY_PRIVATE_PATTERNS) {
+        if (pattern.test(value)) {
+          return { ok: false, error: "private_value:" + key };
+        }
+      }
+    }
+    sanitized[key] = value;
+  }
+  if (!TELEMETRY_EVENTS.has(sanitized.event)) {
+    return { ok: false, error: "unknown_event" };
+  }
+  if (!sanitized.timestamp) {
+    sanitized.timestamp = new Date().toISOString();
+  }
+  return { ok: true, event: sanitized };
+}
+
+function makeAnalysisError(kind, details = {}) {
+  const base = ANALYSIS_ERROR_MAP[kind] || ANALYSIS_ERROR_MAP.runtime;
+  return {
+    type: base.type,
+    message: details.message || base.message,
+    retryable: details.retryable ?? base.retryable,
+    safe_to_send: "user_decides",
+    diagnostic_code: details.diagnostic_code || base.diagnostic_code,
+    status: details.status,
+    phase: details.phase,
+    route: details.route,
+    model: details.model
+  };
+}
+
 /**
  * Truncate text for display.
  */
@@ -245,6 +478,10 @@ if (typeof globalThis !== "undefined") {
     getReadabilityClass,
     getConfidenceClass,
     shouldAnalyze,
+    precheckAnalysis,
+    makeAnalysisError,
+    getSiteProfile,
+    sanitizeTelemetryEvent,
     truncate,
     extractMentions,
     hashApiKey,

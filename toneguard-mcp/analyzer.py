@@ -23,7 +23,36 @@ from learning_store import LearningStore
 logger = logging.getLogger("toneguard.analyzer")
 
 CRITICS_DIR = Path(__file__).parent / "critics"
+GENERATED_PROMPT_HEADER = "Generated from shared/. Do not edit directly.\n\n"
 STYLE_RULES_MTIME_CHECK_INTERVAL = 60  # seconds
+PRECHECK_RULES = {
+    "local_pass_max_words": 4,
+    "local_pass_phrases": {
+        "sounds good",
+        "thanks",
+        "thank you",
+        "got it",
+        "ok",
+        "okay",
+        "will do",
+    },
+    "escalation_phrases": {
+        "what the heck",
+        "what the hell",
+        "are you serious",
+        "i can't believe",
+        "per my last email",
+        "as i already said",
+        "why this is so hard",
+    },
+    "high_stakes_intent_modes": {"deescalating", "boundary"},
+}
+VOICE_STRENGTH_LABELS = {
+    "preserve": "Keep the user's words and rhythm unless a phrase is the problem.",
+    "balanced": "Preserve style, but prioritize clarity and tone safety.",
+    "polish": "Edit more freely for clarity while keeping the user's intent.",
+    "rewrite": "Rewrite aggressively when the draft is rough.",
+}
 
 # Rubric dimensions evaluated by the synthesizer
 RUBRIC_DIMENSIONS = [
@@ -65,6 +94,79 @@ def _score_to_grade(score: int) -> str:
     return "F"
 
 
+def _read_prompt(path: Path) -> str:
+    """Read a prompt file and remove generated-file metadata."""
+    if not path.exists():
+        return ""
+    prompt = path.read_text()
+    if prompt.startswith(GENERATED_PROMPT_HEADER):
+        return prompt[len(GENERATED_PROMPT_HEADER) :]
+    return prompt
+
+
+def _normalize_for_precheck(text: str) -> str:
+    """Normalize text for deterministic routing checks."""
+    normalized = "".join(
+        ch.lower() if ch.isalnum() or ch.isspace() or ch == "'" else " "
+        for ch in str(text or "")
+    )
+    return " ".join(normalized.split())
+
+
+def precheck_analysis(
+    text: str,
+    intent_mode: str = "",
+    error: str = "",
+) -> dict[str, Any]:
+    """Conservatively route analysis before model calls."""
+    if error:
+        return {
+            "route": "blocked_error",
+            "precheck_hits": [f"error:{error}"],
+            "should_call_model": False,
+        }
+
+    normalized = _normalize_for_precheck(text)
+    words = normalized.split() if normalized else []
+    if not normalized:
+        return {
+            "route": "local_pass",
+            "precheck_hits": ["empty"],
+            "should_call_model": False,
+        }
+
+    hits = [
+        f"phrase:{phrase}"
+        for phrase in PRECHECK_RULES["escalation_phrases"]
+        if phrase in normalized
+    ]
+    if intent_mode in PRECHECK_RULES["high_stakes_intent_modes"]:
+        hits.append(f"intent:{intent_mode}")
+    if hits:
+        return {
+            "route": "deep",
+            "precheck_hits": hits,
+            "should_call_model": True,
+        }
+
+    if (
+        len(words) <= PRECHECK_RULES["local_pass_max_words"]
+        and normalized in PRECHECK_RULES["local_pass_phrases"]
+    ):
+        return {
+            "route": "local_pass",
+            "precheck_hits": [f"phrase:{normalized}"],
+            "should_call_model": False,
+        }
+
+    return {"route": "standard", "precheck_hits": [], "should_call_model": True}
+
+
+def normalize_voice_strength(strength: str) -> str:
+    """Normalize voice preservation controls to known values."""
+    return strength if strength in VOICE_STRENGTH_LABELS else "balanced"
+
+
 class ToneAnalyzer:
     """Multi-agent tone analysis: 2 critics → synthesizer → self-grade."""
 
@@ -90,9 +192,9 @@ class ToneAnalyzer:
         claude_path = CRITICS_DIR / "claude-tone.md"
         gpt_path = CRITICS_DIR / "gpt-tone.md"
         landing_path = CRITICS_DIR / "landing.md"
-        self._claude_prompt = claude_path.read_text() if claude_path.exists() else ""
-        self._gpt_prompt = gpt_path.read_text() if gpt_path.exists() else ""
-        self._landing_prompt = landing_path.read_text() if landing_path.exists() else ""
+        self._claude_prompt = _read_prompt(claude_path)
+        self._gpt_prompt = _read_prompt(gpt_path)
+        self._landing_prompt = _read_prompt(landing_path)
 
     def _reload_style_rules(self) -> None:
         try:
@@ -147,10 +249,43 @@ class ToneAnalyzer:
         message: str,
         context: str = "",
         recipient: str = "",
+        voice_strength: str = "balanced",
     ) -> dict[str, Any]:
         """Run tone + clarity critics and the landing analyzer in parallel,
         synthesize the rewrite, self-grade, attach the landing view, and return.
         """
+        precheck = precheck_analysis(message)
+        voice_strength = normalize_voice_strength(voice_strength)
+        routing = {
+            "route": precheck["route"],
+            "precheck_hits": precheck["precheck_hits"],
+            "model": "multi-model" if precheck["should_call_model"] else "local",
+        }
+        if not precheck["should_call_model"]:
+            return {
+                "flagged": False,
+                "issues": [],
+                "suggestion": "",
+                "rewrite": "",
+                "confidence": 0,
+                "routing": routing,
+                "voice": {
+                    "strength": voice_strength,
+                    "source": "none",
+                    "voice_fidelity": 0,
+                },
+                "agents": {
+                    "claude": "skipped",
+                    "gpt": "skipped",
+                    "landing": "skipped",
+                },
+                "landing": {
+                    "takeaway": None,
+                    "tone_felt": None,
+                    "next_action": None,
+                },
+            }
+
         user_context = self._build_context(message, context, recipient)
 
         # Run tone + clarity + landing critics in parallel. Landing failure
@@ -178,11 +313,21 @@ class ToneAnalyzer:
             landing_result = None
 
         # Synthesize with rubric scoring and competing rewrites
-        synthesis = await self._synthesize(message, claude_result, gpt_result)
+        synthesis = await self._synthesize(
+            message,
+            claude_result,
+            gpt_result,
+            voice_strength=voice_strength,
+        )
         synthesis["agents"] = {
             "claude": "ok" if claude_ok else "error",
             "gpt": "ok" if gpt_ok else "error",
             "landing": "ok" if landing_ok else "error",
+        }
+        synthesis["routing"] = routing
+        synthesis["voice"] = {
+            **(synthesis.get("voice") or {}),
+            "strength": voice_strength,
         }
 
         # Self-grade loop: refine if any rubric dimension < B
@@ -304,7 +449,7 @@ class ToneAnalyzer:
         )
         return resp.content[0].text.strip()
 
-    def _build_voice_section(self) -> str:
+    def _build_voice_section(self, voice_strength: str = "balanced") -> str:
         """Render the voice-personalization section of the synthesizer prompt.
 
         Preference order:
@@ -315,6 +460,11 @@ class ToneAnalyzer:
              (too sparse for a reliable fingerprint).
           3. empty string — user has no samples at all.
         """
+        voice_strength = normalize_voice_strength(voice_strength)
+        strength_section = (
+            "\n## Voice Preservation Strength\n\n"
+            f"{voice_strength}: {VOICE_STRENGTH_LABELS[voice_strength]}\n"
+        )
         fingerprint = self.store.get("voice_fingerprint")
         learning = self.store.get_learning_context(limit=5)
         all_samples = self.store.get("voice_samples") or []
@@ -322,6 +472,7 @@ class ToneAnalyzer:
 
         if fingerprint and fingerprint.get("text") and trained_count >= 3:
             return (
+                strength_section +
                 "\n## User Voice Fingerprint (match this style in the rewrite)\n\n"
                 f"{fingerprint['text']}\n"
             )
@@ -330,6 +481,7 @@ class ToneAnalyzer:
         if samples:
             samples_text = "\n".join(f"- {s.get('text', '')}" for s in samples)
             return (
+                strength_section +
                 "\n## User Voice Samples (match this style in the rewrite)\n\n"
                 f"{samples_text}\n"
             )
@@ -340,6 +492,7 @@ class ToneAnalyzer:
         original: str,
         claude_result: dict,
         gpt_result: dict,
+        voice_strength: str = "balanced",
     ) -> str:
         """Build the synthesizer prompt with rubric scoring and rewrite competition.
 
@@ -348,7 +501,7 @@ class ToneAnalyzer:
           2. raw voice samples — if fingerprint is missing or has <3 samples
           3. no voice section — zero samples ever collected
         """
-        voice_section = self._build_voice_section()
+        voice_section = self._build_voice_section(voice_strength)
 
         return (
             "You are a synthesis judge and writing coach. Two critics analyzed a "
@@ -398,9 +551,15 @@ class ToneAnalyzer:
         original: str,
         claude_result: dict,
         gpt_result: dict,
+        voice_strength: str = "balanced",
     ) -> dict[str, Any]:
         """Synthesize two critic outputs with rubric scoring."""
-        prompt = self._build_synthesizer_prompt(original, claude_result, gpt_result)
+        prompt = self._build_synthesizer_prompt(
+            original,
+            claude_result,
+            gpt_result,
+            voice_strength=voice_strength,
+        )
 
         try:
             resp = await self._anthropic.messages.create(

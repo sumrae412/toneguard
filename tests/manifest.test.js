@@ -64,6 +64,7 @@ describe("manifest.json", () => {
     expect(resources).toBeTruthy();
     const promptResource = resources.find((r) => r.resources.includes("prompts/base.txt"));
     expect(promptResource).toBeTruthy();
+    expect(promptResource.resources).toContain("prompts/landing.txt");
   });
 
   it("references files that exist", () => {

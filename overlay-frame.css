@@ -113,6 +113,70 @@ html, body {
   line-height: 1.4;
 }
 
+.tg-issues {
+  margin-bottom: 14px;
+}
+
+.tg-issues-list {
+  display: grid;
+  gap: 8px;
+}
+
+.tg-issue-card {
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-left: 3px solid #FFB300;
+  border-radius: 6px;
+  padding: 9px 10px;
+}
+
+.tg-issue-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 5px;
+}
+
+.tg-issue-category,
+.tg-issue-severity {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.tg-issue-category { color: #5D4037; }
+.tg-issue-severity { color: #999; }
+
+.tg-issue-quote {
+  font-size: 12px;
+  color: #C62828;
+  margin-bottom: 4px;
+}
+
+.tg-issue-explanation,
+.tg-issue-fix {
+  font-size: 12px;
+  color: #333;
+  line-height: 1.4;
+}
+
+.tg-issue-fix {
+  color: #666;
+  margin-top: 4px;
+}
+
+.tg-show-more {
+  margin-top: 8px;
+  border: none;
+  background: transparent;
+  color: #2E7D32;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  padding: 0;
+}
+
 .tg-meta-row {
   display: flex;
   flex-wrap: wrap;
@@ -268,6 +332,16 @@ html, body {
   padding: 10px 12px;
 }
 .tg-btn-tertiary:hover { color: #555; background: rgba(0,0,0,0.04); }
+
+.tg-failure-panel {
+  padding: 20px 0;
+}
+
+.tg-failure-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+}
 
 .tg-kbd {
   display: inline-block;

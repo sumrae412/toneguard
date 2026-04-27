@@ -70,6 +70,22 @@
     .btn-danger { background: #fff; color: #e53935; border: 1px solid #e53935; }
     .btn-danger:hover { background: #FFEBEE; }
 
+    select {
+      width: 100%;
+      max-width: 240px;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 13px;
+      background: white;
+      color: #1a1a1a;
+    }
+
+    select:focus {
+      outline: none;
+      border-color: #4CAF50;
+    }
+
     .status {
       font-size: 12px;
       color: #4CAF50;
@@ -298,6 +314,15 @@
   <div class="section">
     <h2>Train Your Voice</h2>
     <p>Paste 5&ndash;10 messages you'd be happy to send as-is. ToneGuard will learn your style and match it in rewrites. Separate samples with a blank line.</p>
+    <p>
+      Voice preservation:
+      <select id="voiceStrength">
+        <option value="preserve">Preserve my wording and rhythm</option>
+        <option value="balanced">Balanced</option>
+        <option value="polish">Polish more freely</option>
+        <option value="rewrite">Rewrite aggressively</option>
+      </select>
+    </p>
     <textarea id="voiceTraining" placeholder="Hey team — shipping the fix this afternoon. Will ping when it's up.&#10;&#10;Quick heads up that the deploy is taking longer than expected. Update by 4pm.&#10;&#10;Thanks for sending these over. I'll review tonight and get back with notes tomorrow."></textarea>
     <div class="btn-row">
       <button class="btn btn-primary" id="saveTraining">Save training samples</button>

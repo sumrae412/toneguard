@@ -8,6 +8,9 @@ import {
   getReadabilityClass,
   getConfidenceClass,
   shouldAnalyze,
+  precheckAnalysis,
+  makeAnalysisError,
+  getSiteProfile,
   truncate,
   extractMentions,
   verifyInsertedText
@@ -232,6 +235,90 @@ describe("shouldAnalyze", () => {
   it("trims whitespace before checking", () => {
     expect(shouldAnalyze("   hi   ")).toBe(false);
     expect(shouldAnalyze("   hello world   ")).toBe(true);
+  });
+});
+
+describe("precheckAnalysis", () => {
+  it("passes obvious short acknowledgments locally", () => {
+    expect(precheckAnalysis("sounds good")).toEqual({
+      route: "local_pass",
+      precheck_hits: ["phrase:sounds good"],
+      should_call_model: false
+    });
+    expect(precheckAnalysis("Thanks!").route).toBe("local_pass");
+  });
+
+  it("keeps non-issue casual messages on the model path when not exact allowlist matches", () => {
+    expect(precheckAnalysis("Nice, that works for me. Thanks for moving it forward.")).toEqual({
+      route: "standard",
+      precheck_hits: [],
+      should_call_model: true
+    });
+  });
+
+  it("escalates conflict phrases to the deep route", () => {
+    const result = precheckAnalysis("I do not know why this is so hard to understand.");
+    expect(result.route).toBe("deep");
+    expect(result.should_call_model).toBe(true);
+    expect(result.precheck_hits).toContain("phrase:why this is so hard");
+  });
+
+  it("escalates high-stakes intent modes", () => {
+    const result = precheckAnalysis("Please send the recovery plan.", {
+      intent_mode: "boundary"
+    });
+    expect(result.route).toBe("deep");
+    expect(result.precheck_hits).toContain("intent:boundary");
+  });
+
+  it("maps explicit errors to blocked_error", () => {
+    expect(precheckAnalysis("anything", { error: "parse" })).toEqual({
+      route: "blocked_error",
+      precheck_hits: ["error:parse"],
+      should_call_model: false
+    });
+  });
+});
+
+describe("makeAnalysisError", () => {
+  it("creates privacy-safe typed parse errors", () => {
+    expect(makeAnalysisError("parse", { route: "standard", model: "test-model" })).toEqual({
+      type: "parse_error",
+      message: "ToneGuard could not read the model response.",
+      retryable: true,
+      safe_to_send: "user_decides",
+      diagnostic_code: "TG_PARSE_001",
+      status: undefined,
+      phase: undefined,
+      route: "standard",
+      model: "test-model"
+    });
+  });
+
+  it("does not include raw message or prompt fields", () => {
+    const error = makeAnalysisError("network");
+    expect(error).not.toHaveProperty("text");
+    expect(error).not.toHaveProperty("message_text");
+    expect(error).not.toHaveProperty("prompt");
+    expect(error).not.toHaveProperty("api_key");
+  });
+});
+
+describe("getSiteProfile", () => {
+  it("returns configured profiles for known platforms", () => {
+    expect(getSiteProfile("slack")).toMatchObject({
+      id: "slack",
+      label: "Slack",
+      issue_card_limit: 2
+    });
+  });
+
+  it("falls back to generic for unknown platforms", () => {
+    expect(getSiteProfile("unknown")).toMatchObject({
+      id: "generic",
+      label: "Generic",
+      issue_card_limit: 3
+    });
   });
 });
 

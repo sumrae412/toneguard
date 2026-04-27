@@ -64,10 +64,15 @@ const saveKeyBtn = document.getElementById("saveKeyBtn");
 const keyStatus = document.getElementById("keyStatus");
 
 const messageInput = document.getElementById("messageInput");
+const intentModeSelect = document.getElementById("intentMode");
 const checkBtn = document.getElementById("checkBtn");
 const inputArea = document.getElementById("inputArea");
 const loading = document.getElementById("loading");
 const passed = document.getElementById("passed");
+const failure = document.getElementById("failure");
+const failureMessage = document.getElementById("failureMessage");
+const retryBtn = document.getElementById("retryBtn");
+const copyDiagnosticsBtn = document.getElementById("copyDiagnosticsBtn");
 const result = document.getElementById("result");
 const badge = document.getElementById("badge");
 
@@ -78,6 +83,9 @@ const readability = document.getElementById("readability");
 const categories = document.getElementById("categories");
 const redFlags = document.getElementById("redFlags");
 const flagsList = document.getElementById("flagsList");
+const issuesSection = document.getElementById("issuesSection");
+const issuesList = document.getElementById("issuesList");
+const issuesMore = document.getElementById("issuesMore");
 const diffSection = document.getElementById("diffSection");
 const diffView = document.getElementById("diffView");
 const originalSection = document.getElementById("originalSection");
@@ -88,6 +96,12 @@ const copyBtn = document.getElementById("copyBtn");
 const copyOriginalBtn = document.getElementById("copyOriginalBtn");
 const newCheckBtn = document.getElementById("newCheckBtn");
 const copyFeedback = document.getElementById("copyFeedback");
+const PWA_SITE_PROFILE = {
+  id: "pwa",
+  label: "PWA",
+  issue_card_limit: 3,
+  prompt: "PWA profile: assume copy-first use with no auto-send behavior."
+};
 
 // ── Init ──
 function init() {
@@ -97,6 +111,11 @@ function init() {
     showMain();
   } else {
     showSetup();
+  }
+  if (intentModeSelect) {
+    intentModeSelect.value = normalizeIntentMode(
+      localStorage.getItem("toneguard_intent_mode") || "professional"
+    );
   }
 
   // Check if launched via share target
@@ -130,6 +149,7 @@ function showInput() {
   inputArea.style.display = "flex";
   loading.classList.remove("visible");
   passed.classList.remove("visible");
+  failure.classList.remove("visible");
   result.classList.remove("visible");
   badge.style.display = "none";
 }
@@ -138,6 +158,7 @@ function showLoading() {
   inputArea.style.display = "none";
   loading.classList.add("visible");
   passed.classList.remove("visible");
+  failure.classList.remove("visible");
   result.classList.remove("visible");
   badge.style.display = "none";
 }
@@ -146,6 +167,7 @@ function showPassed() {
   loading.classList.remove("visible");
   inputArea.style.display = "none";
   passed.classList.add("visible");
+  failure.classList.remove("visible");
   result.classList.remove("visible");
 
   setTimeout(() => {
@@ -159,6 +181,7 @@ function showResult(data) {
   loading.classList.remove("visible");
   inputArea.style.display = "none";
   passed.classList.remove("visible");
+  failure.classList.remove("visible");
   result.classList.add("visible");
 
   // Badge
@@ -221,6 +244,8 @@ function showResult(data) {
     redFlags.classList.remove("visible");
   }
 
+  renderIssues(data.issues);
+
   // Diff view
   const original = data._original;
   const suggestion = data.suggestion || "";
@@ -243,6 +268,125 @@ function showResult(data) {
 
   originalText.textContent = original;
   suggestionText.textContent = suggestion;
+}
+
+let lastFailure = null;
+
+function makePwaAnalysisError(kind, details = {}) {
+  const base = {
+    parse: ["parse_error", "ToneGuard could not read the model response.", "TG_PARSE_001"],
+    network: ["network_error", "Network error. Check your connection and try again.", "TG_NET_001"],
+    api: ["api_error", "The analysis API returned an error.", "TG_API_001"],
+    runtime: ["runtime_error", "ToneGuard hit an unexpected error.", "TG_RUNTIME_001"]
+  }[kind] || ["runtime_error", "ToneGuard hit an unexpected error.", "TG_RUNTIME_001"];
+  return {
+    type: base[0],
+    message: details.message || base[1],
+    retryable: details.retryable ?? true,
+    safe_to_send: "user_decides",
+    diagnostic_code: details.diagnostic_code || base[2],
+    status: details.status,
+    phase: details.phase,
+    route: details.route,
+    model: details.model
+  };
+}
+
+function showFailure(error) {
+  lastFailure = error;
+  recordLocalTelemetry({
+    event: "analysis_failed",
+    platform: "pwa",
+    site_profile: PWA_SITE_PROFILE.id,
+    route: error.route || "blocked_error",
+    model: error.model || MODEL,
+    failure_diagnostic_code: error.diagnostic_code,
+    outcome: "failed"
+  });
+  loading.classList.remove("visible");
+  inputArea.style.display = "none";
+  passed.classList.remove("visible");
+  result.classList.remove("visible");
+  failureMessage.textContent = error.message || "Analysis failed.";
+  failure.classList.add("visible");
+}
+
+function issueCategory(issue) {
+  return issue.category || issue.rule || "Issue";
+}
+
+function renderIssueCard(issue) {
+  const card = document.createElement("div");
+  card.className = "issue-card";
+
+  const top = document.createElement("div");
+  top.className = "issue-top";
+  const category = document.createElement("span");
+  category.className = "issue-category";
+  category.textContent = issueCategory(issue);
+  top.appendChild(category);
+  if (issue.severity) {
+    const severity = document.createElement("span");
+    severity.className = "issue-severity";
+    severity.textContent = issue.severity;
+    top.appendChild(severity);
+  }
+  card.appendChild(top);
+
+  if (issue.quote) {
+    const quote = document.createElement("div");
+    quote.className = "issue-quote";
+    quote.textContent = "\u201c" + issue.quote + "\u201d";
+    card.appendChild(quote);
+  }
+
+  const explanation = document.createElement("div");
+  explanation.className = "issue-explanation";
+  explanation.textContent = issue.explanation || "";
+  card.appendChild(explanation);
+
+  if (issue.suggested_fix) {
+    const fix = document.createElement("div");
+    fix.className = "issue-fix";
+    fix.textContent = issue.suggested_fix;
+    card.appendChild(fix);
+  }
+
+  return card;
+}
+
+function renderIssues(issues) {
+  if (!issuesSection || !issuesList) return;
+  issuesList.textContent = "";
+  if (!Array.isArray(issues) || issues.length === 0) {
+    issuesSection.classList.remove("visible");
+    if (issuesMore) issuesMore.style.display = "none";
+    return;
+  }
+
+  let expanded = false;
+  const paint = () => {
+    issuesList.textContent = "";
+    const limit = PWA_SITE_PROFILE.issue_card_limit || 3;
+    const visibleIssues = expanded ? issues : issues.slice(0, limit);
+    for (const issue of visibleIssues) {
+      issuesList.appendChild(renderIssueCard(issue));
+    }
+    if (issuesMore) {
+      const hasMore = issues.length > limit;
+      issuesMore.style.display = hasMore ? "" : "none";
+      issuesMore.textContent = expanded ? "Show less" : "Show more";
+    }
+  };
+
+  if (issuesMore) {
+    issuesMore.onclick = () => {
+      expanded = !expanded;
+      paint();
+    };
+  }
+  paint();
+  issuesSection.classList.add("visible");
 }
 
 // ── API Key ──
@@ -274,7 +418,23 @@ messageInput.addEventListener("keydown", (e) => {
 
 async function analyze() {
   const text = messageInput.value.trim();
-  if (!text || text.length < 10) return;
+  if (!text) return;
+  const intentMode = normalizeIntentMode(intentModeSelect?.value || "professional");
+  localStorage.setItem("toneguard_intent_mode", intentMode);
+  const precheck = precheckAnalysis(text, { intent_mode: intentMode });
+  if (!precheck.should_call_model) {
+    savePwaVoiceSample(text);
+    recordLocalTelemetry({
+      event: "analysis_completed",
+      platform: "pwa",
+      site_profile: PWA_SITE_PROFILE.id,
+      route: precheck.route,
+      model: "local",
+      outcome: "passed"
+    });
+    showPassed();
+    return;
+  }
 
   const apiKey = localStorage.getItem(STORAGE_KEY);
   if (!apiKey) { showSetup(); return; }
@@ -282,7 +442,7 @@ async function analyze() {
   showLoading();
 
   try {
-    const systemPrompt = getSystemPrompt();
+    const systemPrompt = getSystemPrompt(intentMode, PWA_SITE_PROFILE);
 
     let response;
     for (let attempt = 0; attempt < 3; attempt++) {
@@ -310,8 +470,13 @@ async function analyze() {
 
     if (!response.ok) {
       const errBody = await response.text();
-      showInput();
-      alert(getFriendlyError(response.status, errBody));
+      showFailure(makePwaAnalysisError("api", {
+        message: getFriendlyError(response.status, errBody),
+        status: response.status,
+        phase: "api",
+        route: "blocked_error",
+        model: MODEL
+      }));
       return;
     }
 
@@ -320,17 +485,45 @@ async function analyze() {
     const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
 
     if (!jsonMatch) {
-      showPassed();
+      showFailure(makePwaAnalysisError("parse", {
+        phase: "parse",
+        route: "blocked_error",
+        model: MODEL
+      }));
       return;
     }
 
     const parsed = JSON.parse(jsonMatch[0]);
+    parsed.routing = {
+      route: precheck.route,
+      precheck_hits: precheck.precheck_hits,
+      model: MODEL
+    };
+    parsed.intent_mode = intentMode;
+    parsed.site_profile = PWA_SITE_PROFILE;
 
     if (!parsed.flagged) {
       savePwaVoiceSample(text);
+      recordLocalTelemetry({
+        event: "analysis_completed",
+        platform: "pwa",
+        site_profile: PWA_SITE_PROFILE.id,
+        route: precheck.route,
+        model: MODEL,
+        issue_categories: parsed.categories || [],
+        outcome: "passed"
+      });
       showPassed();
       return;
     }
+    recordLocalTelemetry({
+      event: "analysis_completed",
+      platform: "pwa",
+      site_profile: PWA_SITE_PROFILE.id,
+      route: precheck.route,
+      model: MODEL,
+      issue_categories: parsed.categories || []
+    });
 
     parsed._original = text;
     showResult(parsed);
@@ -339,13 +532,126 @@ async function analyze() {
     window._lastAnalyzedText = text;
 
   } catch (err) {
-    showInput();
     if (err.message && err.message.includes("Failed to fetch")) {
-      alert("Network error. Check your internet connection.");
+      showFailure(makePwaAnalysisError("network", {
+        phase: "fetch",
+        route: "blocked_error",
+        model: MODEL
+      }));
     } else {
-      alert("Error: " + err.message);
+      showFailure(makePwaAnalysisError("runtime", {
+        message: err.message,
+        phase: "runtime",
+        route: "blocked_error",
+        model: MODEL
+      }));
     }
   }
+}
+
+function recordLocalTelemetry(event) {
+  const allowed = new Set([
+    "event",
+    "platform",
+    "site_profile",
+    "route",
+    "model",
+    "failure_diagnostic_code",
+    "issue_categories",
+    "outcome"
+  ]);
+  const compact = {};
+  for (const [key, value] of Object.entries(event || {})) {
+    if (!allowed.has(key) || value === undefined || value === null) continue;
+    compact[key] = value;
+  }
+  compact.timestamp = new Date().toISOString();
+  const summary = JSON.parse(localStorage.getItem("toneguard_telemetry_summary") || "{}");
+  summary.counts = summary.counts || {};
+  summary.routes = summary.routes || {};
+  summary.failures = summary.failures || {};
+  summary.counts[compact.event] = (summary.counts[compact.event] || 0) + 1;
+  if (compact.route) summary.routes[compact.route] = (summary.routes[compact.route] || 0) + 1;
+  if (compact.failure_diagnostic_code) {
+    summary.failures[compact.failure_diagnostic_code] =
+      (summary.failures[compact.failure_diagnostic_code] || 0) + 1;
+  }
+  summary.updatedAt = compact.timestamp;
+  localStorage.setItem("toneguard_telemetry_summary", JSON.stringify(summary));
+}
+
+retryBtn.addEventListener("click", analyze);
+copyDiagnosticsBtn.addEventListener("click", () => {
+  if (!lastFailure) return;
+  const diagnostics = {
+    diagnostic_code: lastFailure.diagnostic_code || "TG_UNKNOWN",
+    type: lastFailure.type || "unknown",
+    route: lastFailure.route || "",
+    model: lastFailure.model || "",
+    status: lastFailure.status || "",
+    phase: lastFailure.phase || ""
+  };
+  copyToClipboard(JSON.stringify(diagnostics, null, 2), "Diagnostics copied.");
+});
+
+function normalizeIntentMode(mode) {
+  const allowed = ["professional", "warm", "direct", "deescalating", "boundary", "concise"];
+  return allowed.includes(mode) ? mode : "professional";
+}
+
+function normalizeForPrecheck(text) {
+  return String(text || "")
+    .toLowerCase()
+    .replace(/[^\w\s']/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function precheckAnalysis(text, options = {}) {
+  if (options.error) {
+    return {
+      route: "blocked_error",
+      precheck_hits: ["error:" + options.error],
+      should_call_model: false
+    };
+  }
+
+  const rules = {
+    localPassMaxWords: 4,
+    localPassPhrases: ["sounds good", "thanks", "thank you", "got it", "ok", "okay", "will do"],
+    escalationPhrases: [
+      "what the heck",
+      "what the hell",
+      "are you serious",
+      "i can't believe",
+      "per my last email",
+      "as i already said",
+      "why this is so hard"
+    ],
+    highStakesIntentModes: ["deescalating", "boundary"]
+  };
+  const normalized = normalizeForPrecheck(text);
+  const words = normalized ? normalized.split(" ") : [];
+  if (!normalized) {
+    return { route: "local_pass", precheck_hits: ["empty"], should_call_model: false };
+  }
+
+  const hits = rules.escalationPhrases
+    .filter((phrase) => normalized.includes(phrase))
+    .map((phrase) => "phrase:" + phrase);
+  const mode = options.intent_mode || options.intentMode || "";
+  if (rules.highStakesIntentModes.includes(mode)) hits.push("intent:" + mode);
+  if (hits.length) return { route: "deep", precheck_hits: hits, should_call_model: true };
+
+  if (words.length <= rules.localPassMaxWords && rules.localPassPhrases.includes(normalized)) {
+    return {
+      route: "local_pass",
+      precheck_hits: ["phrase:" + normalized],
+      should_call_model: false
+    };
+  }
+
+  return { route: "standard", precheck_hits: [], should_call_model: true };
 }
 
 // ── Copy buttons ──
@@ -443,7 +749,7 @@ function wordDiff(oldText, newText) {
 }
 
 // ── System prompt (condensed version of prompts/base.txt) ──
-function getSystemPrompt() {
+function getSystemPrompt(intentMode = "professional", siteProfile = PWA_SITE_PROFILE) {
   return `You are ToneGuard, a writing assistant that checks messages for tone and clarity issues before sending.
 
 Your job has three parts:
@@ -452,6 +758,10 @@ Your job has three parts:
 3. PROFESSIONALISM: Catch messages that are sloppy, incoherent, or would make the sender look unprofessional.
 
 IMPORTANT: When in doubt, FLAG IT. The user can always dismiss your suggestion.
+
+INTENT MODE: ${normalizeIntentMode(intentMode)}. Intent mode affects rewrite style only. It must not suppress real tone, clarity, or professionalism warnings.
+
+SITE PROFILE: ${siteProfile.prompt}
 
 When you DO rewrite:
 - One idea per sentence

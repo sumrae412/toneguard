@@ -3,6 +3,7 @@ const saveRulesBtn = document.getElementById("saveRules");
 const rulesStatusEl = document.getElementById("rulesStatus");
 const historyListEl = document.getElementById("historyList");
 const clearHistoryBtn = document.getElementById("clearHistory");
+const voiceStrengthSelect = document.getElementById("voiceStrength");
 
 // Load weekly stats
 chrome.storage.local.get(["tg_stats"], (result) => {
@@ -57,6 +58,18 @@ chrome.storage.sync.get(["tg_custom_rules"], (result) => {
     customRulesEl.value = result.tg_custom_rules;
   }
 });
+
+chrome.storage.sync.get(["tg_voice_strength"], (result) => {
+  if (voiceStrengthSelect) {
+    voiceStrengthSelect.value = result.tg_voice_strength || "balanced";
+  }
+});
+
+if (voiceStrengthSelect) {
+  voiceStrengthSelect.addEventListener("change", () => {
+    chrome.storage.sync.set({ tg_voice_strength: voiceStrengthSelect.value });
+  });
+}
 
 // Save custom rules
 saveRulesBtn.addEventListener("click", () => {

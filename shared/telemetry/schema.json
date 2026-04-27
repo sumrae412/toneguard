@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://toneguard.local/shared/telemetry/schema.json",
+  "title": "ToneGuard Local Telemetry Event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["event", "timestamp"],
+  "properties": {
+    "event": {
+      "type": "string",
+      "enum": [
+        "analysis_started",
+        "analysis_completed",
+        "analysis_failed",
+        "route_selected",
+        "rewrite_accepted",
+        "rewrite_edited",
+        "send_as_is",
+        "retry_clicked",
+        "mode_changed",
+        "voice_strength_changed"
+      ]
+    },
+    "timestamp": {
+      "type": "string"
+    },
+    "platform": {
+      "type": "string"
+    },
+    "site_profile": {
+      "type": "string"
+    },
+    "route": {
+      "type": "string",
+      "enum": ["local_pass", "standard", "deep", "blocked_error"]
+    },
+    "model": {
+      "type": "string"
+    },
+    "latency_bucket": {
+      "type": "string",
+      "enum": ["lt_1s", "1_3s", "3_10s", "gt_10s", "unknown"]
+    },
+    "token_estimate_bucket": {
+      "type": "string",
+      "enum": ["lt_500", "500_1500", "1500_3000", "gt_3000", "unknown"]
+    },
+    "failure_diagnostic_code": {
+      "type": "string"
+    },
+    "issue_categories": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "outcome": {
+      "type": "string",
+      "enum": ["accepted", "edited", "dismissed", "passed", "failed", "retried"]
+    }
+  }
+}

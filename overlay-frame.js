@@ -7,6 +7,7 @@
 //     { type: "show_result", result }
 //     { type: "show_passed" }
 //     { type: "show_stale" }
+//     { type: "show_error", error }
 //     { type: "hide" }
 //     { type: "decision_ack", id, ok, error? }   // confirms the parent acted
 //
@@ -53,6 +54,9 @@
     categories: document.getElementById("tgCategories"),
     redFlags: document.getElementById("tgRedFlags"),
     flagsList: document.getElementById("tgFlagsList"),
+    issuesSection: document.getElementById("tgIssuesSection"),
+    issuesList: document.getElementById("tgIssuesList"),
+    issuesMore: document.getElementById("tgIssuesMore"),
     questionsSection: document.getElementById("tgQuestionsSection"),
     questionsList: document.getElementById("tgQuestionsList"),
     submitAnswersBtn: document.getElementById("tgSubmitAnswers"),
@@ -190,6 +194,9 @@
     els.suggestion.textContent = "";
     els.reasoning.textContent = "";
     els.flagsList.textContent = "";
+    if (els.issuesList) els.issuesList.textContent = "";
+    if (els.issuesSection) els.issuesSection.style.display = "none";
+    if (els.issuesMore) els.issuesMore.style.display = "none";
     els.categories.textContent = "";
     els.questionsList.textContent = "";
     els.useSuggestionBtn.textContent = "Use suggestion ";
@@ -224,6 +231,8 @@
     // finish that action" dialog doesn't stack on top of the next state.
     const warn = els.drawer.querySelector(".tg-stale-notice");
     if (warn) warn.remove();
+    const failure = els.drawer.querySelector(".tg-failure-panel");
+    if (failure) failure.remove();
   }
 
   function openDrawer() {
@@ -347,6 +356,8 @@
       els.redFlags.style.display = "none";
     }
 
+    renderIssues(result.issues);
+
     // Readability + categories
     if (result.readability || (result.categories && result.categories.length > 0)) {
       els.metaRow.style.display = "flex";
@@ -404,6 +415,83 @@
     els.empty.style.display = "none";
     els.content.style.display = "block";
     openDrawer();
+  }
+
+  function issueCategory(issue) {
+    return issue.category || issue.rule || "Issue";
+  }
+
+  function renderIssueCard(issue) {
+    const card = el("div", { className: "tg-issue-card" });
+    const top = el("div", { className: "tg-issue-top" });
+    top.appendChild(el("span", {
+      className: "tg-issue-category",
+      textContent: issueCategory(issue)
+    }));
+    if (issue.severity) {
+      top.appendChild(el("span", {
+        className: "tg-issue-severity",
+        textContent: issue.severity
+      }));
+    }
+    card.appendChild(top);
+
+    if (issue.quote) {
+      card.appendChild(el("div", {
+        className: "tg-issue-quote",
+        textContent: "\u201c" + issue.quote + "\u201d"
+      }));
+    }
+    card.appendChild(el("div", {
+      className: "tg-issue-explanation",
+      textContent: issue.explanation || ""
+    }));
+    if (issue.suggested_fix) {
+      card.appendChild(el("div", {
+        className: "tg-issue-fix",
+        textContent: issue.suggested_fix
+      }));
+    }
+    return card;
+  }
+
+  function renderIssues(issues) {
+    if (!els.issuesSection || !els.issuesList) return;
+    els.issuesList.textContent = "";
+    if (!Array.isArray(issues) || issues.length === 0) {
+      els.issuesSection.style.display = "none";
+      if (els.issuesMore) els.issuesMore.style.display = "none";
+      return;
+    }
+
+    const limit = resultIssueLimit();
+    let expanded = false;
+    const paint = () => {
+      els.issuesList.textContent = "";
+      const visibleIssues = expanded ? issues : issues.slice(0, limit);
+      for (const issue of visibleIssues) {
+        els.issuesList.appendChild(renderIssueCard(issue));
+      }
+      if (els.issuesMore) {
+        const hasMore = issues.length > limit;
+        els.issuesMore.style.display = hasMore ? "" : "none";
+        els.issuesMore.textContent = expanded ? "Show less" : "Show more";
+      }
+    };
+
+    if (els.issuesMore) {
+      els.issuesMore.onclick = () => {
+        expanded = !expanded;
+        paint();
+      };
+    }
+    paint();
+    els.issuesSection.style.display = "block";
+  }
+
+  function resultIssueLimit() {
+    const limit = currentResult?.site_profile?.issue_card_limit;
+    return Number.isInteger(limit) && limit > 0 ? limit : 3;
   }
 
   function renderLanding(landing) {
@@ -472,6 +560,83 @@
       notice.remove();
       hide();
     }, 8000);
+  }
+
+  function showError(error) {
+    clearToast();
+    resetState();
+    const failure = error && typeof error === "object"
+      ? error
+      : {
+          type: "runtime_error",
+          message: String(error || "ToneGuard hit an unexpected error."),
+          retryable: true,
+          diagnostic_code: "TG_RUNTIME_001"
+        };
+    currentResult = { error: failure, failureMode: true };
+    els.loading.style.display = "none";
+    els.content.style.display = "none";
+    els.empty.style.display = "none";
+
+    const panel = el("div", { className: "tg-failure-panel" });
+    panel.appendChild(el("div", { className: "tg-stale-icon", textContent: "\u26A0" }));
+    panel.appendChild(el("div", { className: "tg-stale-title", textContent: "ToneGuard could not check this" }));
+    panel.appendChild(el("div", {
+      className: "tg-stale-msg",
+      textContent: failure.message || "The analysis failed before ToneGuard could make a recommendation."
+    }));
+
+    const actions = el("div", { className: "tg-failure-actions" });
+    const retryBtn = el("button", {
+      className: "tg-btn tg-btn-primary",
+      textContent: "Retry",
+      type: "button"
+    });
+    retryBtn.disabled = failure.retryable === false;
+    retryBtn.addEventListener("click", async () => {
+      try {
+        await notifyDecision({ action: "retry" });
+        hide();
+      } catch (err) {
+        showActionError("Couldn't retry. Try again from your compose window.", err);
+      }
+    });
+    const sendBtn = el("button", {
+      className: "tg-btn tg-btn-secondary",
+      textContent: "Send as-is",
+      type: "button"
+    });
+    sendBtn.addEventListener("click", async () => {
+      try {
+        await notifyDecision({ action: "sent_original_after_error" });
+        showSent("Sent as-is.");
+      } catch (err) {
+        showActionError("Couldn't send — try again from your compose window.", err);
+      }
+    });
+    const copyBtn = el("button", {
+      className: "tg-btn tg-btn-tertiary",
+      textContent: "Copy diagnostics",
+      type: "button"
+    });
+    copyBtn.addEventListener("click", () => {
+      const diagnostics = {
+        diagnostic_code: failure.diagnostic_code || "TG_UNKNOWN",
+        type: failure.type || "unknown",
+        route: failure.route || "",
+        model: failure.model || "",
+        status: failure.status || "",
+        phase: failure.phase || ""
+      };
+      navigator.clipboard.writeText(JSON.stringify(diagnostics, null, 2)).catch(() => {});
+      copyBtn.textContent = "Copied";
+    });
+    actions.appendChild(retryBtn);
+    actions.appendChild(sendBtn);
+    actions.appendChild(copyBtn);
+    panel.appendChild(actions);
+    els.drawer.appendChild(panel);
+    openDrawer();
   }
 
   // --- Action handlers ---
@@ -693,6 +858,10 @@
       hide();
       return;
     }
+    if (els.drawer.querySelector(".tg-failure-panel")) {
+      hide();
+      return;
+    }
     handleSendOriginal();
   }
 
@@ -754,6 +923,7 @@
       case "show_result":   showResult(msg.result); break;
       case "show_passed":   showPassed(); break;
       case "show_stale":    showStale(); break;
+      case "show_error":    showError(msg.error); break;
       case "hide":          hide(); break;
       case "decision_ack":  handleDecisionAck(msg); break;
     }

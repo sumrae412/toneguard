@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "ToneGuard",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "description": "Checks your messages for tone and clarity before sending. Only interrupts when it matters.",
 
   "permissions": [
@@ -46,6 +46,7 @@
     {
       "resources": [
         "prompts/base.txt",
+        "prompts/landing.txt",
         "overlay.html",
         "overlay-frame.css",
         "overlay-frame.js"

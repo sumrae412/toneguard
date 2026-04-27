@@ -19,6 +19,10 @@ Ever hit Send and immediately regretted it? ToneGuard catches tone and clarity i
 **Features:**
 - Real-time tone, clarity, and professionalism analysis
 - Smart suggestions with word-level diff highlighting
+- Explainable warnings showing what phrase was flagged and why
+- Rewrite modes for professional, warm, direct, de-escalating, boundary-setting, and concise messages
+- Voice preservation controls for lighter or stronger rewrites
+- Retry and diagnostic actions when analysis fails
 - Learns your writing style over time
 - Adjustable strictness (Gentle / Balanced / Strict) — globally or per site
 - Add your own custom rules in plain English
@@ -27,6 +31,7 @@ Ever hit Send and immediately regretted it? ToneGuard catches tone and clarity i
 - 3-second undo after sending
 - Dark mode support
 - All data stays on your device — no tracking, no analytics
+- Local quality counters never store message text, prompts, recipients, API keys, emails, phone numbers, or URLs
 
 **Privacy first:**
 ToneGuard uses YOUR Claude API key — there's no middleman server. Your messages go directly from your browser to the Anthropic API and nowhere else. All settings and learning data are stored locally on your device.

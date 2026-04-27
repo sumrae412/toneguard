@@ -13,7 +13,10 @@ from analyzer import (
     _compute_overall,
     _find_weak_dimensions,
     _normalize_rubric,
+    _read_prompt,
     _score_to_grade,
+    normalize_voice_strength,
+    precheck_analysis,
     GRADE_THRESHOLD,
     MAX_REFINEMENT_PASSES,
     RUBRIC_DIMENSIONS,
@@ -78,6 +81,51 @@ def _make_synthesis_response(
     })
 
 
+class TestPromptLoading:
+    def test_read_prompt_strips_generated_header(self, tmp_path):
+        """Generated metadata should not be sent as model instructions."""
+        prompt_path = tmp_path / "prompt.md"
+        prompt_path.write_text(
+            "Generated from shared/. Do not edit directly.\n\n"
+            "You are ToneGuard.\n"
+        )
+
+        assert _read_prompt(prompt_path) == "You are ToneGuard.\n"
+
+
+class TestPrecheckAnalysis:
+    def test_local_pass_for_safe_ack(self):
+        result = precheck_analysis("sounds good")
+
+        assert result == {
+            "route": "local_pass",
+            "precheck_hits": ["phrase:sounds good"],
+            "should_call_model": False,
+        }
+
+    def test_deep_route_for_conflict_phrase(self):
+        result = precheck_analysis(
+            "I do not know why this is so hard to understand."
+        )
+
+        assert result["route"] == "deep"
+        assert result["should_call_model"] is True
+        assert "phrase:why this is so hard" in result["precheck_hits"]
+
+    def test_standard_route_for_normal_message(self):
+        assert precheck_analysis("Please send the draft today.") == {
+            "route": "standard",
+            "precheck_hits": [],
+            "should_call_model": True,
+        }
+
+
+class TestVoiceStrength:
+    def test_normalizes_unknown_voice_strength(self):
+        assert normalize_voice_strength("preserve") == "preserve"
+        assert normalize_voice_strength("unknown") == "balanced"
+
+
 def _mock_analyzer_apis(analyzer, claude_resp, gpt_resp, synth_resp, refine_resps=None):
     """Wire up mock API calls for both critics and synthesizer."""
     refine_resps = refine_resps or []
@@ -113,6 +161,19 @@ def _mock_analyzer_apis(analyzer, claude_resp, gpt_resp, synth_resp, refine_resp
 
 
 class TestParallelDispatch:
+    @pytest.mark.asyncio
+    async def test_safe_ack_skips_model_calls(self, analyzer):
+        """Obvious short acknowledgments should pass locally."""
+        analyzer._anthropic.messages.create = AsyncMock()
+        analyzer._openai.chat.completions.create = AsyncMock()
+
+        result = await analyzer.analyze("sounds good")
+
+        assert result["flagged"] is False
+        assert result["routing"]["route"] == "local_pass"
+        analyzer._anthropic.messages.create.assert_not_called()
+        analyzer._openai.chat.completions.create.assert_not_called()
+
     @pytest.mark.asyncio
     async def test_calls_both_critics_in_parallel(self, analyzer):
         """Both Claude and GPT should be called for each analysis."""
@@ -535,11 +596,14 @@ class TestStylePreservation:
             "test message",
             {"flagged": True, "issues": [], "rewrite": "x"},
             {"flagged": True, "issues": [], "rewrite": "y"},
+            voice_strength="preserve",
         )
         assert "quick heads up" in prompt
         assert "no rush" in prompt
         assert "voice_fidelity" in prompt
         assert "Voice Samples" in prompt
+        assert "Voice Preservation Strength" in prompt
+        assert "preserve" in prompt
 
     def test_empty_voice_samples_no_section(self, analyzer):
         """No voice samples section when store is empty."""

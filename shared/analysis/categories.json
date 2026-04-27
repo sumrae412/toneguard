@@ -1,0 +1,65 @@
+{
+  "version": 1,
+  "categories": [
+    {
+      "id": "adverbs",
+      "label": "Adverbs",
+      "description": "Unnecessary adverbs weaken or clutter the message."
+    },
+    {
+      "id": "passive voice",
+      "label": "Passive voice",
+      "description": "Passive construction hides who did what."
+    },
+    {
+      "id": "wordy",
+      "label": "Wordy",
+      "description": "The message uses more words than the reader needs."
+    },
+    {
+      "id": "hedging",
+      "label": "Hedging",
+      "description": "Qualifiers bury or soften the actual point."
+    },
+    {
+      "id": "hard to read",
+      "label": "Hard to read",
+      "description": "The message needs simpler sentences or structure."
+    },
+    {
+      "id": "tone",
+      "label": "Tone",
+      "description": "The message may read as harsh, defensive, or negative."
+    },
+    {
+      "id": "grammar",
+      "label": "Grammar",
+      "description": "The message has grammar, typo, or proofreading issues."
+    },
+    {
+      "id": "clarity",
+      "label": "Clarity",
+      "description": "The message is vague, ambiguous, or missing context."
+    },
+    {
+      "id": "inclusive language",
+      "label": "Inclusive language",
+      "description": "The message uses language that could exclude or distract."
+    },
+    {
+      "id": "professionalism",
+      "label": "Professionalism",
+      "description": "The message could make the sender look unprepared."
+    },
+    {
+      "id": "structure",
+      "label": "Structure",
+      "description": "The message needs clearer ordering or scannability."
+    },
+    {
+      "id": "audience",
+      "label": "Audience",
+      "description": "The tone or detail level does not fit the recipient."
+    }
+  ]
+}

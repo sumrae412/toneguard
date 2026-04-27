@@ -16,7 +16,13 @@ data class AnalysisResult(
     val categories: List<String> = emptyList(),
     val reasoning: String = "",
     val suggestion: String = "",
-    val error: String? = null
+    val error: String? = null,
+    val errorType: String? = null,
+    val diagnosticCode: String? = null,
+    val retryable: Boolean = false,
+    val routingRoute: String = "standard",
+    val routingHits: List<String> = emptyList(),
+    val routingModel: String = "claude-haiku-4-5-20251001"
 )
 
 class ClaudeApiClient(private val apiKey: String, private val learningStore: LearningStore? = null) {
@@ -26,13 +32,26 @@ class ClaudeApiClient(private val apiKey: String, private val learningStore: Lea
         .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
         .build()
 
-    fun analyze(text: String, strictness: Int, callback: (AnalysisResult) -> Unit) {
-        if (text.trim().length < 10) {
-            callback(AnalysisResult(flagged = false))
+    fun analyze(
+        text: String,
+        strictness: Int,
+        intentMode: String = "professional",
+        callback: (AnalysisResult) -> Unit
+    ) {
+        val normalizedIntentMode = normalizeIntentMode(intentMode)
+        val precheck = precheckAnalysis(text, normalizedIntentMode)
+        if (!precheck.shouldCallModel) {
+            callback(AnalysisResult(
+                flagged = false,
+                mode = "",
+                routingRoute = precheck.route,
+                routingHits = precheck.hits,
+                routingModel = "local"
+            ))
             return
         }
 
-        val systemPrompt = buildSystemPrompt(strictness, text)
+        val systemPrompt = buildSystemPrompt(strictness, text, normalizedIntentMode)
         val body = JSONObject().apply {
             put("model", "claude-haiku-4-5-20251001")
             put("max_tokens", 1024)
@@ -60,19 +79,22 @@ class ClaudeApiClient(private val apiKey: String, private val learningStore: Lea
                 val response = client.newCall(request).execute()
 
                 if (response.code == 401 || response.code == 400 || response.code == 403) {
-                    callback(AnalysisResult(flagged = false, error = getFriendlyError(response.code)))
+                    callback(analysisError("api", getFriendlyError(response.code), response.code))
                     return
                 }
 
                 if (response.isSuccessful) {
                     val responseBody = response.body?.string() ?: ""
                     val result = parseResponse(responseBody)
-                    callback(result)
+                    callback(result.copy(
+                        routingRoute = precheck.route,
+                        routingHits = precheck.hits
+                    ))
                     return
                 }
 
                 if (response.code < 500) {
-                    callback(AnalysisResult(flagged = false, error = getFriendlyError(response.code)))
+                    callback(analysisError("api", getFriendlyError(response.code), response.code))
                     return
                 }
 
@@ -86,7 +108,88 @@ class ClaudeApiClient(private val apiKey: String, private val learningStore: Lea
             }
         }
 
-        callback(AnalysisResult(flagged = false, error = lastError))
+        callback(analysisError("network", lastError ?: "Network error. Check your internet connection."))
+    }
+
+    private fun analysisError(kind: String, message: String, status: Int? = null): AnalysisResult {
+        val type = when (kind) {
+            "parse" -> "parse_error"
+            "network" -> "network_error"
+            "api" -> "api_error"
+            else -> "runtime_error"
+        }
+        val code = when (kind) {
+            "parse" -> "TG_PARSE_001"
+            "network" -> "TG_NET_001"
+            "api" -> if (status != null) "TG_API_$status" else "TG_API_001"
+            else -> "TG_RUNTIME_001"
+        }
+        return AnalysisResult(
+            flagged = false,
+            error = message,
+            errorType = type,
+            diagnosticCode = code,
+            retryable = kind != "api" || status !in listOf(400, 401, 403)
+        )
+    }
+
+    private data class PrecheckResult(
+        val route: String,
+        val hits: List<String>,
+        val shouldCallModel: Boolean
+    )
+
+    private fun normalizeIntentMode(mode: String): String {
+        return when (mode) {
+            "professional", "warm", "direct", "deescalating", "boundary", "concise" -> mode
+            else -> "professional"
+        }
+    }
+
+    private fun precheckAnalysis(text: String, intentMode: String = ""): PrecheckResult {
+        val normalized = text.lowercase()
+            .replace(Regex("[^\\w\\s']"), " ")
+            .replace(Regex("\\s+"), " ")
+            .trim()
+        if (normalized.isEmpty()) {
+            return PrecheckResult("local_pass", listOf("empty"), false)
+        }
+
+        val escalationPhrases = listOf(
+            "what the heck",
+            "what the hell",
+            "are you serious",
+            "i can't believe",
+            "per my last email",
+            "as i already said",
+            "why this is so hard"
+        )
+        val hits = escalationPhrases
+            .filter { normalized.contains(it) }
+            .map { "phrase:$it" }
+            .toMutableList()
+        if (intentMode == "deescalating" || intentMode == "boundary") {
+            hits.add("intent:$intentMode")
+        }
+        if (hits.isNotEmpty()) {
+            return PrecheckResult("deep", hits, true)
+        }
+
+        val localPassPhrases = setOf(
+            "sounds good",
+            "thanks",
+            "thank you",
+            "got it",
+            "ok",
+            "okay",
+            "will do"
+        )
+        val words = normalized.split(" ").filter { it.isNotEmpty() }
+        if (words.size <= 4 && localPassPhrases.contains(normalized)) {
+            return PrecheckResult("local_pass", listOf("phrase:$normalized"), false)
+        }
+
+        return PrecheckResult("standard", emptyList(), true)
     }
 
     private fun parseResponse(body: String): AnalysisResult {
@@ -96,7 +199,8 @@ class ClaudeApiClient(private val apiKey: String, private val learningStore: Lea
             val text = content.getJSONObject(0).getString("text")
 
             val jsonRegex = Regex("\\{[\\s\\S]*\\}")
-            val match = jsonRegex.find(text) ?: return AnalysisResult(flagged = false)
+            val match = jsonRegex.find(text)
+                ?: return analysisError("parse", "Failed to parse response")
             val result = JSONObject(match.value)
 
             val flagged = result.optBoolean("flagged", false)
@@ -129,7 +233,7 @@ class ClaudeApiClient(private val apiKey: String, private val learningStore: Lea
                 suggestion = result.optString("suggestion", "")
             )
         } catch (e: Exception) {
-            return AnalysisResult(flagged = false, error = "Failed to parse response")
+            return analysisError("parse", "Failed to parse response")
         }
     }
 
@@ -144,7 +248,11 @@ class ClaudeApiClient(private val apiKey: String, private val learningStore: Lea
         }
     }
 
-    private fun buildSystemPrompt(strictness: Int, messageText: String = ""): String {
+    private fun buildSystemPrompt(
+        strictness: Int,
+        messageText: String = "",
+        intentMode: String = "professional"
+    ): String {
         val base = """You are ToneGuard, a writing assistant that checks messages for tone and clarity issues before sending.
 
 Your job has three parts:
@@ -153,6 +261,8 @@ Your job has three parts:
 3. PROFESSIONALISM: Catch messages that are sloppy, incoherent, or would make the sender look unprofessional.
 
 IMPORTANT: When in doubt, FLAG IT. The user can always dismiss your suggestion.
+
+INTENT MODE: $intentMode. Intent mode affects rewrite style only. It must not suppress real tone, clarity, or professionalism warnings.
 
 When you DO rewrite:
 - One idea per sentence

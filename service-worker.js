@@ -13,8 +13,13 @@ importScripts(
 const CLAUDE_API_URL = "https://api.anthropic.com/v1/messages";
 const MODEL = "claude-haiku-4-5-20251001";
 
-// Cache the base prompt after first load
+// Cache packaged prompts after first load
 let basePromptCache = null;
+let landingPromptCache = null;
+
+function stripGeneratedPromptHeader(prompt) {
+  return prompt.replace(/^Generated from shared\/\. Do not edit directly\.\n\n/, "");
+}
 
 // Sync manager (initialized once API key is available)
 let syncManager = null;
@@ -43,13 +48,31 @@ async function loadBasePrompt() {
   try {
     const url = chrome.runtime.getURL("prompts/base.txt");
     const response = await fetch(url);
-    basePromptCache = await response.text();
+    basePromptCache = stripGeneratedPromptHeader(await response.text());
   } catch (err) {
     console.error("ToneGuard: failed to load base prompt", err);
     // Don't cache the fallback — allow retry on next call
     return "You are ToneGuard, a writing assistant. Check messages for tone and clarity. Respond with JSON: {flagged, confidence, mode, readability, red_flags, categories, reasoning, suggestion, has_questions, questions}.";
   }
   return basePromptCache;
+}
+
+async function loadLandingPrompt() {
+  if (landingPromptCache) return landingPromptCache;
+
+  try {
+    const url = chrome.runtime.getURL("prompts/landing.txt");
+    const response = await fetch(url);
+    landingPromptCache = stripGeneratedPromptHeader(await response.text());
+  } catch (err) {
+    console.error("ToneGuard: failed to load landing prompt", err);
+    return (
+      "You are a message landing analyst. Report how the message lands " +
+      "on first skim. Return only JSON with takeaway, tone_felt, and " +
+      "next_action. Use null values for messages under 10 words."
+    );
+  }
+  return landingPromptCache;
 }
 
 // On install/startup, register content scripts for custom sites + context menu
@@ -159,9 +182,16 @@ async function registerCustomSites() {
 // Listen for messages from content script
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.type === "ANALYZE") {
-    handleAnalyze(message.text, message.context, message.site)
+    handleAnalyze(message.text, message.context, message.site, message.intent_mode)
       .then(sendResponse)
-      .catch((err) => sendResponse({ error: err.message }));
+      .catch((err) => sendResponse({
+        flagged: false,
+        error: makeAnalysisError("runtime", {
+          message: err.message,
+          phase: "runtime",
+          model: MODEL
+        })
+      }));
     return true;
   }
 
@@ -257,20 +287,135 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   }
 });
 
-async function handleAnalyze(text, context, site) {
-  if (!text || text.trim().length < 10) {
-    return { flagged: false };
-  }
+const INTENT_MODE_LABELS = {
+  professional: "Professional",
+  warm: "Warm",
+  direct: "Direct",
+  deescalating: "De-escalating",
+  boundary: "Boundary",
+  concise: "Concise"
+};
+
+function normalizeIntentMode(mode) {
+  return INTENT_MODE_LABELS[mode] ? mode : "professional";
+}
+
+function buildIntentModePrompt(mode) {
+  const normalized = normalizeIntentMode(mode);
+  return (
+    "INTENT MODE FOR THIS REWRITE: " + normalized + " (" +
+    INTENT_MODE_LABELS[normalized] + "). Apply this to rewrite style only. " +
+    "Do not lower the bar for flagging real issues."
+  );
+}
+
+const VOICE_STRENGTH_LABELS = {
+  preserve: "Preserve the user's words and rhythm unless a phrase is the problem.",
+  balanced: "Preserve style, but prioritize clarity and tone safety.",
+  polish: "Edit more freely for clarity while keeping the user's intent.",
+  rewrite: "Rewrite aggressively when the draft is rough."
+};
+
+function normalizeVoiceStrength(strength) {
+  return VOICE_STRENGTH_LABELS[strength] ? strength : "balanced";
+}
+
+async function resolveIntentMode(requestedMode) {
+  if (requestedMode) return normalizeIntentMode(requestedMode);
+  const { tg_intent_mode_default: storedMode } = await chrome.storage.sync.get([
+    "tg_intent_mode_default"
+  ]);
+  return normalizeIntentMode(storedMode || "professional");
+}
+
+async function resolveVoiceStrength() {
+  const { tg_voice_strength: storedStrength } = await chrome.storage.sync.get([
+    "tg_voice_strength"
+  ]);
+  return normalizeVoiceStrength(storedStrength || "balanced");
+}
+
+async function handleAnalyze(text, context, site, requestedIntentMode) {
+  const startedAt = Date.now();
+  const intentMode = await resolveIntentMode(requestedIntentMode);
+  const voiceStrength = await resolveVoiceStrength();
+  const siteProfile = getSiteProfile(site);
+  const precheck = precheckAnalysis(text, { intent_mode: intentMode });
+  const routing = {
+    route: precheck.route,
+    precheck_hits: precheck.precheck_hits,
+    model: precheck.should_call_model ? MODEL : "local"
+  };
+  await recordTelemetry({
+    event: "route_selected",
+    platform: "chrome",
+    site_profile: siteProfile.id,
+    route: routing.route,
+    model: routing.model
+  });
 
   const { tg_api_key: apiKey, tg_enabled: enabled, tg_strictness: strictness } =
     await chrome.storage.sync.get(["tg_api_key", "tg_enabled", "tg_strictness"]);
 
   if (enabled === false) {
-    return { flagged: false };
+    return { flagged: false, routing };
+  }
+
+  if (!precheck.should_call_model) {
+    await trackStats(false, "");
+    await saveVoiceSample(text);
+    await recordTelemetry({
+      event: "analysis_completed",
+      platform: "chrome",
+      site_profile: siteProfile.id,
+      route: routing.route,
+      model: routing.model,
+      latency_bucket: latencyBucket(Date.now() - startedAt),
+      outcome: "passed"
+    });
+    return {
+      flagged: false,
+      confidence: 0.0,
+      mode: "",
+      readability: 0,
+      red_flags: [],
+      categories: [],
+      reasoning: "",
+      suggestion: "",
+      has_questions: false,
+      questions: [],
+      intent_mode: intentMode,
+      voice: { strength: voiceStrength, source: "none", voice_fidelity: 0 },
+      site_profile: siteProfile,
+      routing
+    };
   }
 
   if (!apiKey) {
-    return { error: "No API key set. Click the ToneGuard icon to add one." };
+    const error = makeAnalysisError("missing_api_key", {
+      route: "blocked_error",
+      model: "none",
+      phase: "auth"
+    });
+    await recordTelemetry({
+      event: "analysis_failed",
+      platform: "chrome",
+      site_profile: siteProfile.id,
+      route: "blocked_error",
+      model: "none",
+      failure_diagnostic_code: error.diagnostic_code,
+      latency_bucket: latencyBucket(Date.now() - startedAt),
+      outcome: "failed"
+    });
+    return {
+      flagged: false,
+      error,
+      routing: {
+        route: "blocked_error",
+        precheck_hits: ["error:missing_api_key"],
+        model: "none"
+      }
+    };
   }
 
   // Build full prompt: base file + dynamic sections
@@ -278,6 +423,8 @@ async function handleAnalyze(text, context, site) {
   const learnedExamples = await getLearnedExamples();
   const customRules = await getCustomRules();
   let fullPrompt = basePrompt;
+  fullPrompt += "\n\n" + buildIntentModePrompt(intentMode);
+  fullPrompt += "\n\nSITE PROFILE: " + siteProfile.prompt;
 
   // Per-site strictness: supports { default: 2, slack: 3, gmail: 1 } or plain number (backward compat)
   let strictLevel = 2;
@@ -300,7 +447,7 @@ async function handleAnalyze(text, context, site) {
     fullPrompt += "\n\nLEARNED FROM PAST DECISIONS (use these to calibrate):\n" + learnedExamples;
   }
 
-  const voiceContext = await getVoiceContext();
+  const voiceContext = await getVoiceContext(voiceStrength);
   if (voiceContext) {
     fullPrompt += "\n\n" + voiceContext;
   }
@@ -364,7 +511,32 @@ async function handleAnalyze(text, context, site) {
       const errBody = await response.text();
       const friendlyError = getFriendlyApiError(response.status, errBody);
       console.error("ToneGuard API error:", response.status, errBody);
-      return { flagged: false, error: friendlyError };
+      const error = makeAnalysisError("runtime", {
+        message: friendlyError,
+        status: response.status,
+        route: "blocked_error",
+        model: MODEL,
+        phase: "api"
+      });
+      await recordTelemetry({
+        event: "analysis_failed",
+        platform: "chrome",
+        site_profile: siteProfile.id,
+        route: "blocked_error",
+        model: MODEL,
+        failure_diagnostic_code: error.diagnostic_code,
+        latency_bucket: latencyBucket(Date.now() - startedAt),
+        outcome: "failed"
+      });
+      return {
+        flagged: false,
+        error,
+        routing: {
+          route: "blocked_error",
+          precheck_hits: ["error:api_" + response.status],
+          model: MODEL
+        }
+      };
     }
 
     const data = await response.json();
@@ -376,14 +548,52 @@ async function handleAnalyze(text, context, site) {
     const result = parseApiResponse(rawContent);
     if (!result) {
       console.error("ToneGuard: could not parse JSON from response:", rawContent);
-      return { flagged: false, error: "Response parse error — message sent without checking." };
+      const error = makeAnalysisError("parse", {
+        route: "blocked_error",
+        model: MODEL,
+        phase: "parse"
+      });
+      await recordTelemetry({
+        event: "analysis_failed",
+        platform: "chrome",
+        site_profile: siteProfile.id,
+        route: "blocked_error",
+        model: MODEL,
+        failure_diagnostic_code: error.diagnostic_code,
+        latency_bucket: latencyBucket(Date.now() - startedAt),
+        outcome: "failed"
+      });
+      return {
+        flagged: false,
+        error,
+        routing: {
+          route: "blocked_error",
+          precheck_hits: ["error:parse"],
+          model: MODEL
+        }
+      };
     }
+
+    result.routing = routing;
+    result.intent_mode = intentMode;
+    result.voice = { ...(result.voice || {}), strength: voiceStrength };
+    result.site_profile = siteProfile;
 
     await trackStats(result.flagged, result.mode);
 
     if (!result.flagged) {
       await saveVoiceSample(text);
     }
+    await recordTelemetry({
+      event: "analysis_completed",
+      platform: "chrome",
+      site_profile: siteProfile.id,
+      route: routing.route,
+      model: routing.model,
+      latency_bucket: latencyBucket(Date.now() - startedAt),
+      issue_categories: result.categories || [],
+      outcome: result.flagged ? undefined : "passed"
+    });
 
     // Attach landing view. Null when the call failed or the message was
     // too short — the overlay hides the panel in both cases.
@@ -394,36 +604,58 @@ async function handleAnalyze(text, context, site) {
   } catch (err) {
     console.error("ToneGuard analysis error:", err);
     if (err.message && err.message.includes("Failed to fetch")) {
-      return { flagged: false, error: "Network error — check your internet connection and try again." };
+      const error = makeAnalysisError("network", {
+        route: "blocked_error",
+        model: MODEL,
+        phase: "fetch"
+      });
+      await recordTelemetry({
+        event: "analysis_failed",
+        platform: "chrome",
+        site_profile: siteProfile.id,
+        route: "blocked_error",
+        model: MODEL,
+        failure_diagnostic_code: error.diagnostic_code,
+        latency_bucket: latencyBucket(Date.now() - startedAt),
+        outcome: "failed"
+      });
+      return {
+        flagged: false,
+        error,
+        routing: {
+          route: "blocked_error",
+          precheck_hits: ["error:network"],
+          model: MODEL
+        }
+      };
     }
-    return { flagged: false, error: err.message };
+    const error = makeAnalysisError("runtime", {
+      message: err.message,
+      route: "blocked_error",
+      model: MODEL,
+      phase: "runtime"
+    });
+    await recordTelemetry({
+      event: "analysis_failed",
+      platform: "chrome",
+      site_profile: siteProfile.id,
+      route: "blocked_error",
+      model: MODEL,
+      failure_diagnostic_code: error.diagnostic_code,
+      latency_bucket: latencyBucket(Date.now() - startedAt),
+      outcome: "failed"
+    });
+    return {
+      flagged: false,
+      error,
+      routing: {
+        route: "blocked_error",
+        precheck_hits: ["error:runtime"],
+        model: MODEL
+      }
+    };
   }
 }
-
-// Landing critic — descriptive "how does this read on a skim" analysis.
-// Runs in parallel with handleAnalyze's main Claude call. Haiku-tier,
-// ~$0.002 per call. Returns {takeaway, tone_felt, next_action} (any
-// may be null) or null on failure / short message.
-//
-// The prompt mirrors critics/landing.md in the MCP server — keep them
-// in sync if this one changes.
-const LANDING_SYSTEM_PROMPT = (
-  "You are a 'message landing' analyst. Read a message as if you were the " +
-  "recipient skimming it once — no re-reads, no charitable interpretation — " +
-  "and report what they'd actually walk away with.\n\n" +
-  "This is NOT a rewrite or critique. You do NOT flag issues.\n\n" +
-  "Return JSON with exactly three fields:\n" +
-  "- takeaway: one short sentence (<=20 words), the single idea the " +
-  "recipient would carry away\n" +
-  "- tone_felt: 2-3 words (e.g. 'rushed and curt', 'warm but vague')\n" +
-  "- next_action: what the recipient would think they're being asked to do " +
-  "next, OR null if nothing is being asked. Phrase as an imperative from " +
-  "their POV ('approve the PR', 'reply with a time', 'just read it').\n\n" +
-  "Rules: Report how it LANDS, not how it was INTENDED. Do not praise. " +
-  "Do not suggest improvements. For messages <10 words, return " +
-  '{"takeaway": null, "tone_felt": null, "next_action": null}.\n\n' +
-  "Return ONLY the JSON object, no prefatory text, no markdown fences."
-);
 
 async function callLandingCritic(text, context, apiKey) {
   if (!text || text.trim().split(/\s+/).length < 10) {
@@ -444,7 +676,7 @@ async function callLandingCritic(text, context, apiKey) {
     body: JSON.stringify({
       model: "claude-haiku-4-5-20251001",
       max_tokens: 256,
-      system: LANDING_SYSTEM_PROMPT,
+      system: await loadLandingPrompt(),
       messages: [{ role: "user", content: userContent }]
     })
   });
@@ -664,9 +896,13 @@ async function regenerateVoiceFingerprint() {
   }
 }
 
-async function getVoiceContext() {
+async function getVoiceContext(strength = "balanced") {
+  const normalizedStrength = normalizeVoiceStrength(strength);
   const samples = await getVoiceSamples();
   if (!samples.length) return "";
+  const strengthInstruction =
+    "VOICE PRESERVATION: " + normalizedStrength + ". " +
+    VOICE_STRENGTH_LABELS[normalizedStrength] + "\n\n";
 
   // If a derived fingerprint exists and the user has ≥3 trained samples,
   // prefer the fingerprint (sharper signal, ~200 tokens) over raw samples.
@@ -675,7 +911,8 @@ async function getVoiceContext() {
   ]);
   const trainedCount = samples.filter((s) => s.source === "trained").length;
   if (fingerprint && fingerprint.text && trainedCount >= 3) {
-    return "VOICE FINGERPRINT (match this style in rewrites):\n" + fingerprint.text;
+    return strengthInstruction +
+      "VOICE FINGERPRINT (match this style in rewrites):\n" + fingerprint.text;
   }
 
   // Trained samples take priority up to 5; fill with auto from the tail.
@@ -690,7 +927,8 @@ async function getVoiceContext() {
   if (pickedTrained.length === 0 && picked.length < 5) return "";
 
   const voiceExamples = picked.map((s) => '  "' + s.text + '"').join("\n");
-  return "VOICE SAMPLES (match this writing style in rewrites):\n" + voiceExamples;
+  return strengthInstruction +
+    "VOICE SAMPLES (match this writing style in rewrites):\n" + voiceExamples;
 }
 
 async function saveRecipientInteraction(text) {
@@ -780,6 +1018,41 @@ async function trackStats(flagged, mode) {
   await chrome.storage.local.set({ tg_stats: stats });
 
   if (syncManager) syncManager.schedulePush("stats_history");
+}
+
+function latencyBucket(ms) {
+  if (typeof ms !== "number") return "unknown";
+  if (ms < 1000) return "lt_1s";
+  if (ms < 3000) return "1_3s";
+  if (ms < 10000) return "3_10s";
+  return "gt_10s";
+}
+
+async function recordTelemetry(event) {
+  const compact = {};
+  for (const [key, value] of Object.entries(event || {})) {
+    if (value !== undefined && value !== null) compact[key] = value;
+  }
+  compact.timestamp = compact.timestamp || new Date().toISOString();
+  const sanitized = sanitizeTelemetryEvent(compact);
+  if (!sanitized.ok) return false;
+
+  const { tg_telemetry_summary: summary } = await chrome.storage.local.get([
+    "tg_telemetry_summary"
+  ]);
+  const next = summary || { counts: {}, failures: {}, routes: {}, updatedAt: null };
+  const safeEvent = sanitized.event;
+  next.counts[safeEvent.event] = (next.counts[safeEvent.event] || 0) + 1;
+  if (safeEvent.route) {
+    next.routes[safeEvent.route] = (next.routes[safeEvent.route] || 0) + 1;
+  }
+  if (safeEvent.failure_diagnostic_code) {
+    next.failures[safeEvent.failure_diagnostic_code] =
+      (next.failures[safeEvent.failure_diagnostic_code] || 0) + 1;
+  }
+  next.updatedAt = safeEvent.timestamp;
+  await chrome.storage.local.set({ tg_telemetry_summary: next });
+  return true;
 }
 
 async function handleRefine(original, answers) {

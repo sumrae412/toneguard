@@ -1,0 +1,154 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://toneguard.local/shared/analysis/schema.json",
+  "title": "ToneGuard Analysis Result",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["flagged"],
+  "properties": {
+    "flagged": {
+      "type": "boolean"
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "mode": {
+      "type": "string",
+      "enum": ["", "tone", "polish", "both"]
+    },
+    "readability": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 16
+    },
+    "red_flags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "categories": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "adverbs",
+          "passive voice",
+          "wordy",
+          "hedging",
+          "hard to read",
+          "tone",
+          "grammar",
+          "clarity",
+          "inclusive language",
+          "professionalism",
+          "structure",
+          "audience"
+        ]
+      }
+    },
+    "reasoning": {
+      "type": "string"
+    },
+    "suggestion": {
+      "type": "string"
+    },
+    "has_questions": {
+      "type": "boolean"
+    },
+    "questions": {
+      "type": "array",
+      "maxItems": 3,
+      "items": {
+        "type": "string"
+      }
+    },
+    "issues": {
+      "type": "array",
+      "items": {
+        "anyOf": [
+          {
+            "title": "Structured issue",
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["category", "severity", "explanation"],
+            "properties": {
+              "quote": {
+                "type": "string"
+              },
+              "category": {
+                "type": "string",
+                "enum": [
+                  "adverbs",
+                  "passive voice",
+                  "wordy",
+                  "hedging",
+                  "hard to read",
+                  "tone",
+                  "grammar",
+                  "clarity",
+                  "inclusive language",
+                  "professionalism",
+                  "structure",
+                  "audience"
+                ]
+              },
+              "severity": {
+                "type": "string",
+                "enum": ["low", "medium", "high"]
+              },
+              "explanation": {
+                "type": "string"
+              },
+              "suggested_fix": {
+                "type": "string"
+              },
+              "quote_confidence": {
+                "type": "string",
+                "enum": ["exact", "approximate", "missing"]
+              }
+            }
+          },
+          {
+            "title": "Legacy critic issue",
+            "type": "object",
+            "additionalProperties": true,
+            "required": ["explanation"],
+            "properties": {
+              "rule": {
+                "type": "string"
+              },
+              "quote": {
+                "type": "string"
+              },
+              "explanation": {
+                "type": "string"
+              }
+            }
+          }
+        ]
+      }
+    },
+    "routing": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "route": {
+          "type": "string",
+          "enum": ["local_pass", "standard", "deep", "blocked_error"]
+        },
+        "precheck_hits": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "model": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

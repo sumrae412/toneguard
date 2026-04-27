@@ -154,6 +154,18 @@
 
     .input-area textarea::placeholder { color: var(--text-muted); }
 
+    .mode-select {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 14px;
+      background: var(--surface);
+      color: var(--text);
+    }
+
+    .mode-select:focus { outline: none; border-color: var(--green); }
+
     /* ── Buttons ── */
     .btn {
       padding: 12px 20px;
@@ -304,6 +316,69 @@
       line-height: 1.4;
     }
 
+    .issues { display: none; margin-bottom: 14px; }
+    .issues.visible { display: block; }
+
+    .issues-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .issue-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--amber);
+      border-radius: 6px;
+      padding: 9px 10px;
+    }
+
+    .issue-top {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 5px;
+    }
+
+    .issue-category,
+    .issue-severity {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+
+    .issue-category { color: var(--text); }
+    .issue-severity { color: var(--text-muted); }
+
+    .issue-quote {
+      font-size: 12px;
+      color: var(--red);
+      margin-bottom: 4px;
+    }
+
+    .issue-explanation,
+    .issue-fix {
+      font-size: 12px;
+      color: var(--text);
+      line-height: 1.4;
+    }
+
+    .issue-fix {
+      color: var(--text-secondary);
+      margin-top: 4px;
+    }
+
+    .show-more {
+      margin-top: 8px;
+      border: none;
+      background: transparent;
+      color: var(--green);
+      cursor: pointer;
+      font: inherit;
+      font-size: 12px;
+      padding: 0;
+    }
+
     /* Sections */
     .section { margin-bottom: 16px; }
 
@@ -390,6 +465,28 @@
       min-height: 20px;
     }
 
+    .failure {
+      display: none;
+      padding: 16px;
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--amber);
+      border-radius: 8px;
+      background: var(--surface);
+    }
+
+    .failure.visible { display: block; }
+
+    .failure-title {
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+
+    .failure-message {
+      color: var(--text-secondary);
+      font-size: 13px;
+      line-height: 1.4;
+    }
+
     /* Settings link */
     .settings-link {
       padding: 16px 20px;
@@ -434,6 +531,14 @@
     <!-- Text input -->
     <div class="input-area" id="inputArea">
       <textarea id="messageInput" placeholder="Paste or type your message here..."></textarea>
+      <select class="mode-select" id="intentMode">
+        <option value="professional">Professional</option>
+        <option value="warm">Warm</option>
+        <option value="direct">Direct</option>
+        <option value="deescalating">De-escalating</option>
+        <option value="boundary">Boundary</option>
+        <option value="concise">Concise</option>
+      </select>
       <button class="btn btn-primary btn-full" id="checkBtn">Check tone & clarity</button>
     </div>
 
@@ -445,6 +550,15 @@
 
     <!-- Passed -->
     <div class="passed" id="passed">Looks good! No issues found.</div>
+
+    <div class="failure" id="failure">
+      <div class="failure-title">ToneGuard could not check this</div>
+      <div class="failure-message" id="failureMessage"></div>
+      <div class="actions">
+        <button class="btn btn-primary" id="retryBtn">Retry</button>
+        <button class="btn btn-secondary" id="copyDiagnosticsBtn">Copy diagnostics</button>
+      </div>
+    </div>
 
     <!-- Result drawer content -->
     <div class="result" id="result">
@@ -462,6 +576,12 @@
       <div class="red-flags" id="redFlags">
         <div class="section-label">Flagged phrases</div>
         <div class="flags-list" id="flagsList"></div>
+      </div>
+
+      <div class="issues" id="issuesSection">
+        <div class="section-label">Why this was flagged</div>
+        <div class="issues-list" id="issuesList"></div>
+        <button class="show-more" id="issuesMore" type="button" style="display:none">Show more</button>
       </div>
 
       <!-- Diff view -->

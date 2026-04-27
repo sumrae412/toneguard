@@ -6,6 +6,8 @@ const keyDot = document.getElementById("keyDot");
 const keyLabel = document.getElementById("keyLabel");
 const strictnessSlider = document.getElementById("strictness");
 const strictnessLabel = document.getElementById("strictnessLabel");
+const intentModeSelect = document.getElementById("intentMode");
+const voiceStrengthSelect = document.getElementById("voiceStrength");
 const siteListEl = document.getElementById("siteList");
 const newSiteInput = document.getElementById("newSite");
 const addSiteBtn = document.getElementById("addSiteBtn");
@@ -29,7 +31,14 @@ const SITE_DISPLAY_NAMES = {
 // Load saved settings
 const STRICTNESS_LABELS = { 1: "Gentle", 2: "Balanced", 3: "Strict" };
 
-chrome.storage.sync.get(["tg_api_key", "tg_enabled", "tg_custom_sites", "tg_strictness"], (result) => {
+chrome.storage.sync.get([
+  "tg_api_key",
+  "tg_enabled",
+  "tg_custom_sites",
+  "tg_strictness",
+  "tg_intent_mode_default",
+  "tg_voice_strength"
+], (result) => {
   if (result.tg_api_key) {
     apiKeyInput.value = result.tg_api_key;
     keyDot.classList.add("active");
@@ -52,6 +61,8 @@ chrome.storage.sync.get(["tg_api_key", "tg_enabled", "tg_custom_sites", "tg_stri
 
   strictnessSlider.value = strictMap.default || 2;
   strictnessLabel.textContent = STRICTNESS_LABELS[strictMap.default || 2];
+  intentModeSelect.value = result.tg_intent_mode_default || "professional";
+  voiceStrengthSelect.value = result.tg_voice_strength || "balanced";
 
   renderSiteStrictness(strictMap);
   renderSiteList(result.tg_custom_sites || []);
@@ -85,6 +96,14 @@ saveBtn.addEventListener("click", () => {
 // Toggle enabled/disabled
 enabledToggle.addEventListener("change", () => {
   chrome.storage.sync.set({ tg_enabled: enabledToggle.checked });
+});
+
+intentModeSelect.addEventListener("change", () => {
+  chrome.storage.sync.set({ tg_intent_mode_default: intentModeSelect.value });
+});
+
+voiceStrengthSelect.addEventListener("change", () => {
+  chrome.storage.sync.set({ tg_voice_strength: voiceStrengthSelect.value });
 });
 
 // Strictness slider (sets the default for all sites)
