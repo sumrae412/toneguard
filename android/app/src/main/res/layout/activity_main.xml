@@ -23,7 +23,7 @@
             <ImageView
                 android:layout_width="40dp"
                 android:layout_height="40dp"
-                android:src="@mipmap/ic_launcher"
+                android:src="@drawable/ic_launcher"
                 android:contentDescription="@string/app_name" />
 
             <TextView
@@ -39,7 +39,7 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Checks your messages for tone and clarity before sending."
+            android:text="Checks your messages for tone and clarity before sending. Once setup is complete, ToneGuard runs in your messaging apps and browsers."
             android:textSize="14sp"
             android:textColor="@color/text_secondary"
             android:layout_marginBottom="32dp" />
@@ -74,6 +74,16 @@
                     android:text="@string/status_needs_key"
                     android:textSize="14sp"
                     android:textColor="@color/text_primary" />
+
+                <TextView
+                    android:id="@+id/readyHint"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="ToneGuard is running. Open a supported app, write a message, and tap Send."
+                    android:textSize="13sp"
+                    android:textColor="@color/text_secondary"
+                    android:layout_marginTop="8dp"
+                    android:visibility="gone" />
             </LinearLayout>
         </androidx.cardview.widget.CardView>
 
@@ -177,6 +187,39 @@
                 android:textAlignment="textEnd" />
         </LinearLayout>
 
+        <!-- Android parity settings -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="REWRITE STYLE"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:textColor="@color/text_muted"
+            android:textAllCaps="true"
+            android:letterSpacing="0.05"
+            android:layout_marginBottom="8dp" />
+
+        <Spinner
+            android:id="@+id/intentModeSpinner"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:layout_marginBottom="12dp" />
+
+        <Spinner
+            android:id="@+id/voiceStrengthSpinner"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:layout_marginBottom="24dp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/testToneGuardBtn"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Test ToneGuard"
+            android:textAllCaps="false"
+            android:backgroundTint="@color/green"
+            android:layout_marginBottom="24dp" />
+
         <!-- Accessibility Service -->
         <TextView
             android:layout_width="match_parent"
@@ -231,6 +274,56 @@
             android:textColor="@color/text_muted"
             android:layout_marginTop="8dp"
             android:layout_marginBottom="32dp" />
+
+        <!-- Supported apps -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="SUPPORTED APPS"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:textColor="@color/text_muted"
+            android:textAllCaps="true"
+            android:letterSpacing="0.05"
+            android:layout_marginBottom="8dp" />
+
+        <LinearLayout
+            android:id="@+id/supportedAppsContainer"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginBottom="24dp" />
+
+        <!-- Diagnostics -->
+        <androidx.appcompat.widget.SwitchCompat
+            android:id="@+id/diagnosticsSwitch"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Diagnostics mode"
+            android:textColor="@color/text_primary"
+            android:textSize="14sp"
+            android:layout_marginBottom="8dp" />
+
+        <TextView
+            android:id="@+id/diagnosticsText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Diagnostics are off. When enabled, ToneGuard records metadata only: app package, event type, button label/id, and whether an editable field was found. Message text is never saved."
+            android:textSize="12sp"
+            android:textColor="@color/text_muted"
+            android:layout_marginBottom="12dp" />
+
+        <com.google.android.material.button.MaterialButton
+            xmlns:app="http://schemas.android.com/apk/res-auto"
+            android:id="@+id/clearDiagnosticsBtn"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Clear Diagnostics"
+            android:textAllCaps="false"
+            android:textColor="@color/text_primary"
+            style="@style/Widget.Material3.Button.OutlinedButton"
+            app:strokeColor="@color/border"
+            android:layout_marginBottom="24dp" />
 
         <!-- Sync Status -->
         <TextView

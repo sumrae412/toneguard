@@ -36,9 +36,11 @@ class ClaudeApiClient(private val apiKey: String, private val learningStore: Lea
         text: String,
         strictness: Int,
         intentMode: String = "professional",
+        voiceStrength: String = "balanced",
         callback: (AnalysisResult) -> Unit
     ) {
         val normalizedIntentMode = normalizeIntentMode(intentMode)
+        val normalizedVoiceStrength = normalizeVoiceStrength(voiceStrength)
         val precheck = precheckAnalysis(text, normalizedIntentMode)
         if (!precheck.shouldCallModel) {
             callback(AnalysisResult(
@@ -51,7 +53,7 @@ class ClaudeApiClient(private val apiKey: String, private val learningStore: Lea
             return
         }
 
-        val systemPrompt = buildSystemPrompt(strictness, text, normalizedIntentMode)
+        val systemPrompt = buildSystemPrompt(strictness, text, normalizedIntentMode, normalizedVoiceStrength)
         val body = JSONObject().apply {
             put("model", "claude-haiku-4-5-20251001")
             put("max_tokens", 1024)
@@ -143,6 +145,13 @@ class ClaudeApiClient(private val apiKey: String, private val learningStore: Lea
         return when (mode) {
             "professional", "warm", "direct", "deescalating", "boundary", "concise" -> mode
             else -> "professional"
+        }
+    }
+
+    private fun normalizeVoiceStrength(strength: String): String {
+        return when (strength) {
+            "light", "balanced", "strong" -> strength
+            else -> "balanced"
         }
     }
 
@@ -251,7 +260,8 @@ class ClaudeApiClient(private val apiKey: String, private val learningStore: Lea
     private fun buildSystemPrompt(
         strictness: Int,
         messageText: String = "",
-        intentMode: String = "professional"
+        intentMode: String = "professional",
+        voiceStrength: String = "balanced"
     ): String {
         val base = """You are ToneGuard, a writing assistant that checks messages for tone and clarity issues before sending.
 
@@ -263,6 +273,7 @@ Your job has three parts:
 IMPORTANT: When in doubt, FLAG IT. The user can always dismiss your suggestion.
 
 INTENT MODE: $intentMode. Intent mode affects rewrite style only. It must not suppress real tone, clarity, or professionalism warnings.
+VOICE STRENGTH: $voiceStrength. Use "light" for minimal voice matching, "balanced" for natural matching, and "strong" for closer matching when learned voice examples exist.
 
 When you DO rewrite:
 - One idea per sentence

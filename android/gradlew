@@ -1,0 +1,50 @@
+#!/usr/bin/env sh
+
+set -eu
+
+APP_HOME=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+DIST_URL=$(sed -n 's/^distributionUrl=//p' "$APP_HOME/gradle/wrapper/gradle-wrapper.properties" | sed 's#\\:#:#')
+DIST_ARCHIVE_NAME=$(basename "$DIST_URL" .zip)
+DIST_DIR_NAME=${DIST_ARCHIVE_NAME%-bin}
+GRADLE_HOME="$APP_HOME/.gradle/bootstrap/$DIST_DIR_NAME"
+GRADLE_BIN="$GRADLE_HOME/bin/gradle"
+GRADLE_USER_HOME="${GRADLE_USER_HOME:-$APP_HOME/.gradle/user-home}"
+export GRADLE_USER_HOME
+
+if [ -z "${ANDROID_HOME:-}" ] && [ -d /usr/local/share/android-commandlinetools ]; then
+  ANDROID_HOME=/usr/local/share/android-commandlinetools
+  export ANDROID_HOME
+fi
+
+java_major_version() {
+  java -version 2>&1 | awk -F[\".] '/version/ { if ($2 == "1") print $3; else print $2; exit }'
+}
+
+if ! command -v java >/dev/null 2>&1; then
+  echo "Java is required. Install JDK 17 and retry." >&2
+  exit 1
+fi
+
+JAVA_MAJOR=$(java_major_version)
+if [ "${JAVA_MAJOR:-0}" -lt 17 ]; then
+  echo "JDK 17 or newer is required. Current Java major version: $JAVA_MAJOR" >&2
+  echo "Set JAVA_HOME to a JDK 17+ install and retry." >&2
+  exit 1
+fi
+
+if [ ! -x "$GRADLE_BIN" ]; then
+  TMP_DIR="$APP_HOME/.gradle/bootstrap/tmp"
+  ZIP_FILE="$TMP_DIR/$DIST_ARCHIVE_NAME.zip"
+  mkdir -p "$TMP_DIR" "$APP_HOME/.gradle/bootstrap"
+
+  if command -v curl >/dev/null 2>&1; then
+    curl -fL "$DIST_URL" -o "$ZIP_FILE"
+  else
+    echo "curl is required to download $DIST_URL" >&2
+    exit 1
+  fi
+
+  unzip -q "$ZIP_FILE" -d "$APP_HOME/.gradle/bootstrap"
+fi
+
+exec "$GRADLE_BIN" "$@"
