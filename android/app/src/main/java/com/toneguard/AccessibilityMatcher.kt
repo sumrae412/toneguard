@@ -101,11 +101,9 @@ object AccessibilityMatcher {
         var depth = 0
         while (parent != null && depth < 3) {
             if (isSendButton(parent)) {
-                parent.recycle()
                 return true
             }
             val nextParent = parent.parent
-            parent.recycle()
             parent = nextParent
             depth += 1
         }
@@ -143,7 +141,6 @@ object AccessibilityMatcher {
         for (i in 0 until node.childCount) {
             val child = node.getChild(i) ?: continue
             val result = findEditableText(child)
-            child.recycle()
             if (result != null) return result
         }
 

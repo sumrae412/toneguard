@@ -1,5 +1,8 @@
 package com.toneguard
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
@@ -35,6 +38,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var supportedAppsContainer: LinearLayout
     private lateinit var diagnosticsSwitch: SwitchCompat
     private lateinit var diagnosticsText: TextView
+    private lateinit var lastDetectedEvent: TextView
+    private lateinit var copyDiagnosticsBtn: MaterialButton
     private lateinit var clearDiagnosticsBtn: MaterialButton
     private lateinit var syncDot: View
     private lateinit var syncText: TextView
@@ -65,6 +70,8 @@ class MainActivity : AppCompatActivity() {
         supportedAppsContainer = findViewById(R.id.supportedAppsContainer)
         diagnosticsSwitch = findViewById(R.id.diagnosticsSwitch)
         diagnosticsText = findViewById(R.id.diagnosticsText)
+        lastDetectedEvent = findViewById(R.id.lastDetectedEvent)
+        copyDiagnosticsBtn = findViewById(R.id.copyDiagnosticsBtn)
         clearDiagnosticsBtn = findViewById(R.id.clearDiagnosticsBtn)
         syncDot = findViewById(R.id.syncDot)
         syncText = findViewById(R.id.syncText)
@@ -262,6 +269,9 @@ class MainActivity : AppCompatActivity() {
             Prefs.setDiagnosticsEnabled(this, checked)
             renderDiagnostics()
         }
+        copyDiagnosticsBtn.setOnClickListener {
+            copyDiagnostics()
+        }
         clearDiagnosticsBtn.setOnClickListener {
             diagnosticStore.clear()
             renderDiagnostics()
@@ -272,10 +282,16 @@ class MainActivity : AppCompatActivity() {
     private fun renderDiagnostics() {
         if (!Prefs.isDiagnosticsEnabled(this)) {
             diagnosticsText.text = "Diagnostics are off. When enabled, ToneGuard records metadata only: app package, event type, button label/id, and whether an editable field was found. Message text is never saved."
+            lastDetectedEvent.text = "Last detected event: diagnostics off"
             return
         }
 
         val recent = diagnosticStore.getRecent().take(5)
+        lastDetectedEvent.text = if (recent.isEmpty()) {
+            "Last detected event: none"
+        } else {
+            "Last detected event: ${formatDiagnostic(recent.first())}"
+        }
         diagnosticsText.text = if (recent.isEmpty()) {
             "Diagnostics are on. Try tapping Send in a supported app, then return here. Message text is never saved."
         } else {
@@ -295,6 +311,23 @@ class MainActivity : AppCompatActivity() {
             "id=${event.optString("viewId", "")}",
             "label=${event.optString("contentDescription", event.optString("textLabel", ""))}"
         ).joinToString(" | ")
+    }
+
+    private fun copyDiagnostics() {
+        val recent = diagnosticStore.getRecent()
+        if (recent.isEmpty()) {
+            Toast.makeText(this, "No diagnostics to copy.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        clipboard.setPrimaryClip(
+            ClipData.newPlainText(
+                "ToneGuard diagnostics",
+                recent.joinToString("\n\n") { formatDiagnostic(it) }
+            )
+        )
+        Toast.makeText(this, "Diagnostics copied.", Toast.LENGTH_SHORT).show()
     }
 
     private fun runToneGuardTest() {

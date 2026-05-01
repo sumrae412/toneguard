@@ -79,7 +79,7 @@
                     android:id="@+id/readyHint"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="ToneGuard is running. Open a supported app, write a message, and tap Send."
+                    android:text="Setup complete. ToneGuard now runs in the supported apps below. Leave this screen, write a message, and tap Send."
                     android:textSize="13sp"
                     android:textColor="@color/text_secondary"
                     android:layout_marginTop="8dp"
@@ -247,7 +247,7 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="ToneGuard needs the accessibility service to detect when you tap Send in messaging apps. It only reads text fields in supported apps."
+            android:text="Accessibility lets ToneGuard detect supported app send buttons and read the active compose field only after you tap Send."
             android:textSize="12sp"
             android:textColor="@color/text_muted"
             android:layout_marginTop="8dp"
@@ -312,6 +312,27 @@
             android:textSize="12sp"
             android:textColor="@color/text_muted"
             android:layout_marginBottom="12dp" />
+
+        <TextView
+            android:id="@+id/lastDetectedEvent"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Last detected event: none"
+            android:textSize="12sp"
+            android:textColor="@color/text_secondary"
+            android:layout_marginBottom="12dp" />
+
+        <com.google.android.material.button.MaterialButton
+            xmlns:app="http://schemas.android.com/apk/res-auto"
+            android:id="@+id/copyDiagnosticsBtn"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Copy Diagnostics"
+            android:textAllCaps="false"
+            android:textColor="@color/text_primary"
+            style="@style/Widget.Material3.Button.OutlinedButton"
+            app:strokeColor="@color/border"
+            android:layout_marginBottom="8dp" />
 
         <com.google.android.material.button.MaterialButton
             xmlns:app="http://schemas.android.com/apk/res-auto"

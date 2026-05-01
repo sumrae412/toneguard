@@ -49,7 +49,6 @@ class ToneGuardAccessibilityService : AccessibilityService() {
             if (isSend) {
                 handleSendClicked(pkg)
             }
-            source.recycle()
         }
     }
 
@@ -67,7 +66,6 @@ class ToneGuardAccessibilityService : AccessibilityService() {
         // Find the text field in the same window
         val rootNode = rootInActiveWindow ?: return
         val messageText = AccessibilityMatcher.findEditableText(rootNode)
-        rootNode.recycle()
 
         if (Prefs.isDiagnosticsEnabled(this)) {
             diagnosticStore.add(JSONObject().apply {
