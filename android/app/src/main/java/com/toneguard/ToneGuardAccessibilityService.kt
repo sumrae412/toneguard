@@ -6,42 +6,21 @@ import android.os.Looper
 import android.provider.Settings
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import org.json.JSONObject
 
 class ToneGuardAccessibilityService : AccessibilityService() {
 
     private lateinit var overlay: OverlayManager
     private lateinit var learningStore: LearningStore
+    private lateinit var diagnosticStore: DiagnosticStore
     private var syncManager: SyncManager? = null
     private val handler = Handler(Looper.getMainLooper())
     private var analyzing = false
 
-    // Packages where we look for send buttons
-    private val supportedPackages = setOf(
-        "com.slack",
-        "com.Slack",
-        "com.google.android.gm",          // Gmail
-        "com.linkedin.android",
-        "com.whatsapp",
-        "com.facebook.orca",               // Messenger
-        "com.google.android.apps.messaging", // Google Messages
-        "org.telegram.messenger",
-        "com.discord",
-        "com.microsoft.teams"
-    )
-
-    // Common send button identifiers
-    private val sendButtonIds = setOf(
-        "send", "send_button", "btn_send", "compose_send",
-        "send_message", "message_send_button", "texty_send_button"
-    )
-
-    private val sendButtonLabels = setOf(
-        "send", "send message", "send sms"
-    )
-
     override fun onCreate() {
         super.onCreate()
         learningStore = LearningStore(this)
+        diagnosticStore = DiagnosticStore(this)
         initSync()
         overlay = OverlayManager(this, learningStore, syncManager)
     }
@@ -58,14 +37,18 @@ class ToneGuardAccessibilityService : AccessibilityService() {
         if (analyzing || overlay.isShowing()) return
 
         val pkg = event.packageName?.toString() ?: return
-        if (!supportedPackages.any { pkg.startsWith(it) }) return
+        val supported = AccessibilityMatcher.isSupportedPackage(pkg, Prefs.getEnabledPackages(this))
+        if (!supported) return
 
         if (event.eventType == AccessibilityEvent.TYPE_VIEW_CLICKED) {
             val source = event.source ?: return
-            if (isSendButton(source)) {
-                handleSendClicked(source)
+            val isSend = AccessibilityMatcher.isSendButtonOrAncestor(source)
+            if (Prefs.isDiagnosticsEnabled(this)) {
+                recordDiagnostic(event, source, isSend, "click")
             }
-            source.recycle()
+            if (isSend) {
+                handleSendClicked(pkg)
+            }
         }
     }
 
@@ -79,30 +62,27 @@ class ToneGuardAccessibilityService : AccessibilityService() {
         super.onDestroy()
     }
 
-    private fun isSendButton(node: AccessibilityNodeInfo): Boolean {
-        // Check resource ID
-        val viewId = node.viewIdResourceName?.lowercase() ?: ""
-        if (sendButtonIds.any { viewId.contains(it) }) return true
-
-        // Check content description
-        val desc = node.contentDescription?.toString()?.lowercase() ?: ""
-        if (sendButtonLabels.any { desc.contains(it) }) return true
-
-        // Check text
-        val text = node.text?.toString()?.lowercase() ?: ""
-        if (sendButtonLabels.any { text.contains(it) }) return true
-
-        return false
-    }
-
-    private fun handleSendClicked(sendButton: AccessibilityNodeInfo) {
+    private fun handleSendClicked(sourcePackage: String) {
         // Find the text field in the same window
         val rootNode = rootInActiveWindow ?: return
-        val messageText = findEditableText(rootNode)
-        rootNode.recycle()
+        val messageText = AccessibilityMatcher.findEditableText(rootNode)
+
+        if (Prefs.isDiagnosticsEnabled(this)) {
+            diagnosticStore.add(JSONObject().apply {
+                put("packageName", sourcePackage)
+                put("eventType", "send_attempt")
+                put("sendCandidate", true)
+                put("editableFound", !messageText.isNullOrBlank())
+                put("route", if (messageText.isNullOrBlank()) "no_editable_text" else "analyze")
+            })
+        }
 
         if (messageText.isNullOrBlank() || messageText.trim().length < 10) return
 
+        analyzeMessage(messageText)
+    }
+
+    private fun analyzeMessage(messageText: String) {
         // Check overlay permission
         if (!Settings.canDrawOverlays(this)) return
 
@@ -111,6 +91,8 @@ class ToneGuardAccessibilityService : AccessibilityService() {
 
         val apiKey = Prefs.getApiKey(this) ?: return
         val strictness = Prefs.getStrictness(this)
+        val intentMode = Prefs.getIntentMode(this)
+        val voiceStrength = Prefs.getVoiceStrength(this)
         val client = ClaudeApiClient(apiKey, learningStore)
 
         // Save recipient interaction for relationship tracking
@@ -118,11 +100,15 @@ class ToneGuardAccessibilityService : AccessibilityService() {
         syncManager?.schedulePush("relationships")
 
         Thread {
-            client.analyze(messageText, strictness) { result ->
+            client.analyze(messageText, strictness, intentMode, voiceStrength) { result ->
                 analyzing = false
 
                 if (result.error != null) {
-                    handler.post { overlay.dismiss() }
+                    handler.post {
+                        overlay.showError(result) {
+                            analyzeMessage(messageText)
+                        }
+                    }
                     return@analyze
                 }
 
@@ -143,29 +129,25 @@ class ToneGuardAccessibilityService : AccessibilityService() {
         }.start()
     }
 
-    private fun findEditableText(node: AccessibilityNodeInfo): String? {
-        // Look for editable text fields
-        if (node.isEditable && node.text != null) {
-            val text = node.text.toString().trim()
-            if (text.isNotEmpty()) return text
-        }
-
-        // Check className for EditText/input fields
-        val className = node.className?.toString() ?: ""
-        if ((className.contains("EditText") || className.contains("edittext")) && node.text != null) {
-            val text = node.text.toString().trim()
-            if (text.isNotEmpty()) return text
-        }
-
-        // Recurse into children
-        for (i in 0 until node.childCount) {
-            val child = node.getChild(i) ?: continue
-            val result = findEditableText(child)
-            child.recycle()
-            if (result != null) return result
-        }
-
-        return null
+    private fun recordDiagnostic(
+        event: AccessibilityEvent,
+        source: AccessibilityNodeInfo?,
+        sendCandidate: Boolean,
+        route: String
+    ) {
+        val metadata = AccessibilityMatcher.metadataFor(source, includeTextLabel = sendCandidate)
+        diagnosticStore.add(JSONObject().apply {
+            put("packageName", event.packageName?.toString().orEmpty())
+            put("eventType", event.eventType)
+            put("sendCandidate", sendCandidate)
+            put("editableFound", false)
+            put("route", route)
+            put("viewId", metadata["viewId"].orEmpty())
+            put("className", metadata["className"].orEmpty())
+            put("contentDescription", metadata["contentDescription"].orEmpty())
+            put("textLabel", metadata["textLabel"].orEmpty())
+            put("editable", metadata["editable"].orEmpty())
+        })
     }
 
     companion object {

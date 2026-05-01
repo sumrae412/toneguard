@@ -162,9 +162,40 @@ ToneGuard uses your own Claude API key — there is no intermediary server. Mess
 
 See [PRIVACY.md](PRIVACY.md) for the full privacy policy.
 
-## Android / Mobile (PWA)
+## Android
 
-ToneGuard includes a Progressive Web App in the `pwa/` directory that works on Android (and iOS) via the browser share sheet.
+ToneGuard includes a native Android app in `android/`. It runs as an Accessibility + overlay service: after setup, ToneGuard watches supported messaging apps and browsers, checks the active compose field when you tap Send, and shows an overlay only when there is feedback or an error.
+
+### Native Android setup
+
+```bash
+cd android
+export JAVA_HOME=/usr/local/opt/openjdk@17
+export ANDROID_HOME=/usr/local/share/android-commandlinetools
+./gradlew testDebugUnitTest assembleDebug --no-daemon --no-parallel
+```
+
+The debug APK is generated at:
+
+```text
+android/app/build/outputs/apk/debug/app-debug.apk
+```
+
+After sideloading:
+
+1. Open ToneGuard and save your Anthropic API key.
+2. Enable ToneGuard in Android Accessibility settings.
+3. Grant Display over other apps / overlay permission.
+4. Use **Test ToneGuard** to verify the API key and overlay.
+5. Toggle supported apps as needed.
+
+Diagnostics mode records metadata only: package name, event type, view id/class, button label, whether an editable field was found, and the route taken. It never stores raw message text.
+
+Supported app matching currently covers Google Messages, Samsung Messages, Gmail, Chrome-family browsers, Firefox, Edge, Brave, Slack, LinkedIn, WhatsApp, Messenger, Telegram, Discord, and Teams. Browser/domain behavior depends on what each site exposes through Android Accessibility.
+
+## Mobile PWA
+
+ToneGuard also includes a Progressive Web App in the `pwa/` directory that works on Android (and iOS) via the browser share sheet.
 
 ### How it works on Android
 

@@ -147,6 +147,32 @@ class OverlayManager(
         }
     }
 
+    fun showError(result: AnalysisResult, onRetry: (() -> Unit)? = null) {
+        handler.post {
+            ensureOverlay()
+            val view = overlayView ?: return@post
+
+            view.findViewById<TextView>(R.id.errorTitle).text = "ToneGuard could not check this message"
+            view.findViewById<TextView>(R.id.errorMessage).text =
+                result.error ?: "Something went wrong while checking the message."
+            view.findViewById<TextView>(R.id.errorDiagnostic).text =
+                listOfNotNull(result.errorType, result.diagnosticCode).joinToString(" • ")
+
+            view.findViewById<MaterialButton>(R.id.retryBtn).visibility =
+                if (result.retryable && onRetry != null) View.VISIBLE else View.GONE
+            view.findViewById<MaterialButton>(R.id.retryBtn).setOnClickListener {
+                dismiss()
+                onRetry?.invoke()
+            }
+            view.findViewById<MaterialButton>(R.id.errorDismissBtn).setOnClickListener {
+                dismiss()
+            }
+
+            setVisibility(error = true)
+            animateDrawerIn()
+        }
+    }
+
     fun dismiss() {
         handler.post {
             overlayView?.let {
@@ -177,14 +203,20 @@ class OverlayManager(
         }
     }
 
-    private fun setVisibility(loading: Boolean = false, passed: Boolean = false, result: Boolean = false) {
+    private fun setVisibility(
+        loading: Boolean = false,
+        passed: Boolean = false,
+        result: Boolean = false,
+        error: Boolean = false
+    ) {
         val view = overlayView ?: return
         view.findViewById<View>(R.id.loadingView).visibility = if (loading) View.VISIBLE else View.GONE
         view.findViewById<View>(R.id.passedView).visibility = if (passed) View.VISIBLE else View.GONE
         view.findViewById<View>(R.id.resultView).visibility = if (result) View.VISIBLE else View.GONE
+        view.findViewById<View>(R.id.errorView).visibility = if (error) View.VISIBLE else View.GONE
         view.findViewById<View>(R.id.actionsView).visibility = if (result) View.VISIBLE else View.GONE
 
-        if (loading || passed) {
+        if (loading || passed || error) {
             animateDrawerIn()
         }
     }

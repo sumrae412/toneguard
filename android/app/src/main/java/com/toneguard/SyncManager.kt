@@ -120,7 +120,7 @@ class SyncManager(private val store: LearningStore) {
         }
 
         val data = JSONObject(response.body?.string() ?: "{}")
-        jwt = data.optString("token", null)
+        jwt = data.optString("token").takeIf { it.isNotBlank() }
     }
 
     // --- Pull ---
