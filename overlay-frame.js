@@ -712,15 +712,24 @@
         reasoning: savedResult.reasoning,
         wasEdited
       });
+      console.log("[ToneGuard:diag] use_suggestion decision sending", { wasEdited });
       try {
         await notifyDecision({ action: "use_suggestion", suggestion: finalText });
+        console.log("[ToneGuard:diag] use_suggestion decision acked ok");
         showSent(wasEdited ? "Edited version sent!" : "Suggestion applied!");
       } catch (err) {
-        // Parent couldn't insert/send — tell the user the truth so they can
-        // paste the rewrite manually. Preserve it on the clipboard as a last-
-        // ditch affordance.
-        try { navigator.clipboard.writeText(finalText); } catch (_) { /* ignore */ }
-        showActionError("Couldn't apply the rewrite — it's on your clipboard. Paste and send manually.", err);
+        // Parent couldn't insert/send — the message did NOT go out. Be loud
+        // about it: a non-dismissing failure card so the user can't mistake
+        // it for a successful send. Preserve the rewrite on the clipboard
+        // as a last-ditch affordance (may fail under host CSP, that's OK).
+        console.warn("[ToneGuard:diag] use_suggestion decision rejected:",
+          err && err.message ? err.message : err);
+        let clipboardOk = false;
+        try {
+          await navigator.clipboard.writeText(finalText);
+          clipboardOk = true;
+        } catch (_) { /* host blocks clipboard — fall through */ }
+        showSendFailed(finalText, clipboardOk, err);
       }
     }, 3000);
 
@@ -743,6 +752,73 @@
       sent.remove();
       hide();
     }, 2000);
+  }
+
+  // Specifically for the "user clicked Use Edited Version but the send didn't
+  // land" case. Unlike showActionError, this panel does NOT auto-dismiss —
+  // staying visible until the user closes it is the whole point, since the
+  // user must know the message didn't go out. Includes the rewrite text so
+  // they can copy it manually if the auto-clipboard failed.
+  function showSendFailed(finalText, clipboardOk, err) {
+    if (err) console.warn("ToneGuard:", err && err.message ? err.message : err);
+    clearToast();
+    els.content.style.display = "none";
+    els.loading.style.display = "none";
+    els.empty.style.display = "none";
+
+    const panel = el("div", { className: "tg-failure-panel" });
+    panel.appendChild(el("div", { className: "tg-stale-icon", textContent: "⚠" }));
+    panel.appendChild(el("div", {
+      className: "tg-stale-title",
+      textContent: "Your message did not send"
+    }));
+    panel.appendChild(el("div", {
+      className: "tg-stale-msg",
+      textContent: clipboardOk
+        ? "ToneGuard couldn't apply the rewrite to your compose window. It's on your clipboard — paste it and send manually."
+        : "ToneGuard couldn't apply the rewrite to your compose window. Copy the text below and send it manually."
+    }));
+
+    if (!clipboardOk) {
+      const textBox = el("textarea", {
+        className: "tg-failure-text",
+        readonly: "readonly"
+      });
+      textBox.value = finalText;
+      textBox.style.width = "100%";
+      textBox.style.minHeight = "80px";
+      textBox.style.marginTop = "8px";
+      panel.appendChild(textBox);
+    }
+
+    const actions = el("div", { className: "tg-failure-actions" });
+    const copyBtn = el("button", {
+      className: "tg-btn tg-btn-secondary",
+      textContent: clipboardOk ? "Copy again" : "Copy text",
+      type: "button"
+    });
+    copyBtn.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(finalText);
+        copyBtn.textContent = "Copied";
+      } catch (_) {
+        copyBtn.textContent = "Copy blocked — select text above";
+      }
+    });
+    const closeBtn = el("button", {
+      className: "tg-btn tg-btn-primary",
+      textContent: "Close",
+      type: "button"
+    });
+    closeBtn.addEventListener("click", () => {
+      panel.remove();
+      hide();
+    });
+    actions.appendChild(copyBtn);
+    actions.appendChild(closeBtn);
+    panel.appendChild(actions);
+    els.drawer.appendChild(panel);
+    openDrawer();
   }
 
   function showActionError(message, err) {
