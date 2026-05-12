@@ -196,6 +196,10 @@
   function setupOverlay() {
     if (!window.__toneGuard) return;
     window.__toneGuard.setOnDecision((decision) => {
+      console.log("[ToneGuard:diag] decision arrived", decision.action,
+        "pendingEditor:", !!pendingEditor,
+        "connected:", pendingEditor?.isConnected);
+
       // Cancel always succeeds: it just clears the concurrency guard and
       // leaves the editor untouched so the user can keep editing. Handle
       // before the pendingEditor checks so a stale-state cancel still acks
@@ -218,6 +222,7 @@
       }
 
       if (!pendingEditor) {
+        console.warn("[ToneGuard:diag] decision rejected: pendingEditor was null", decision.action);
         return { ok: false, error: "no pending compose" };
       }
       if (!pendingEditor.isConnected) {
@@ -245,6 +250,13 @@
             return { ok: false, error: "verification helper missing" };
           }
           const before = currentPlatform.getEditorText(pendingEditor) || "";
+          const activeBefore = document.activeElement;
+          console.log("[ToneGuard:diag] replaceEditorText about to run",
+            "site:", SITE,
+            "editorIsActive:", pendingEditor === activeBefore,
+            "activeTag:", activeBefore?.tagName,
+            "activeId:", activeBefore?.id,
+            "beforeLen:", before.length);
           currentPlatform.replaceEditorText(pendingEditor, decision.suggestion);
           // Verify the insert actually landed — execCommand can silently
           // no-op if focus transfer failed. Normalize the comparison so
@@ -252,6 +264,11 @@
           // below the body, Slack Quill's zero-width-space padding,
           // NBSP/CRLF normalization) don't produce false negatives.
           const after = currentPlatform.getEditorText(pendingEditor) || "";
+          console.log("[ToneGuard:diag] replaceEditorText completed",
+            "afterLen:", after.length,
+            "expectedLen:", decision.suggestion.length,
+            "afterMatches:", after.trim() === decision.suggestion.trim(),
+            "editorStillActive:", pendingEditor === document.activeElement);
           if (!lib.verifyInsertedText(before, after, decision.suggestion)) {
             // Must clear state before returning — otherwise the pendingEditor
             // concurrency guard in analyzeAndIntercept blocks every future
@@ -435,19 +452,29 @@
 
     pendingText = text;
     pendingEditor = editor;
+    console.log("[ToneGuard:diag] pendingEditor set, analysis starting");
 
-    // Safety timeout: if anything goes wrong, release the send after 10s
-    // so messages never get permanently stuck
+    // Safety timeout: if analysis hangs much longer than the multi-model
+    // path's worst case (~15s), surface a stale-state notice and clear
+    // the concurrency guard. Do NOT dispatch a synthetic Enter here —
+    // synthetic KeyboardEvents have isTrusted=false and Slack ignores them
+    // for send, so the old "releaseSend on timeout" path silently left the
+    // message in draft while clearing pendingEditor (which then broke any
+    // later "Use edited version" click with a "no pending compose" error).
     const safetyTimeout = setTimeout(() => {
-      console.warn("ToneGuard: safety timeout, releasing send");
+      console.warn("[ToneGuard:diag] safety timeout fired after 30s; clearing pending state");
       hideCheckingIndicator();
-      if (window.__toneGuard) window.__toneGuard.hide();
-      if (pendingEditor) {
-        currentPlatform.releaseSend(pendingEditor);
-        pendingEditor = null;
-        pendingText = null;
+      if (window.__toneGuard) {
+        window.__toneGuard.showError({
+          type: "timeout",
+          message: "Analysis took longer than 30 seconds. Your message was not sent. Close this and try again from your compose window.",
+          retryable: true,
+          diagnostic_code: "TG_TIMEOUT_001"
+        });
       }
-    }, 10000);
+      pendingEditor = null;
+      pendingText = null;
+    }, 30000);
 
     // Check if extension context is still valid before calling chrome APIs.
     // If stale, show reload prompt and DO NOT release the send — the message
