@@ -443,13 +443,24 @@ function verifyInsertedText(before, after, suggestion) {
   if (nAfter === nBefore) return false;
   // Exact match is always OK.
   if (nAfter === nSuggestion) return true;
+  // Strip @mentions for the comparison. Slack's Quill editor expands plain
+  // "@name" text into rendered mention tokens with the user's full display
+  // name on insert (see [AUTOSLUG] events), so the suggestion text is no
+  // longer a substring of the resulting editor content even though the
+  // insert succeeded. Stripping mentions from both sides neutralizes that.
+  const stripMentions = (s) => s.replace(/@[\w.-]+/g, "").replace(/\s+/g, " ").trim();
+  const sBefore = stripMentions(nBefore);
+  const sAfter = stripMentions(nAfter);
+  const sSuggestion = stripMentions(nSuggestion);
   // Containment is the Gmail-signature-appended case. But if the ORIGINAL
   // draft already contained the suggestion as a substring, `includes` can
   // pass while the actual insert silently failed (cursor moved, ZWSP
   // inserted elsewhere). Require the suggestion to be *newly present* —
   // not in `before` but in `after`.
   if (nBefore.includes(nSuggestion)) return false;
-  return nAfter.includes(nSuggestion);
+  if (nAfter.includes(nSuggestion)) return true;
+  if (sSuggestion && !sBefore.includes(sSuggestion) && sAfter.includes(sSuggestion)) return true;
+  return false;
 }
 
 /**

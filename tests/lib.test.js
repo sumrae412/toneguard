@@ -425,4 +425,15 @@ describe("verifyInsertedText", () => {
     // suggestion. Exact match branch.
     expect(verifyInsertedText("Original draft", suggestion, suggestion)).toBe(true);
   });
+
+  it("passes when Slack expanded @mentions on insert", () => {
+    // Slack's Quill autoslug expands plain "@name" text into the user's
+    // full display name on insert, so the suggestion text is no longer a
+    // verbatim substring of the editor content even though the insert
+    // succeeded.
+    const before = "hey @sam can you check this";
+    const proposed = "Hi @sam, could you take a look when you get a chance?";
+    const afterExpanded = "Hi @Sam Rivera, could you take a look when you get a chance?";
+    expect(verifyInsertedText(before, afterExpanded, proposed)).toBe(true);
+  });
 });
