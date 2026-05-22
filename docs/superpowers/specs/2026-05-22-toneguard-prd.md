@@ -9,13 +9,13 @@
 
 ## Diagrams in this document
 
-| # | Where | File |
-|---|-------|------|
-| Fig. 1 | §5 System Architecture | [diagrams/architecture.excalidraw](diagrams/architecture.excalidraw) |
-| Fig. 2 | §4.2 Pre-send flow | [diagrams/presend-flow.excalidraw](diagrams/presend-flow.excalidraw) |
-| Fig. 3 | §6 Analysis pipeline | [diagrams/analysis-pipeline.excalidraw](diagrams/analysis-pipeline.excalidraw) |
+| # | Where | Topic |
+|---|-------|-------|
+| Fig. 1 | §5 | System architecture |
+| Fig. 2 | §4.2 | Pre-send flow |
+| Fig. 3 | §6 | Analysis pipeline |
 
-Open `.excalidraw` files in VS Code (with the Excalidraw extension) or by dragging into [excalidraw.com](https://excalidraw.com).
+Diagrams render inline as Mermaid. High-fidelity Excalidraw source files (with color coding and layout polish) live in [diagrams/](diagrams/) — open them in VS Code (Excalidraw extension) or at [excalidraw.com](https://excalidraw.com).
 
 ---
 
@@ -80,7 +80,31 @@ Strong technically, less confident about register and idiom. Wants a coach that 
 
 ### 4.2 Pre-send interception (the green path)
 
-**Figure 2 — Pre-send flow:** [diagrams/presend-flow.excalidraw](diagrams/presend-flow.excalidraw)
+**Figure 2 — Pre-send flow** ([Excalidraw source](diagrams/presend-flow.excalidraw))
+
+```mermaid
+flowchart LR
+    A([User clicks Send]) --> B[Intercept<br/>extract text]
+    B --> C{Route?}
+    C -- local_pass --> S([Sent silently])
+    C -- standard / deep --> D[Analysis pipeline<br/>see Fig. 3]
+    D --> E{Flagged?}
+    E -- no --> S
+    E -- yes --> O([Overlay drawer<br/>use / edit / send])
+
+    classDef start fill:#fed7aa,stroke:#c2410c,color:#374151
+    classDef ok fill:#a7f3d0,stroke:#047857,color:#374151
+    classDef flag fill:#fecaca,stroke:#b91c1c,color:#374151
+    classDef proc fill:#3b82f6,stroke:#1e3a5f,color:#ffffff
+    classDef ai fill:#ddd6fe,stroke:#6d28d9,color:#374151
+    classDef dec fill:#fef3c7,stroke:#b45309,color:#374151
+    class A start
+    class S ok
+    class O flag
+    class B proc
+    class D ai
+    class C,E dec
+```
 
 1. User types a message in a supported surface and clicks Send (or Cmd-Enter).
 2. Content script intercepts the send. Text is extracted from the editable element.
@@ -127,9 +151,45 @@ The overlay drawer shows, in order:
 
 ToneGuard is a constellation of clients around a shared sync backbone. The LLM calls themselves are stateless and run on the user's API account.
 
-**Figure 1 — System architecture:** [diagrams/architecture.excalidraw](diagrams/architecture.excalidraw)
+**Figure 1 — System architecture** ([Excalidraw source](diagrams/architecture.excalidraw))
 
-Four client surfaces (Chrome extension, Android, PWA, MCP server) talk to two backends: LLM APIs (green arrows — one-way, BYOK, the user's own Anthropic + OpenAI accounts) and the Railway sync server (orange arrows — bidirectional, WebSocket-backed). The sync server stores opaque JSON keyed by `SHA-256(api_key)` and never sees prompt content.
+```mermaid
+flowchart TB
+    subgraph Clients["CLIENT SURFACES"]
+        direction LR
+        C1[Chrome Ext<br/>content + SW]
+        C2[Android<br/>accessibility]
+        C3[PWA<br/>share sheet]
+        C4[MCP Server<br/>Claude Desktop]
+    end
+
+    subgraph Backends["BACKENDS"]
+        direction LR
+        L[LLM APIs<br/>Anthropic + OpenAI<br/>User's API account — BYOK]
+        S[Sync Server Railway<br/>Node + Postgres + WebSocket<br/>Identity = SHA-256 api_key<br/>Opaque JSON blobs]
+    end
+
+    C1 -->|"LLM (BYOK, one-way)"| L
+    C2 --> L
+    C3 --> L
+    C4 --> L
+
+    C1 <-->|"sync (bidirectional, WS)"| S
+    C2 <--> S
+    C3 <--> S
+    C4 <--> S
+
+    classDef client fill:#3b82f6,stroke:#1e3a5f,color:#ffffff
+    classDef mcp fill:#ddd6fe,stroke:#6d28d9,color:#374151
+    classDef llm fill:#a7f3d0,stroke:#047857,color:#374151
+    classDef sync fill:#fed7aa,stroke:#c2410c,color:#374151
+    class C1,C2,C3 client
+    class C4 mcp
+    class L llm
+    class S sync
+```
+
+Four client surfaces (Chrome extension, Android, PWA, MCP server) talk to two backends: LLM APIs (one-way, BYOK — the user's own Anthropic + OpenAI accounts) and the Railway sync server (bidirectional, WebSocket-backed). The sync server stores opaque JSON keyed by `SHA-256(api_key)` and never sees prompt content.
 
 ### 5.1 Surfaces (clients)
 
@@ -158,9 +218,36 @@ Reason: the Chrome extension cannot call a Python MCP server from a service work
 
 A single analysis is a 3-or-4-stage cascade.
 
-**Figure 3 — Analysis pipeline:** [diagrams/analysis-pipeline.excalidraw](diagrams/analysis-pipeline.excalidraw)
+**Figure 3 — Analysis pipeline** ([Excalidraw source](diagrams/analysis-pipeline.excalidraw))
 
-Input → routing precheck (either short-circuits to `local_pass` or fans out to three parallel model calls: Haiku tone critic, GPT-4o-mini clarity critic, Haiku landing read) → converges into the Sonnet synthesizer → structured response. The dashed red loop is the self-grading refinement (max 2 passes if any rubric dimension grades below B).
+```mermaid
+flowchart LR
+    I([Input<br/>text + context<br/>+ voice]) --> P{Routing<br/>precheck}
+    P -- local_pass --> X[/local_pass<br/>skip pipeline/]
+    P --> T[Tone critic<br/>Claude Haiku<br/>~$0.003, &lt;800ms]
+    P --> C[Clarity critic<br/>GPT-4o-mini<br/>~$0.001, &lt;800ms]
+    P --> L[Landing read<br/>Claude Haiku<br/>~$0.002, &lt;600ms]
+    T --> S[Synthesizer<br/>Claude Sonnet<br/>~$0.012, &lt;1.5s]
+    C --> S
+    L --> S
+    S -.->|"self-grade<br/>max 2 refines"| S
+    S --> O([Response<br/>issues + diff<br/>+ rubric])
+
+    classDef start fill:#fed7aa,stroke:#c2410c,color:#374151
+    classDef ok fill:#a7f3d0,stroke:#047857,color:#374151
+    classDef dec fill:#fef3c7,stroke:#b45309,color:#374151
+    classDef ai fill:#ddd6fe,stroke:#6d28d9,color:#374151
+    classDef synth fill:#3b82f6,stroke:#1e3a5f,color:#ffffff
+    classDef short fill:#dbeafe,stroke:#1e40af,color:#374151
+    class I start
+    class O ok
+    class P dec
+    class T,C,L ai
+    class S synth
+    class X short
+```
+
+Input → routing precheck (either short-circuits to `local_pass` or fans out to three parallel model calls: Haiku tone critic, GPT-4o-mini clarity critic, Haiku landing read) → converges into the Sonnet synthesizer → structured response. The self-grading loop refines up to 2 passes if any rubric dimension grades below B.
 
 ### 6.1 Inputs
 
