@@ -2,219 +2,192 @@
 
 **Checks your messages for tone and clarity before sending. Only interrupts when it matters.**
 
-ToneGuard is a Chrome extension that uses Claude AI to analyze your messages on Slack, Gmail, LinkedIn, and other sites before you send them. If a message has tone or clarity issues, ToneGuard suggests a rewrite. If it looks good, it sends instantly — you won't even notice it's there.
+ToneGuard is a Chrome extension that uses Claude to analyze messages on Slack, Gmail, LinkedIn, and other sites before you send them. If a message has tone or clarity issues, you see a suggestion. If it looks good, it sends instantly — you won't even notice ToneGuard is there.
 
-## Features
+---
 
-- **Smart interception** — catches tone, clarity, and professionalism issues in real time
-- **Word-level diffs** — see exactly what changed between your original and the suggestion
-- **Explainable issue cards** — see the phrase, category, and reason behind each warning
-- **Intent modes** — tune rewrites for professional, warm, direct, de-escalating, boundary-setting, or concise delivery
-- **Voice preservation controls** — choose how strongly rewrites should preserve your wording and rhythm
-- **Smart local routing** — obvious short acknowledgments pass locally without an API call
-- **Recoverable failures** — retry, send as-is, or copy non-sensitive diagnostics when analysis fails
-- **Learns your style** — adapts to your writing voice and learns from your decisions
-- **Per-site strictness** — set different sensitivity levels for Slack vs. Gmail vs. LinkedIn
-- **Custom rules** — add your own rules in plain English ("never use the word 'urgent'")
-- **Custom sites** — add any website you want ToneGuard to monitor
-- **Weekly stats** — track how many messages were checked, flagged, and your pass rate
-- **Undo countdown** — 3-second undo after sending with a suggestion
-- **Dark mode** — matches your system preference
-- **Privacy first** — all data stored locally, messages go directly to Anthropic's API
+## Quick Start (5 minutes)
 
-## Requirements
+You'll need a **Claude API key** ([get one here](https://console.anthropic.com)) and **Chrome**.
 
-- Chrome browser (Manifest v3)
-- A Claude API key from [Anthropic Console](https://console.anthropic.com)
+```bash
+# 1. Clone
+git clone https://github.com/sumrae412/toneguard.git
+cd toneguard
 
-## Installation
+# 2. (optional) install dev deps if you want to run tests
+npm install
+```
 
-### From Chrome Web Store
-*(Coming soon)*
+**3. Load the extension in Chrome:**
+1. Open `chrome://extensions`
+2. Turn on **Developer mode** (top-right)
+3. Click **Load unpacked**
+4. Select the `toneguard` folder you just cloned
 
-### From Source (Developer Mode)
+**4. Add your API key:**
+1. Click the ToneGuard icon in the Chrome toolbar
+2. Paste your Claude API key (`sk-ant-...`)
+3. Click **Save**
 
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/sumrae412/toneguard.git
-   cd toneguard
-   ```
+That's it. Open Slack, Gmail, or LinkedIn and start writing — ToneGuard runs silently until something is worth flagging.
 
-2. Install dev dependencies (for running tests):
-   ```bash
-   npm install
-   ```
+> Chrome Web Store listing is coming soon. For now, install from source as above.
 
-3. Load in Chrome:
-   - Open `chrome://extensions`
-   - Enable **Developer mode** (top right)
-   - Click **Load unpacked**
-   - Select the `toneguard` folder
+---
 
-4. Set up your API key:
-   - Click the ToneGuard icon in your Chrome toolbar
-   - Enter your Claude API key (`sk-ant-...`)
-   - Click **Save**
+## What it does
 
-## Usage
+- **Smart interception** — catches tone, clarity, and professionalism issues before send
+- **Word-level diffs** — see exactly what changed in the suggestion
+- **Explainable issue cards** — the phrase, the rule, the reason
+- **Intent modes** — professional, warm, direct, de-escalating, boundary, concise
+- **Voice preservation** — choose how much the rewrite is allowed to deviate from your voice
+- **Per-site strictness** — Gentle, Balanced, or Strict per site
+- **Custom rules** — plain English ("never use the word 'urgent'")
+- **Custom sites** — add any domain you want monitored
+- **Learns your style** — adapts to your voice over time
+- **Smart local routing** — short acknowledgments skip the API
+- **Weekly stats** — messages checked, flagged, accept rate
+- **Recoverable failures** — never silently sends on error; retry or send-as-is
+- **Privacy first** — your API key, your data, no intermediary server
 
-Once installed and configured:
+---
 
-1. **Write a message** on any supported site (Slack, Gmail, LinkedIn, TurboTenant)
-2. **Hit Send** as you normally would
-3. If your message looks good, it sends immediately
-4. If ToneGuard detects an issue, a drawer appears with:
+## Using ToneGuard
+
+1. Write a message on Slack, Gmail, LinkedIn, or TurboTenant
+2. Hit Send as normal
+3. If it's fine → it sends. You see nothing.
+4. If it's flagged → a drawer appears with:
    - Your original message
-   - A suggested rewrite with changes highlighted
-   - Issue cards explaining what was flagged and why
-5. Choose one of three actions:
-   - **Use suggestion** — sends the rewritten version
-   - **Send as-is** — sends your original message unchanged
-   - **Edit suggestion** — modify the rewrite before sending
+   - A suggested rewrite (with highlighted changes)
+   - Issue cards explaining what was flagged
+5. Choose **Use suggestion**, **Send as-is**, or **Edit suggestion**
 
-### Adding Custom Sites
+### Add a custom site
+Click the ToneGuard icon → scroll to **Active sites** → type a domain (e.g. `teams.microsoft.com`) → **Add** → grant the permission.
 
-1. Click the ToneGuard icon in the toolbar
-2. Scroll to **Active sites**
-3. Type a domain (e.g., `teams.microsoft.com`) and click **Add**
-4. Grant the permission when prompted
+### Adjust strictness
+- **Gentle** — only clearly problematic messages
+- **Balanced** (default) — meaningful issues
+- **Strict** — anything that could be improved
 
-### Adjusting Strictness
+Set globally in the popup, or override per site.
 
-- **Gentle** — only flags clearly problematic messages
-- **Balanced** (default) — catches meaningful issues
-- **Strict** — flags anything that could be improved
-
-Set a global level from the popup, or override per-site.
-
-### Custom Rules
-
-Open the ToneGuard options page (right-click icon > Options) to add custom rules in plain English:
+### Add custom rules
+Right-click the ToneGuard icon → **Options** → add plain-English rules:
 ```
 - Never use the word "urgent" unless it truly is
 - Always include a greeting in emails
 - Don't use exclamation marks more than once per message
 ```
 
-## Building for Distribution
+---
 
-Create a `.zip` file ready for Chrome Web Store upload:
+## For developers
 
-```bash
-npm run build
-```
-
-This creates `toneguard-0.2.0.zip` in the project root, containing only the files needed for the extension.
-
-## Running Tests
-
+### Run tests
 ```bash
 npm test
 ```
 
-Tests cover utility functions, manifest integrity, and JavaScript syntax validation.
+### Build a distributable zip
+```bash
+npm run build
+```
+Creates `toneguard-<version>.zip` in the project root, ready for Chrome Web Store upload. Version is read from `manifest.json` (currently `0.3.7`).
 
-### Shared Artifacts
-
-Prompts and analysis contracts live under `shared/`. After editing shared prompt
-or schema files, regenerate packaged client artifacts:
-
+### Regenerate shared artifacts
+Prompts and analysis contracts live in `shared/`. After editing them:
 ```bash
 node scripts/generate_shared_artifacts.mjs
 ```
-
 `npm test` fails if generated artifacts are stale.
 
-## How It Works
+### Detailed product spec
+A full PRD with architecture diagrams lives at [docs/superpowers/specs/2026-05-22-toneguard-prd.md](docs/superpowers/specs/2026-05-22-toneguard-prd.md).
 
-1. **Content scripts** (`content.js`, `overlay.js`) are injected into supported sites
-2. When you press Send, the content script intercepts the action and sends the message text to the **service worker**
-3. The service worker calls the **Claude API** with a detailed system prompt covering tone, clarity, and professionalism rules
-4. A conservative pre-check skips the API only for obvious safe acknowledgments; risky messages still go through model analysis
-5. If the message is flagged, the overlay shows results; otherwise the send proceeds silently
-6. Your decisions (accepted/dismissed/edited) are stored locally and fed back to Claude in future analyses to improve accuracy
-7. Local telemetry summaries store routes, outcomes, and diagnostic codes only. They do not store raw messages, prompts, recipients, API keys, emails, phone numbers, or URLs.
+---
 
-## Cross-Platform Sync
+## How it works (short version)
 
-ToneGuard syncs learning data (decisions, voice samples, relationships, custom rules, stats) across the Chrome extension, PWA, and Android app via a tiny self-hosted service on Railway. Same API key on two devices = automatic pairing.
+1. **Content scripts** (`content.js`, `overlay.js`) inject into supported sites
+2. On Send, the script intercepts and forwards the text to the **service worker**
+3. The service worker calls Claude with a detailed system prompt (tone + clarity + professionalism)
+4. A local precheck skips the API for obvious safe messages
+5. If flagged → overlay shows results. If not → send proceeds silently.
+6. Your decisions (accepted/dismissed/edited) feed back into future analyses
+7. Local telemetry stores routes and diagnostics only — never raw messages, prompts, recipients, API keys, emails, phone numbers, or URLs
 
-### How it works
+---
 
-- Your Anthropic API key is hashed (SHA-256) client-side — the raw key never leaves your device
-- The hash acts as your identity: same key on two devices means they share data
-- The sync server mints a short-lived JWT scoped to that hash; clients push/pull via HTTPS and receive realtime updates via WebSocket
-- A 5-minute poll runs as a fallback for missed events
-- Everything works offline — sync is opportunistic
+## Other surfaces
 
-### Managing the sync backend
+### Native Android app
+Native Kotlin app in `android/`. Runs as an Accessibility + overlay service: watches supported messaging apps, checks the active compose field on Send, and surfaces an overlay only on feedback or error.
 
-All config and deploy steps live in [`sync-server/README.md`](sync-server/README.md). Summary:
-
-- Node/Express + Postgres + `ws`, deployed to Railway
-- Two env vars: `DATABASE_URL` (auto-injected by Railway's Postgres plugin) and `JWT_SECRET`
-- Schema in `sync-server/schema.sql`, applied once via `npm run db:init`
-- Total cost: ~$5/month on Railway Hobby
-
-## Privacy
-
-ToneGuard uses your own Claude API key — there is no intermediary server. Messages go directly from your browser to the Anthropic API. All settings, learning history, and voice samples are stored locally on your device. When sync is enabled, learning data is also stored on the Railway sync server, isolated per user by the JWT-scoped hash.
-
-See [PRIVACY.md](PRIVACY.md) for the full privacy policy.
-
-## Android
-
-ToneGuard includes a native Android app in `android/`. It runs as an Accessibility + overlay service: after setup, ToneGuard watches supported messaging apps and browsers, checks the active compose field when you tap Send, and shows an overlay only when there is feedback or an error.
-
-### Native Android setup
-
+Build & install:
 ```bash
 cd android
 export JAVA_HOME=/usr/local/opt/openjdk@17
 export ANDROID_HOME=/usr/local/share/android-commandlinetools
 ./gradlew testDebugUnitTest assembleDebug --no-daemon --no-parallel
 ```
+APK lands at `android/app/build/outputs/apk/debug/app-debug.apk`. After sideloading:
+1. Open ToneGuard, paste your Anthropic API key
+2. Enable ToneGuard in Android Accessibility settings
+3. Grant **Display over other apps** permission
+4. Tap **Test ToneGuard** to verify
+5. Toggle the apps you want monitored
 
-The debug APK is generated at:
+Supported apps: Google Messages, Samsung Messages, Gmail, Chrome-family browsers, Firefox, Edge, Brave, Slack, LinkedIn, WhatsApp, Messenger, Telegram, Discord, Teams. Diagnostics mode records metadata only (package, event type, view class, button label) — never raw text.
 
-```text
-android/app/build/outputs/apk/debug/app-debug.apk
-```
-
-After sideloading:
-
-1. Open ToneGuard and save your Anthropic API key.
-2. Enable ToneGuard in Android Accessibility settings.
-3. Grant Display over other apps / overlay permission.
-4. Use **Test ToneGuard** to verify the API key and overlay.
-5. Toggle supported apps as needed.
-
-Diagnostics mode records metadata only: package name, event type, view id/class, button label, whether an editable field was found, and the route taken. It never stores raw message text.
-
-Supported app matching currently covers Google Messages, Samsung Messages, Gmail, Chrome-family browsers, Firefox, Edge, Brave, Slack, LinkedIn, WhatsApp, Messenger, Telegram, Discord, and Teams. Browser/domain behavior depends on what each site exposes through Android Accessibility.
-
-## Mobile PWA
-
-ToneGuard also includes a Progressive Web App in the `pwa/` directory that works on Android (and iOS) via the browser share sheet.
-
-### How it works on Android
+### Mobile PWA (share sheet)
+PWA in `pwa/` works on Android and iOS via the share sheet.
 
 1. Host the `pwa/` folder on any static server (GitHub Pages, Netlify, Vercel, etc.)
-2. Open the URL in Chrome on your phone and tap **"Add to Home Screen"**
-3. ToneGuard appears in your Android **Share menu**
-4. In any messaging app, **select your text** → **Share** → **ToneGuard**
-5. ToneGuard analyzes the text and shows a suggestion with a diff
-6. Tap **Copy suggestion** → switch back to your app and paste
+2. Open the URL in mobile Chrome → **Add to Home Screen**
+3. ToneGuard appears in the system **Share** menu
+4. In any app: select text → **Share** → **ToneGuard**
+5. Read the suggestion → tap **Copy suggestion** → paste back in your app
 
-This isn't fully automatic like the Chrome extension, but it works across every app on the phone — Slack, WhatsApp, Gmail, Messages, etc.
-
-### Running the PWA locally
-
+Run locally:
 ```bash
-# Any static server works
 npx serve .
-# Then open http://localhost:3000/pwa/ on your phone
+# then open http://localhost:3000/pwa/ on your phone
 ```
+
+---
+
+## Cross-device sync
+
+Same API key on two devices = automatic pairing. ToneGuard syncs decisions, voice samples, relationships, custom rules, and stats across the Chrome extension, PWA, and Android app via a small Railway-hosted service.
+
+- Your API key is SHA-256 hashed client-side — the raw key never leaves your device
+- The hash is your identity; the sync server stores opaque JSON blobs
+- Short-lived JWT scopes each session; pushes/pulls over HTTPS, realtime updates via WebSocket
+- 5-minute fallback poll for missed events
+- Fully offline-tolerant — sync is opportunistic
+
+Backend config and deploy steps: [`sync-server/README.md`](sync-server/README.md). Stack: Node/Express + Postgres + `ws`, ~$5/month on Railway Hobby.
+
+---
+
+## Privacy
+
+ToneGuard uses **your** Claude API key. There is no ToneGuard server in the middle of an analysis — messages go directly from your browser to the Anthropic API. Settings, learning history, and voice samples are stored locally. When sync is enabled, learning data is mirrored to the Railway sync server, isolated per user by the JWT-scoped hash.
+
+Full policy: [PRIVACY.md](PRIVACY.md).
+
+---
+
+## Requirements
+
+- Chrome (Manifest v3)
+- A Claude API key from [Anthropic Console](https://console.anthropic.com)
+- For Android: Android 8.0+, Accessibility + overlay permissions
+- For dev work: Node 18+
 
 ## License
 
