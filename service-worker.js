@@ -101,15 +101,28 @@ chrome.permissions.onAdded.addListener(() => {
 
 // --- Context Menu (Step 7) ---
 
+let contextMenuSetupInFlight = false;
 function createContextMenu() {
   // removeAll() before create() — on extension reload, the menu item from the
   // previous install may still exist. Without this, re-registering throws:
   //   "Cannot create item with duplicate id toneguard-analyze"
+  // The in-flight flag prevents onInstalled + onStartup racing each other and
+  // interleaving two removeAll/create pairs (which still produces the
+  // duplicate-id error). The create callback swallows any residual duplicate
+  // so it doesn't surface as an unchecked runtime.lastError in the logs.
+  if (contextMenuSetupInFlight) return;
+  contextMenuSetupInFlight = true;
   chrome.contextMenus.removeAll(() => {
     chrome.contextMenus.create({
       id: "toneguard-analyze",
       title: "Check tone with ToneGuard",
       contexts: ["selection"]
+    }, () => {
+      contextMenuSetupInFlight = false;
+      const err = chrome.runtime.lastError;
+      if (err && !/duplicate id/i.test(err.message || "")) {
+        console.warn("[ToneGuard] contextMenus.create failed:", err.message);
+      }
     });
   });
 }

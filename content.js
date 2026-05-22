@@ -16,6 +16,26 @@
   let pendingEditor = null;
   let currentPlatform = null;
 
+  // Format a result.error for human-readable logging. The service worker now
+  // returns structured error objects ({type, message, retryable,
+  // diagnostic_code}); a bare console.warn("ToneGuard:", obj) stringifies as
+  // "[object Object]" in chrome://extensions, which hides the actual cause.
+  function formatErrorForLog(err) {
+    if (err == null) return "(null error)";
+    if (typeof err === "string") return err;
+    if (typeof err === "object") {
+      const type = err.type || err.name || "error";
+      const msg = err.message || err.error || "";
+      const code = err.diagnostic_code ? ` [${err.diagnostic_code}]` : "";
+      try {
+        return `${type}${code}: ${msg || JSON.stringify(err)}`;
+      } catch (_) {
+        return `${type}${code}: <unserializable>`;
+      }
+    }
+    return String(err);
+  }
+
   // Detect if the extension context was invalidated (extension reloaded
   // without reloading this tab). chrome.runtime.id becomes undefined.
   function isContextValid() {
@@ -509,7 +529,7 @@
       hideCheckingIndicator();
 
       if (result.error) {
-        console.warn("ToneGuard:", result.error);
+        console.warn("ToneGuard:", formatErrorForLog(result.error));
         if (window.__toneGuard) window.__toneGuard.showError(result.error);
         return;
       }
@@ -677,7 +697,7 @@
       hideCheckingIndicator();
 
       if (result.error) {
-        console.warn("ToneGuard:", result.error);
+        console.warn("ToneGuard:", formatErrorForLog(result.error));
         if (window.__toneGuard) window.__toneGuard.showError(result.error);
         return;
       }
@@ -746,7 +766,7 @@
       hideCheckingIndicator();
 
       if (result.error) {
-        console.warn("ToneGuard:", result.error);
+        console.warn("ToneGuard:", formatErrorForLog(result.error));
         if (window.__toneGuard) window.__toneGuard.showError(result.error);
         return;
       }
