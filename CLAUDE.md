@@ -41,6 +41,7 @@ Chrome extension + MCP server for tone analysis. Analyzes messages for professio
 - **Never swallow parse errors into a destructive default.** If the Claude response won't parse, return `{flagged: false, error: "..."}` — never silently release the send as if the check passed. The user must see the failure.
 - **For bugs the user hits and you can't,** add labeled `console.log` breadcrumbs on the critical path with a grep prefix (`[ToneGuard:diag]`) and ship as a diagnostic build. Don't theorize without runtime evidence — see `bug-fix` skill's "user can reproduce, agent cannot" sub-path.
 - **`verifyInsertedText` compares via a symmetric `stripMentions`, but the editor side may be Slack-expanded (`@sam` → `@Sam Rivera`).** Any extension to the mention regex must consume trailing capitalized words on both sides — otherwise the after-side keeps a dangling surname, the substring compare silently fails, and a successful insert gets nacked. See `lib.js:451` and the regression test at `tests/lib.test.js:429`.
+- **CodeRabbit flags `AGENTS.md` on every PR — fix the file, not the review.** CR's `--base main` reads the working tree, so the untracked `AGENTS.md` surfaces on unrelated PRs (#37 and #39 both hit it). AGENTS.md has real pre-existing bugs (Codex/Claude string drift from a bad search-replace — `Codex-sonnet-4-...` should be `claude-sonnet-4-...`, etc.). Don't re-explain "out of scope" each ship — fix or delete the file in its own PR.
 
 ## Multi-Model Architecture
 
