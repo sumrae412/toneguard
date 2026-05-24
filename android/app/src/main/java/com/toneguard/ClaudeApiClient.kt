@@ -150,7 +150,7 @@ class ClaudeApiClient(private val apiKey: String, private val learningStore: Lea
 
     private fun normalizeVoiceStrength(strength: String): String {
         return when (strength) {
-            "light", "balanced", "strong" -> strength
+            "preserve", "balanced", "polish", "rewrite" -> strength
             else -> "balanced"
         }
     }
@@ -273,7 +273,7 @@ Your job has three parts:
 IMPORTANT: When in doubt, FLAG IT. The user can always dismiss your suggestion.
 
 INTENT MODE: $intentMode. Intent mode affects rewrite style only. It must not suppress real tone, clarity, or professionalism warnings.
-VOICE STRENGTH: $voiceStrength. Use "light" for minimal voice matching, "balanced" for natural matching, and "strong" for closer matching when learned voice examples exist.
+VOICE STRENGTH: $voiceStrength. Use "preserve" to keep the user's words and rhythm unless a phrase is the problem, "balanced" to preserve style while prioritizing clarity and tone, "polish" to edit more freely for clarity while keeping intent, and "rewrite" to rewrite aggressively when the draft is rough.
 
 When you DO rewrite:
 - One idea per sentence

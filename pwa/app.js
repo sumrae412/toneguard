@@ -65,6 +65,7 @@ const keyStatus = document.getElementById("keyStatus");
 
 const messageInput = document.getElementById("messageInput");
 const intentModeSelect = document.getElementById("intentMode");
+const voiceStrengthSelect = document.getElementById("voiceStrength");
 const checkBtn = document.getElementById("checkBtn");
 const inputArea = document.getElementById("inputArea");
 const loading = document.getElementById("loading");
@@ -115,6 +116,11 @@ function init() {
   if (intentModeSelect) {
     intentModeSelect.value = normalizeIntentMode(
       localStorage.getItem("toneguard_intent_mode") || "professional"
+    );
+  }
+  if (voiceStrengthSelect) {
+    voiceStrengthSelect.value = normalizeVoiceStrength(
+      localStorage.getItem("toneguard_voice_strength") || "balanced"
     );
   }
 
@@ -421,6 +427,8 @@ async function analyze() {
   if (!text) return;
   const intentMode = normalizeIntentMode(intentModeSelect?.value || "professional");
   localStorage.setItem("toneguard_intent_mode", intentMode);
+  const voiceStrength = normalizeVoiceStrength(voiceStrengthSelect?.value || "balanced");
+  localStorage.setItem("toneguard_voice_strength", voiceStrength);
   const precheck = precheckAnalysis(text, { intent_mode: intentMode });
   if (!precheck.should_call_model) {
     savePwaVoiceSample(text);
@@ -442,7 +450,7 @@ async function analyze() {
   showLoading();
 
   try {
-    const systemPrompt = getSystemPrompt(intentMode, PWA_SITE_PROFILE);
+    const systemPrompt = getSystemPrompt(intentMode, PWA_SITE_PROFILE, voiceStrength);
 
     let response;
     for (let attempt = 0; attempt < 3; attempt++) {
@@ -501,6 +509,7 @@ async function analyze() {
     };
     parsed.intent_mode = intentMode;
     parsed.site_profile = PWA_SITE_PROFILE;
+    parsed.voice = { ...(parsed.voice || {}), strength: voiceStrength };
 
     if (!parsed.flagged) {
       savePwaVoiceSample(text);
@@ -597,6 +606,11 @@ copyDiagnosticsBtn.addEventListener("click", () => {
 function normalizeIntentMode(mode) {
   const allowed = ["professional", "warm", "direct", "deescalating", "boundary", "concise"];
   return allowed.includes(mode) ? mode : "professional";
+}
+
+function normalizeVoiceStrength(strength) {
+  const allowed = ["preserve", "balanced", "polish", "rewrite"];
+  return allowed.includes(strength) ? strength : "balanced";
 }
 
 function normalizeForPrecheck(text) {
@@ -749,7 +763,7 @@ function wordDiff(oldText, newText) {
 }
 
 // ── System prompt (condensed version of prompts/base.txt) ──
-function getSystemPrompt(intentMode = "professional", siteProfile = PWA_SITE_PROFILE) {
+function getSystemPrompt(intentMode = "professional", siteProfile = PWA_SITE_PROFILE, voiceStrength = "balanced") {
   return `You are ToneGuard, a writing assistant that checks messages for tone and clarity issues before sending.
 
 Your job has three parts:
@@ -760,6 +774,8 @@ Your job has three parts:
 IMPORTANT: When in doubt, FLAG IT. The user can always dismiss your suggestion.
 
 INTENT MODE: ${normalizeIntentMode(intentMode)}. Intent mode affects rewrite style only. It must not suppress real tone, clarity, or professionalism warnings.
+
+VOICE STRENGTH: ${normalizeVoiceStrength(voiceStrength)}. Use "preserve" to keep the user's words and rhythm unless a phrase is the problem, "balanced" to preserve style while prioritizing clarity and tone, "polish" to edit more freely for clarity while keeping intent, and "rewrite" to rewrite aggressively when the draft is rough.
 
 SITE PROFILE: ${siteProfile.prompt}
 
