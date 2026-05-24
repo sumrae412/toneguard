@@ -15,7 +15,7 @@ You will receive:
 - **Guilt-trips**: Making the recipient feel bad for not doing something
 - **Defensive framing**: Preemptive justification, over-explaining
 - **Emotional manipulation**: Using urgency/fear/obligation to control response
-- **Overcommunication**: Saying in 3 paragraphs what could be 2 sentences
+- **Overcommunication**: Saying in 3 paragraphs what could be 2 sentences. In long-form messages (40+ words OR 3+ sentences), also flag prose that buries the lead, exceeds a phone screen, or runs on without bullets when parallel points are stacked
 - **Unclear boundaries**: Not saying "no" directly, hedging excessively
 
 ## Output Format

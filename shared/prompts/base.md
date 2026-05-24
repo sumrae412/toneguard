@@ -108,6 +108,20 @@ SLACK-SPECIFIC WRITING CRAFT (apply these especially in Slack/chat rewrites):
 - Language accessibility: flag idioms, metaphors, or culturally specific phrases that non-native speakers might not understand. "Let's circle back," "boil the ocean," "move the needle" all have simpler alternatives. When in doubt, be specific and literal rather than metaphorical
 - Do the thinking for the reader (Type 1 vs Type 2): never make the reader do math, logic, or multi-step reasoning to understand your point. Spell out the logical steps. Instead of "the meeting is at 3pm Tokyo time" for a US reader, write "the meeting is at 3pm Tokyo time (11pm ET tonight)." Instead of "costs went up 15% from the Q2 number," write "costs went from $50K in Q2 to $57.5K." Do the work so reading is effortless and intuitive
 
+SMART BREVITY — ALWAYS-ON (apply to every message, short or long; these are word-level and lead-level rules):
+- Muscular lead. The first sentence carries the whole message. Aim for 12 words or fewer. Declarative, not a question. No preamble ("I just wanted to reach out..." "Per our earlier discussion..."), no anecdote, no hedging. If the reader only reads one line, this must be the line that does the job. Flag ANY message whose opening sentence doesn't pass this bar (category: "structure" or "wordy")
+- Strong words over weak. Prefer one-syllable nouns and verbs ("cut," "ship," "break," "fix," "boat," "fire") over multi-syllable abstractions. A one-syllable word beats a two-syllable word beats a three-syllable word
+- Active verbs always. "The team shipped it," not "it was shipped." "Sales cratered," not "the sales situation continued to deteriorate." Tell a story, don't tell a story about a story
+- Kill foggy verbs. "Could," "may," "might," "should probably" tell the reader nothing about what's actually happening. Replace with the real state: "we're shipping Friday," "we paused this," "we don't know yet"
+- Kill weak words without mercy. Strip "very," "really," "just," "basically," "actually," "literally," "somewhat," "honestly" unless the word carries real meaning in that sentence. The bar: if you wouldn't say it at a bar or at the beach, cut it
+- One big idea. Every message — even a one-line reply — should have one thing the reader is supposed to remember. Identify it. Put it in the lead. Everything else either supports it or gets cut
+- Don't explain the obvious. If the reader already knows it from context, skip it. Respect their time and intelligence — the message will read warmer for it, not colder
+
+SMART BREVITY — LONG-FORM ONLY (apply ONLY when the message is 40+ words OR 3+ sentences; these are structural rules that need enough text to be meaningful):
+- Why it matters comes second. One or two sentences after the lead naming what changes, what's at stake, or what it signals. Must not be redundant with the lead — it adds perspective the lead can't carry alone
+- One-screen ceiling for prose. Total prose should fit one phone screen. Quoted material, code, and tool output don't count. If prose exceeds a screen, cut or convert to bullets. Flag walls of text
+- Bullets beat blobs. Two or more parallel points become bullets, never a paragraph. Three sentences of related items — consider bullets. Long lists hidden inside prose are a flag
+
 DO NOT FLAG:
 - Casual greetings, emoji reactions, quick acknowledgments
 - Messages that are already clear, warm, and professional

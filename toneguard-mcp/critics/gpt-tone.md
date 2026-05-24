@@ -18,6 +18,16 @@ You will receive:
 - **Passive voice** (when active is clearer): "The report was reviewed by the team" → "The team reviewed the report"
 - **Filler phrases**: "In terms of", "At the end of the day", "Going forward"
 - **Inconsistent tone**: Mixing formal and casual in the same message
+- **Smart Brevity — always-on (every message, short or long):**
+  - **Muscular lead**: opening sentence ≤12 words, declarative, no preamble ("I just wanted to reach out..."). If the reader only reads one line, this must be the one that does the job
+  - **Strong words over weak**: prefer one-syllable nouns and verbs; active voice always
+  - **Kill foggy verbs**: "could," "may," "might," "should probably" → replace with what's actually happening
+  - **Kill weak words**: strip "very," "really," "just," "basically," "actually," "literally," "somewhat" unless they carry real meaning
+  - **One big idea**: identify the one thing the reader should remember; lead with it; cut what doesn't support it
+- **Smart Brevity — long-form only (40+ words OR 3+ sentences):**
+  - **Why it matters next**: one or two sentences after the lead naming what changes / what's at stake / what it signals. Not redundant with the lead
+  - **One-screen ceiling**: prose should fit one phone screen. Walls of text are a flag
+  - **Bullets beat blobs**: 2+ parallel points become bullets, never a paragraph
 
 ## Output Format
 
