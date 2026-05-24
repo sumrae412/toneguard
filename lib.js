@@ -448,7 +448,9 @@ function verifyInsertedText(before, after, suggestion) {
   // name on insert (see [AUTOSLUG] events), so the suggestion text is no
   // longer a substring of the resulting editor content even though the
   // insert succeeded. Stripping mentions from both sides neutralizes that.
-  const stripMentions = (s) => s.replace(/@[\w.-]+/g, "").replace(/\s+/g, " ").trim();
+  // Also consume any trailing capitalized words after the handle so Slack's
+  // "@sam" → "@Sam Rivera" expansion strips to the same shape on both sides.
+  const stripMentions = (s) => s.replace(/@[\w.-]+(?:\s+[A-Z][\w.-]*)*/g, "").replace(/\s+/g, " ").trim();
   const sBefore = stripMentions(nBefore);
   const sAfter = stripMentions(nAfter);
   const sSuggestion = stripMentions(nSuggestion);
