@@ -48,7 +48,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var diagnosticStore: DiagnosticStore
     private val strictnessLabels = mapOf(1f to "Gentle", 2f to "Balanced", 3f to "Strict")
     private val intentModes = listOf("professional", "warm", "direct", "deescalating", "boundary", "concise")
-    private val voiceStrengths = listOf("light", "balanced", "strong")
+    private val voiceStrengths = listOf("preserve", "balanced", "polish", "rewrite")
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
