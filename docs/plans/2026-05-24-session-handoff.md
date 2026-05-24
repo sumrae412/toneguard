@@ -35,14 +35,14 @@ The 2026-04-27 ToneGuard improvement roadmap is at `docs/plans/2026-04-27-tonegu
 These have been sitting in the working tree across sessions:
 
 - `docs/plans/2026-04-27-toneguard-improvement-roadmap.md` — now obsolete (100% shipped). Decide: track as historical archive (commit unchanged), annotate as complete and commit, or delete.
-- `AGENTS.md` — **has real bugs.** Codex/Claude string drift from a bad search-replace (lines 23, 24, 35, 36, 41, 43 all say "Codex" where they should say "Claude" or "claude-"). Spawned a task chip to fix this in its own session; if the chip wasn't started, do it manually: `grep -n "Codex" AGENTS.md` should return 0 lines after the fix. The wrong model IDs would cause runtime auth failures if anything consumed `AGENTS.md` as a config source.
+- `AGENTS.md` — **Resolved by parallel session** in commit `100a231` ("docs: add AGENTS.md as mirror of CLAUDE.md"), which landed between this session's PR #39 and PR #40. The Codex/Claude string-drift bugs that motivated the spawned-task chip are fixed; the file is now tracked. `grep -c "Codex" AGENTS.md` returns 1 — the sole remaining hit is the gotcha-rule line in CLAUDE.md that quotes the historical buggy strings (intentional). No action needed.
 - `.claude/worktrees/` — 3 sibling worktrees (`claude/brave-margulis-bc76a7`, `claude/thirsty-khorana-07fad0`, `claude/wonderful-matsumoto-a3ef09`) from parallel sessions. The `worktree-cleanup` hook reports none stale, so leave alone unless you confirm otherwise.
 
 ## Exact next task
 
 **There is no automatic next task.** The roadmap is closed. The right move for the next session is:
 
-1. Triage the 3 untracked files (decisions above).
+1. Triage the remaining untracked artifact (the obsolete roadmap doc per the section above).
 2. **Then frame a new direction.** Candidates worth considering:
    - **Product:** what does ToneGuard need next post-foundation? (User feedback loop? New platform? Sharper tone categories? Voice fingerprint v2?)
    - **Engineering hygiene:** the codebase has 4 client surfaces (Chrome ext, MCP server, PWA, Android) — `docs/client-parity.md` is the canonical parity matrix. Any drift detected during this session (PR #39's Android taxonomy mismatch) suggests parity-doc accuracy is a recurring failure mode worth automating against.
@@ -67,7 +67,7 @@ Named by memory slug — do not re-explain:
 ```bash
 cd /Users/summerrae/claude_code/toneguard
 git fetch origin --prune
-git status --short                      # expect: 3 untracked files (this handoff doc, AGENTS.md, roadmap doc, .claude/worktrees/)
+git status --short                      # expect: 1 untracked file (the obsolete roadmap doc) + .claude/worktrees/ marker
 gh pr list --state open                 # expect: empty (nothing of mine in flight)
 git log --oneline -5                    # confirm ffc9c3c is on top
 node node_modules/.bin/vitest run       # baseline: 475 passed, 0 failed
