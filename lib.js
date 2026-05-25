@@ -364,6 +364,15 @@ function sanitizeTelemetryEvent(event) {
   return { ok: true, event: sanitized };
 }
 
+function buildTelemetryClipboardPayload(summary, platform, now) {
+  const generatedAt = now || new Date().toISOString();
+  const base = { platform: platform || "unknown", generatedAt };
+  if (!summary || typeof summary !== "object") {
+    return JSON.stringify({ ...base, empty: true }, null, 2);
+  }
+  return JSON.stringify({ ...base, summary }, null, 2);
+}
+
 function makeAnalysisError(kind, details = {}) {
   const base = ANALYSIS_ERROR_MAP[kind] || ANALYSIS_ERROR_MAP.runtime;
   return {
@@ -495,6 +504,7 @@ if (typeof globalThis !== "undefined") {
     makeAnalysisError,
     getSiteProfile,
     sanitizeTelemetryEvent,
+    buildTelemetryClipboardPayload,
     truncate,
     extractMentions,
     hashApiKey,

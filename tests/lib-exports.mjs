@@ -31,6 +31,7 @@ export const precheckAnalysis = lib.precheckAnalysis;
 export const makeAnalysisError = lib.makeAnalysisError;
 export const getSiteProfile = lib.getSiteProfile;
 export const sanitizeTelemetryEvent = lib.sanitizeTelemetryEvent;
+export const buildTelemetryClipboardPayload = lib.buildTelemetryClipboardPayload;
 export const truncate = lib.truncate;
 export const extractMentions = lib.extractMentions;
 export const verifyInsertedText = lib.verifyInsertedText;

@@ -11,6 +11,7 @@ import {
   precheckAnalysis,
   makeAnalysisError,
   getSiteProfile,
+  buildTelemetryClipboardPayload,
   truncate,
   extractMentions,
   verifyInsertedText
@@ -435,5 +436,54 @@ describe("verifyInsertedText", () => {
     const proposed = "Hi @sam, could you take a look when you get a chance?";
     const afterExpanded = "Hi @Sam Rivera, could you take a look when you get a chance?";
     expect(verifyInsertedText(before, afterExpanded, proposed)).toBe(true);
+  });
+});
+
+describe("buildTelemetryClipboardPayload", () => {
+  const FIXED_NOW = "2026-05-24T12:00:00.000Z";
+
+  it("returns valid JSON for a populated summary", () => {
+    const summary = {
+      counts: { analysis_completed: 12, analysis_failed: 1 },
+      routes: { local_pass: 8, standard: 4 },
+      failures: { TG_PARSE: 1 },
+      updatedAt: "2026-05-24T11:59:00.000Z"
+    };
+    const out = buildTelemetryClipboardPayload(summary, "extension", FIXED_NOW);
+    const parsed = JSON.parse(out);
+    expect(parsed.platform).toBe("extension");
+    expect(parsed.generatedAt).toBe(FIXED_NOW);
+    expect(parsed.summary).toEqual(summary);
+    expect(parsed.empty).toBeUndefined();
+  });
+
+  it("returns an empty-marker payload when summary is null/undefined", () => {
+    const out = buildTelemetryClipboardPayload(null, "pwa", FIXED_NOW);
+    const parsed = JSON.parse(out);
+    expect(parsed.empty).toBe(true);
+    expect(parsed.platform).toBe("pwa");
+    expect(parsed.summary).toBeUndefined();
+  });
+
+  it("returns an empty-marker payload when summary is not an object", () => {
+    const out = buildTelemetryClipboardPayload("garbage", "extension", FIXED_NOW);
+    expect(JSON.parse(out).empty).toBe(true);
+  });
+
+  it("falls back to 'unknown' platform when not provided", () => {
+    const out = buildTelemetryClipboardPayload({ counts: {} }, undefined, FIXED_NOW);
+    expect(JSON.parse(out).platform).toBe("unknown");
+  });
+
+  it("includes a generatedAt timestamp when none is provided", () => {
+    const out = buildTelemetryClipboardPayload({ counts: {} }, "extension");
+    expect(typeof JSON.parse(out).generatedAt).toBe("string");
+    expect(JSON.parse(out).generatedAt.length).toBeGreaterThan(0);
+  });
+
+  it("pretty-prints with 2-space indent (so it pastes readably)", () => {
+    const out = buildTelemetryClipboardPayload({ counts: { x: 1 } }, "extension", FIXED_NOW);
+    expect(out).toContain("\n  \"platform\"");
+    expect(out).toContain("\n  \"summary\"");
   });
 });
