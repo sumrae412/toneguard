@@ -1,0 +1,127 @@
+{
+  "$comment": "Declarative probe manifest for parity_scan.mjs. Each probe extracts an enumerated set from a client source file. Scanner compares against canonical sets from shared/analysis/*.json.",
+  "version": 1,
+  "canonical": {
+    "intent_modes": "shared/analysis/modes.json#/intent_modes",
+    "response_modes": "shared/analysis/modes.json#/response_modes",
+    "categories": "shared/analysis/categories.json#/categories",
+    "voice_strengths": "shared/analysis/voice-strengths.json#/voice_strengths"
+  },
+  "clients": [
+    {
+      "id": "chrome",
+      "label": "Chrome",
+      "language": "javascript",
+      "probes": [
+        {
+          "axis": "intent_modes",
+          "file": "service-worker.js",
+          "pattern": "const INTENT_MODE_LABELS = \\{([\\s\\S]*?)\\};",
+          "extract": "object-keys"
+        },
+        {
+          "axis": "voice_strengths",
+          "file": "service-worker.js",
+          "pattern": "const VOICE_STRENGTH_LABELS = \\{([\\s\\S]*?)\\};",
+          "extract": "object-keys"
+        }
+      ],
+      "features": {
+        "intent_mode_ui": { "file": "popup.js", "pattern": "tg_intent_mode_default|intent_mode" },
+        "voice_strength_ui": { "file": "popup.js", "pattern": "tg_voice_strength|voice_strength" },
+        "site_profiles": { "file": "service-worker.js", "pattern": "getSiteProfile|site_profile" },
+        "telemetry": { "file": "service-worker.js", "pattern": "telemetry|TelemetryEvent" },
+        "structured_issues": { "file": "overlay-frame.js", "pattern": "tg-issue|issues" },
+        "retry_diagnostics": { "file": "overlay-frame.js", "pattern": "retry|diagnostic" }
+      }
+    },
+    {
+      "id": "mcp",
+      "label": "MCP",
+      "language": "python",
+      "probes": [
+        {
+          "axis": "intent_modes",
+          "passthrough": true,
+          "note": "MCP passes intent_mode through to Claude; no local enumeration."
+        },
+        {
+          "axis": "voice_strengths",
+          "file": "toneguard-mcp/analyzer.py",
+          "pattern": "VOICE_STRENGTH_LABELS\\s*=\\s*\\{([\\s\\S]*?)\\}",
+          "extract": "python-dict-keys"
+        }
+      ],
+      "features": {
+        "intent_mode_ui": { "file": "toneguard-mcp/analyzer.py", "pattern": "intent_mode" },
+        "voice_strength_ui": { "file": "toneguard-mcp/analyzer.py", "pattern": "VOICE_STRENGTH_LABELS|voice_strength" },
+        "site_profiles": { "file": "toneguard-mcp/analyzer.py", "pattern": "site_profile|getSiteProfile" },
+        "telemetry": { "file": "toneguard-mcp/learning_store.py", "pattern": "record_event|telemetry" },
+        "structured_issues": { "file": "toneguard-mcp/analyzer.py", "pattern": "\"issues\"|issues.*list" },
+        "retry_diagnostics": { "file": "toneguard-mcp/analyzer.py", "pattern": "TG_AUTH|TG_PARSE|TG_NET|TG_RUNTIME" }
+      }
+    },
+    {
+      "id": "pwa",
+      "label": "PWA",
+      "language": "javascript",
+      "probes": [
+        {
+          "axis": "intent_modes",
+          "file": "pwa/app.js",
+          "pattern": "const allowed = \\[(\"professional\"[^\\]]*)\\]",
+          "extract": "string-list"
+        },
+        {
+          "axis": "voice_strengths",
+          "file": "pwa/app.js",
+          "pattern": "const allowed = \\[(\"preserve\"[^\\]]*)\\]",
+          "extract": "string-list"
+        }
+      ],
+      "features": {
+        "intent_mode_ui": { "file": "pwa/app.js", "pattern": "toneguard_intent_mode" },
+        "voice_strength_ui": { "file": "pwa/app.js", "pattern": "toneguard_voice_strength" },
+        "site_profiles": { "file": "pwa/app.js", "pattern": "getSiteProfile|site_profile|PWA profile" },
+        "telemetry": { "file": "pwa/app.js", "pattern": "recordTelemetryEvent|toneguard_telemetry" },
+        "structured_issues": { "file": "pwa/app.js", "pattern": "tg-issue-card|issues\\.map" },
+        "retry_diagnostics": { "file": "pwa/app.js", "pattern": "tg-retry|copy.*diagnostic" }
+      }
+    },
+    {
+      "id": "android",
+      "label": "Android",
+      "language": "kotlin",
+      "probes": [
+        {
+          "axis": "intent_modes",
+          "file": "android/app/src/main/java/com/toneguard/MainActivity.kt",
+          "pattern": "private val intentModes = listOf\\(([^)]+)\\)",
+          "extract": "string-list"
+        },
+        {
+          "axis": "voice_strengths",
+          "file": "android/app/src/main/java/com/toneguard/MainActivity.kt",
+          "pattern": "private val voiceStrengths = listOf\\(([^)]+)\\)",
+          "extract": "string-list"
+        }
+      ],
+      "features": {
+        "intent_mode_ui": { "file": "android/app/src/main/java/com/toneguard/MainActivity.kt", "pattern": "intentModeSpinner|intentModes" },
+        "voice_strength_ui": { "file": "android/app/src/main/java/com/toneguard/MainActivity.kt", "pattern": "voiceStrengthSpinner|voiceStrengths" },
+        "site_profiles": { "file": "android/app/src/main/java/com/toneguard", "pattern": "siteProfile|site_profile", "recursive": true },
+        "telemetry": { "file": "android/app/src/main/java/com/toneguard", "pattern": "telemetry|recordEvent", "recursive": true },
+        "structured_issues": { "file": "android/app/src/main/java/com/toneguard", "pattern": "issues|IssueCard", "recursive": true },
+        "retry_diagnostics": { "file": "android/app/src/main/java/com/toneguard", "pattern": "TG_AUTH|TG_PARSE|TG_NET|TG_RUNTIME|retry", "recursive": true }
+      }
+    }
+  ],
+  "feature_rows": [
+    { "id": "intent_mode_ui", "label": "Intent mode UI" },
+    { "id": "voice_strength_ui", "label": "Voice strength UI" },
+    { "id": "site_profiles", "label": "Site profiles" },
+    { "id": "telemetry", "label": "Local telemetry" },
+    { "id": "structured_issues", "label": "Structured issue cards" },
+    { "id": "retry_diagnostics", "label": "Retry + copy diagnostics" }
+  ]
+}

@@ -37,7 +37,7 @@ function writeOrCheck(relativePath, content) {
   return [];
 }
 
-function validateTaxonomies(schema, modes, categories) {
+function validateTaxonomies(schema, modes, categories, voiceStrengths) {
   const responseModeIds = modes.response_modes.map((mode) => mode.id);
   const categoryIds = categories.categories.map((category) => category.id);
   const schemaModes = schema.properties.mode.enum;
@@ -58,6 +58,16 @@ function validateTaxonomies(schema, modes, categories) {
   if (JSON.stringify(categoryIds) !== JSON.stringify(schemaIssueCategories)) {
     throw new Error("shared/analysis/schema.json issue category enum is stale");
   }
+
+  if (!Array.isArray(voiceStrengths?.voice_strengths) || voiceStrengths.voice_strengths.length === 0) {
+    throw new Error("shared/analysis/voice-strengths.json missing voice_strengths array");
+  }
+  const voiceIds = voiceStrengths.voice_strengths.map((v) => v.id);
+  if (!voiceIds.includes(voiceStrengths.default)) {
+    throw new Error(
+      `shared/analysis/voice-strengths.json default '${voiceStrengths.default}' is not in voice_strengths list`
+    );
+  }
 }
 
 function buildPwaPromptModule(basePrompt, landingPrompt) {
@@ -75,7 +85,8 @@ function buildPwaPromptModule(basePrompt, landingPrompt) {
 const schema = readJson("shared/analysis/schema.json");
 const modes = readJson("shared/analysis/modes.json");
 const categories = readJson("shared/analysis/categories.json");
-validateTaxonomies(schema, modes, categories);
+const voiceStrengths = readJson("shared/analysis/voice-strengths.json");
+validateTaxonomies(schema, modes, categories, voiceStrengths);
 
 const basePrompt = readText("shared/prompts/base.md");
 const landingPrompt = readText("shared/prompts/landing.md");

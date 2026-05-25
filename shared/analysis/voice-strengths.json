@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "voice_strengths": [
+    {
+      "id": "preserve",
+      "label": "Preserve",
+      "description": "Keep the user's words and rhythm unless a phrase is the problem."
+    },
+    {
+      "id": "balanced",
+      "label": "Balanced",
+      "description": "Preserve style, but prioritize clarity and tone safety."
+    },
+    {
+      "id": "polish",
+      "label": "Polish",
+      "description": "Edit more freely for clarity while keeping the user's intent."
+    },
+    {
+      "id": "rewrite",
+      "label": "Rewrite",
+      "description": "Rewrite aggressively when the draft is rough."
+    }
+  ],
+  "default": "balanced"
+}
