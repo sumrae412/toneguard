@@ -5,3 +5,6 @@ toneguard-*.zip
 
 # Claude worktrees (parallel-session debris)
 .claude/worktrees/
+
+# sync-server postinstall build artifact (pwa/ copied here by scripts/copy-pwa.js)
+sync-server/public/

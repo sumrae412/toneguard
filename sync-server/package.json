@@ -10,7 +10,8 @@
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
     "db:init": "node scripts/init-db.js",
-    "migrate:supabase": "node scripts/migrate-from-supabase.js"
+    "migrate:supabase": "node scripts/migrate-from-supabase.js",
+    "postinstall": "node scripts/copy-pwa.js"
   },
   "dependencies": {
     "express": "^4.21.0",
