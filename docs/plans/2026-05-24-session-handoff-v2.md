@@ -20,7 +20,9 @@ Supersedes `docs/plans/2026-05-24-session-handoff.md`. The earlier handoff said 
 Two of the four candidate directions from the previous handoff are still open:
 
 ### Direction 3 — Live integration health
-Re-run `toneguard-mcp/tests/test_live_integration.py` to check whether multi-model critics (Claude Haiku tone, GPT-4o-mini clarity, Claude Sonnet synthesis) are still scoring well. Last verified score unknown — none in `git log`. Setup:
+**Verified 2026-05-24:** 5/5 tests passed in 66.80s. All three agents (`claude` tone, `gpt` clarity, `landing` critic) returning `ok`. Refinement loop working (e.g. B+ 89 → A- 91 on the passive-aggressive sample). Routing precheck + deep route firing. No regressions.
+
+Re-run `toneguard-mcp/tests/test_live_integration.py` to check whether multi-model critics (Claude Haiku tone, GPT-4o-mini clarity, Claude Sonnet synthesis) are still scoring well. Setup:
 
 ```bash
 cd toneguard-mcp && source $HOME/.local/bin/env
