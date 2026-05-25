@@ -50,3 +50,31 @@ English
 
 ## Tags
 tone, writing, communication, AI, clarity, messaging, Slack, Gmail, productivity
+
+---
+
+## CWS submission checklist
+
+Pre-submit prep (track here, finalize before upload):
+
+- [ ] **Privacy policy URL** — host `PRIVACY.md` somewhere public (GitHub raw works: `https://raw.githubusercontent.com/sumrae412/toneguard/main/PRIVACY.md`)
+- [ ] **Support contact URL** — `https://github.com/sumrae412/toneguard/issues`
+- [ ] **Promo tile** — 440×280 PNG OR 1400×560 PNG
+- [ ] **1–5 screenshots** — 1280×800 PNG or 640×400 PNG (use overlay drawer in action, options page, weekly stats popup, suggestion card, intent-mode picker)
+- [ ] **Build zip** — `npm run build` produces `toneguard-0.4.0.zip` (reads version from manifest.json)
+- [ ] **$5 Chrome Web Store developer fee** — one-time, at `https://chrome.google.com/webstore/devconsole`
+
+## Permissions justification
+
+Paste each into the CWS submission form when prompted:
+
+- **`storage`** — Store the user's API key and per-site strictness preferences locally in the browser.
+- **`activeTab`** — Read the message being composed in the active tab when the user clicks Send, so ToneGuard can analyze and offer a suggestion.
+- **`scripting`** — Inject a content script into supported sites (Slack, Gmail, LinkedIn) to intercept the Send action and surface the suggestion overlay.
+- **`contextMenus`** — Provide a right-click "Check this message" shortcut for users who want to analyze selected text outside the supported sites.
+- **`host_permissions: https://api.anthropic.com/*`** — Send the user's message to the Anthropic Claude API for analysis. Uses the user's own API key (BYOK); ToneGuard never proxies or stores the key.
+- **`host_permissions: https://*.slack.com/*`, `https://mail.google.com/*`, `https://www.linkedin.com/*`** — Intercept Send actions on the three primary supported sites. Additional sites the user opts into are requested at runtime via `optional_host_permissions`.
+
+## Post-approval
+
+After Google approves the listing, update `README.md`'s "install from source" section to point at the live Chrome Web Store URL. Doc-only commit direct to main per repo convention.
