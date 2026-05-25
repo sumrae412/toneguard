@@ -144,18 +144,19 @@ APK lands at `android/app/build/outputs/apk/debug/app-debug.apk`. After sideload
 Supported apps: Google Messages, Samsung Messages, Gmail, Chrome-family browsers, Firefox, Edge, Brave, Slack, LinkedIn, WhatsApp, Messenger, Telegram, Discord, Teams. Diagnostics mode records metadata only (package, event type, view class, button label) — never raw text.
 
 ### Mobile PWA (share sheet)
-PWA in `pwa/` works on Android and iOS via the share sheet.
+PWA lives at `sync-server/pwa/` and ships from the Railway sync-server at `https://sync-server-production-3a24.up.railway.app/`.
 
-1. Host the `pwa/` folder on any static server (GitHub Pages, Netlify, Vercel, etc.)
-2. Open the URL in mobile Chrome → **Add to Home Screen**
-3. ToneGuard appears in the system **Share** menu
-4. In any app: select text → **Share** → **ToneGuard**
-5. Read the suggestion → tap **Copy suggestion** → paste back in your app
+1. Open the URL in mobile Chrome (Android) — tap **Install ToneGuard** when prompted, or ⋮ → **Add to Home Screen**.
+2. iOS Safari: tap **Share** → **Add to Home Screen** (no auto-prompt — Apple's choice).
+3. ToneGuard appears in the system **Share** menu.
+4. In any app: select text → **Share** → **ToneGuard**.
+5. Read the suggestion → tap **Copy suggestion** → paste back in your app.
 
-Run locally:
+Run locally (for development on the PWA itself):
 ```bash
-npx serve .
-# then open http://localhost:3000/pwa/ on your phone
+cd sync-server
+JWT_SECRET=dev DATABASE_URL=postgres://test@localhost/test node src/index.js
+# then open http://localhost:8080/ on your phone (same Wi-Fi)
 ```
 
 ---

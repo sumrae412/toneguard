@@ -10,7 +10,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const PWA_DIR = path.resolve(__dirname, "../public");
+const PWA_DIR = path.resolve(__dirname, "../pwa");
 
 const PORT = process.env.PORT || 8080;
 const JWT_SECRET = requireEnv("JWT_SECRET");
@@ -40,7 +40,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// Serve PWA static files (postinstall copies pwa/ → sync-server/public/).
+// Serve PWA static files from sync-server/pwa/ (in build context).
 app.use(express.static(PWA_DIR));
 
 // In-memory fan-out: user_hash -> Set<WebSocket>.
