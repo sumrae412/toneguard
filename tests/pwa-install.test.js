@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-const PWA_DIR = resolve(__dirname, "..", "pwa");
+const PWA_DIR = resolve(__dirname, "..", "sync-server", "pwa");
 const readPwa = (rel) => readFileSync(resolve(PWA_DIR, rel), "utf8");
 
 describe("PWA install criteria", () => {

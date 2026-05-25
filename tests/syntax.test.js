@@ -13,8 +13,8 @@ const jsFiles = [
   "popup.js",
   "options.js",
   "lib.js",
-  "pwa/app.js",
-  "pwa/generated-prompts.js"
+  "sync-server/pwa/app.js",
+  "sync-server/pwa/generated-prompts.js"
 ];
 
 describe("JavaScript syntax validation", () => {
@@ -33,7 +33,7 @@ describe("JavaScript syntax validation", () => {
 });
 
 describe("HTML files are well-formed", () => {
-  const htmlFiles = ["popup.html", "options.html", "overlay.html", "pwa/index.html"];
+  const htmlFiles = ["popup.html", "options.html", "overlay.html", "sync-server/pwa/index.html"];
 
   for (const file of htmlFiles) {
     it(file + " exists and has basic HTML structure", () => {
@@ -52,7 +52,7 @@ describe("HTML files are well-formed", () => {
 
 describe("Model output rendering safety", () => {
   it("does not use innerHTML in overlay or PWA renderers", () => {
-    for (const file of ["overlay-frame.js", "pwa/app.js"]) {
+    for (const file of ["overlay-frame.js", "sync-server/pwa/app.js"]) {
       const content = fs.readFileSync(path.join(root, file), "utf-8");
       expect(content).not.toContain(".innerHTML");
       expect(content).not.toContain("innerHTML =");

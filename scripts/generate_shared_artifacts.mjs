@@ -94,7 +94,7 @@ const stale = [
   ...writeOrCheck("prompts/base.txt", GENERATED_HEADER + basePrompt),
   ...writeOrCheck("prompts/landing.txt", GENERATED_HEADER + landingPrompt),
   ...writeOrCheck("toneguard-mcp/critics/landing.md", GENERATED_HEADER + landingPrompt),
-  ...writeOrCheck("pwa/generated-prompts.js", buildPwaPromptModule(basePrompt, landingPrompt)),
+  ...writeOrCheck("sync-server/pwa/generated-prompts.js", buildPwaPromptModule(basePrompt, landingPrompt)),
   ...writeOrCheck("android/app/src/main/res/raw/toneguard_base_prompt.txt", GENERATED_HEADER + basePrompt)
 ];
 
