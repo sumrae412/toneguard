@@ -76,6 +76,15 @@
     .badge.polish { background: #E3F2FD; color: #1565C0; display: inline-block; }
     .badge.both { background: #FFF3E0; color: #E65100; display: inline-block; }
 
+    /* ── Install help ── */
+    .install-help { padding: 16px; margin: 16px 0; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; }
+    .install-help h2 { font-size: 15px; font-weight: 600; margin-bottom: 8px; }
+    .install-help details { margin: 8px 0; }
+    .install-help summary { cursor: pointer; padding: 4px 0; }
+    .install-help p { font-size: 13px; color: var(--text-secondary); line-height: 1.5; margin: 4px 0; }
+    .install-help small { color: var(--text-muted); }
+    .install-help a { color: var(--green); text-decoration: none; }
+
     /* ── Setup Panel ── */
     .setup {
       padding: 20px;
@@ -512,6 +521,25 @@
 
   <!-- Setup: shown when no API key -->
   <div class="body" id="setupView" style="display:none">
+    <aside class="install-help" id="install-help">
+      <h2>Install ToneGuard on your phone</h2>
+
+      <details>
+        <summary><strong>Android (Chrome) — 2 taps</strong></summary>
+        <p>1. When the "Install ToneGuard" prompt appears at the bottom, tap <strong>Install</strong>.</p>
+        <p>2. If the prompt doesn't appear, tap the ⋮ menu in Chrome → <strong>Add to Home Screen</strong> → <strong>Install</strong>.</p>
+      </details>
+
+      <details>
+        <summary><strong>iPhone (Safari) — 4 taps</strong></summary>
+        <p>1. Tap the <strong>Share</strong> button (square with arrow up) at the bottom of Safari.</p>
+        <p>2. Scroll down, tap <strong>Add to Home Screen</strong>.</p>
+        <p>3. Confirm the name, tap <strong>Add</strong>.</p>
+        <p>4. Open ToneGuard from your home screen.</p>
+      </details>
+
+      <p><small>Already installed? <a href="javascript:void(0)" onclick="document.getElementById('install-help').style.display='none'">Hide this</a>.</small></p>
+    </aside>
     <div class="setup">
       <p>
         ToneGuard checks your messages for tone and clarity using Claude AI.
