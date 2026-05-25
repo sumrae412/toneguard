@@ -34,14 +34,10 @@ jobs:
         with:
           python-version: "3.11"
       - name: Install uv
-        run: curl -LsSf https://astral.sh/uv/install.sh | sh
+        uses: astral-sh/setup-uv@v3
       - name: Install MCP deps
         working-directory: toneguard-mcp
-        run: |
-          source $HOME/.local/bin/env
-          uv sync --extra dev
+        run: uv sync --extra dev
       - name: MCP pytest
         working-directory: toneguard-mcp
-        run: |
-          source $HOME/.local/bin/env
-          uv run --extra dev pytest tests/ -v --ignore=tests/test_live_integration.py
+        run: uv run --extra dev pytest tests/ -v --ignore=tests/test_live_integration.py
