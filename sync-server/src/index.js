@@ -6,6 +6,11 @@ import { WebSocketServer } from "ws";
 import pg from "pg";
 import crypto from "node:crypto";
 import http from "node:http";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const PWA_DIR = path.resolve(__dirname, "../public");
 
 const PORT = process.env.PORT || 8080;
 const JWT_SECRET = requireEnv("JWT_SECRET");
@@ -34,6 +39,9 @@ app.use((req, res, next) => {
   if (req.method === "OPTIONS") return res.sendStatus(204);
   next();
 });
+
+// Serve PWA static files (postinstall copies pwa/ → sync-server/public/).
+app.use(express.static(PWA_DIR));
 
 // In-memory fan-out: user_hash -> Set<WebSocket>.
 // Single Railway instance, so in-process is sufficient. If scaled to multiple
