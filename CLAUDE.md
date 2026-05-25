@@ -31,6 +31,10 @@ Chrome extension + MCP server for tone analysis. Analyzes messages for professio
 - **`docs/client-parity.md` is a generated build artifact — do not hand-edit.** Header carries `<!-- Generated from ... Do not edit directly. -->`. Regen via `node scripts/parity_scan.mjs`. Same convention as the outputs of `scripts/generate_shared_artifacts.mjs`.
 - **PWA cannot import `lib.js` (no bundler).** When the extension and PWA need the same helper (e.g. `buildTelemetryClipboardPayload`), inline a copy in `pwa/app.js` with a sync-pointer comment back to `lib.js`. This is the third axis of the "Dual code paths" gotcha above — same helper, three places (lib.js for ext + service worker, inline in pwa/app.js, separate in MCP if applicable). Update all sides together.
 
+## Repo Conventions
+
+- **Doc-only commits land direct to main, no PR.** Handoff docs, archive annotations, plan files, README updates that touch zero code/tests/schemas ship as a single commit pushed straight to `main`. Established pattern: commits `ffe3bfd`, `a24f128`, `ec12592`, `475514e`, `18407f8`, `76abf6c`. Overrides the global `/next` skill's "ship via `/ship`" instruction for this repo when the diff is documentation-only. Code, schema, or test changes still go through `/ship` → PR → review. Confirm with the user before pushing if unsure whether a change qualifies as doc-only.
+
 ## Chrome Extension Dev Loop
 
 - **Extension reload doesn't always pick up service-worker changes.** Bump `manifest.json` version on every ship (or every meaningful reload) so you can confirm the new build is live in `chrome://extensions`.
