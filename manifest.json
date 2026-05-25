@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "ToneGuard",
-  "version": "0.3.9",
+  "version": "0.4.0",
   "description": "Checks your messages for tone and clarity before sending. Only interrupts when it matters.",
 
   "permissions": [
@@ -15,8 +15,7 @@
     "https://api.anthropic.com/*",
     "https://*.slack.com/*",
     "https://mail.google.com/*",
-    "https://www.linkedin.com/*",
-    "https://*.turbotenant.com/*"
+    "https://www.linkedin.com/*"
   ],
 
   "background": {
