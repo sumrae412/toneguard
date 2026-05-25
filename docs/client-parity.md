@@ -1,19 +1,35 @@
+<!-- Generated from shared/analysis/*.json + scripts/parity_manifest.json by scripts/parity_scan.mjs. Do not edit directly. -->
+
 # ToneGuard Client Parity
+
+Each row is a capability or canonical taxonomy. Each column is a client surface. Generated from `shared/analysis/*.json` + `scripts/parity_manifest.json` by `scripts/parity_scan.mjs`. Run `node scripts/parity_scan.mjs` to regenerate; `node scripts/parity_scan.mjs --check` is wired into CI.
+
+## Canonical taxonomy match (per client)
+
+| Taxonomy | Chrome | MCP | PWA | Android |
+|---|---|---|---|---|
+| `intent_modes` | ✅ canonical | passthrough | ✅ canonical | ✅ canonical |
+| `voice_strengths` | ✅ canonical | ✅ canonical | ✅ canonical | ✅ canonical |
+
+## Feature presence
 
 | Capability | Chrome | MCP | PWA | Android |
 |---|---|---|---|---|
-| Shared base prompt artifact | Yes | Partial | Generated artifact exists | Generated raw resource exists |
-| Shared landing prompt artifact | Yes | Yes | Generated artifact exists | No |
-| Generated freshness tests | Yes | Via JS gate | Yes | Resource generated |
-| Golden fixture contract tests | Yes | Yes | Uses JS parser path | Partial |
-| Deterministic local pass | Yes | Yes | Yes | Yes |
-| Deep route metadata | Yes | Yes | Yes | Yes |
-| Structured issue cards | Yes | Parser-compatible | Yes | Parser-compatible later |
-| Intent mode | Default setting | Prompt API parameter-ready | Per-check selector | API parameter-ready |
-| Voice preservation strength | Popup/options setting | Analyzer parameter | Per-check selector | Spinner setting |
-| Typed failures | Yes | Existing exceptions isolated | Yes | Result fields |
-| Retry/copy diagnostics UI | Yes | N/A | Yes | App UI follow-up |
-| Local telemetry summary | Yes | Not yet | Yes | Not yet |
-| Site profiles | Yes | Not yet | PWA profile | Not yet |
+| Intent mode UI | ✅ | ✅ | ✅ | ✅ |
+| Voice strength UI | ✅ | ✅ | ✅ | ✅ |
+| Site profiles | ✅ | — | ✅ | — |
+| Local telemetry | ✅ | — | ✅ | — |
+| Structured issue cards | ✅ | ✅ | — | ✅ |
+| Retry + copy diagnostics | ✅ | — | ✅ | ✅ |
 
-All four clients now expose intent mode and voice preservation strength to the user. Voice strength uses the canonical taxonomy across every surface: `preserve`, `balanced`, `polish`, `rewrite` (matches `toneguard-mcp/analyzer.py:VOICE_STRENGTH_LABELS`). Older Android builds shipped a `light`/`balanced`/`strong` taxonomy that silently downgraded to `balanced` server-side; that drift was fixed in the same change that added the PWA selector.
+## Canonical taxonomy values
+
+- `intent_modes`: `professional`, `warm`, `direct`, `deescalating`, `boundary`, `concise`
+- `voice_strengths`: `preserve`, `balanced`, `polish`, `rewrite`
+- `response_modes`: `(empty)`, `tone`, `polish`, `both`
+- `categories`: `adverbs`, `passive voice`, `wordy`, `hedging`, `hard to read`, `tone`, `grammar`, `clarity`, `inclusive language`, `professionalism`, `structure`, `audience`
+
+## Drift policy
+
+Any `⚠️ drift` cell fails CI via `node scripts/parity_scan.mjs --check`. MCP intent modes are `passthrough` — the server forwards them to the LLM rather than enumerating locally, so drift is not measurable. Voice strength canonical lives at [`shared/analysis/voice-strengths.json`](../shared/analysis/voice-strengths.json); intent modes and response modes live at [`shared/analysis/modes.json`](../shared/analysis/modes.json); categories at [`shared/analysis/categories.json`](../shared/analysis/categories.json).
+
