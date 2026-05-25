@@ -603,6 +603,37 @@ copyDiagnosticsBtn.addEventListener("click", () => {
   copyToClipboard(JSON.stringify(diagnostics, null, 2), "Diagnostics copied.");
 });
 
+// Mirrors lib.js:buildTelemetryClipboardPayload — PWA does not bundle lib.js,
+// so this is intentional duplication. Update both sides together.
+function buildTelemetryClipboardPayload(summary, platform, now) {
+  const generatedAt = now || new Date().toISOString();
+  const base = { platform: platform || "unknown", generatedAt };
+  if (!summary || typeof summary !== "object") {
+    return JSON.stringify({ ...base, empty: true }, null, 2);
+  }
+  return JSON.stringify({ ...base, summary }, null, 2);
+}
+
+const copyTelemetryBtn = document.getElementById("copyTelemetryBtn");
+if (copyTelemetryBtn) {
+  copyTelemetryBtn.addEventListener("click", () => {
+    let summary = null;
+    try {
+      summary = JSON.parse(localStorage.getItem("toneguard_telemetry_summary") || "null");
+    } catch {
+      summary = null;
+    }
+    const payload = buildTelemetryClipboardPayload(summary, "pwa");
+    const parsed = JSON.parse(payload);
+    if (parsed.empty) {
+      copyToClipboard(payload, "Telemetry copied (no events recorded yet).");
+    } else {
+      const total = Object.values(parsed.summary?.counts || {}).reduce((a, b) => a + b, 0);
+      copyToClipboard(payload, "Telemetry copied (" + total + " events).");
+    }
+  });
+}
+
 function normalizeIntentMode(mode) {
   const allowed = ["professional", "warm", "direct", "deescalating", "boundary", "concise"];
   return allowed.includes(mode) ? mode : "professional";

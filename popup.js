@@ -292,3 +292,31 @@ function removeSite(site) {
     });
   });
 }
+
+const copyTelemetryBtn = document.getElementById("copyTelemetryBtn");
+const telemetryStatusEl = document.getElementById("telemetryStatus");
+
+copyTelemetryBtn.addEventListener("click", async () => {
+  copyTelemetryBtn.disabled = true;
+  telemetryStatusEl.textContent = "";
+  try {
+    const { tg_telemetry_summary: summary } = await chrome.storage.local.get([
+      "tg_telemetry_summary"
+    ]);
+    const payload = window.buildTelemetryClipboardPayload
+      ? window.buildTelemetryClipboardPayload(summary, "extension")
+      : JSON.stringify({ platform: "extension", generatedAt: new Date().toISOString(), summary: summary || null }, null, 2);
+    await navigator.clipboard.writeText(payload);
+    const parsed = JSON.parse(payload);
+    if (parsed.empty) {
+      telemetryStatusEl.textContent = "Copied (no events recorded yet).";
+    } else {
+      const total = Object.values(parsed.summary?.counts || {}).reduce((a, b) => a + b, 0);
+      telemetryStatusEl.textContent = "Copied " + total + " events to clipboard.";
+    }
+  } catch (err) {
+    telemetryStatusEl.textContent = "Copy failed: " + (err && err.message ? err.message : "unknown error");
+  } finally {
+    copyTelemetryBtn.disabled = false;
+  }
+});
