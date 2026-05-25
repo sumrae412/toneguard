@@ -17,6 +17,7 @@ Chrome extension + MCP server for tone analysis. Analyzes messages for professio
 - API keys in `toneguard-mcp/.env` (gitignored): `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`
 - Run tests: `uv run --extra dev pytest tests/ -v`
 - Run live integration tests: `set -a && source .env && set +a && uv run --extra dev pytest tests/test_live_integration.py -v -s`
+- CI runs vitest (Node) + pytest (MCP) on every PR via `.github/workflows/ci.yml`. The MCP job uses `astral-sh/setup-uv@v3` — don't replicate the local `source $HOME/.local/bin/env` pattern in workflows; that path is OS-specific and doesn't exist on `ubuntu-latest` runners.
 
 ## Key Gotchas
 
@@ -26,6 +27,9 @@ Chrome extension + MCP server for tone analysis. Analyzes messages for professio
 - The `.env` file must be sourced into the shell for live integration tests (not just present on disk)
 - **Dual code paths: MCP + extension.** Prompts/behaviors live twice — `toneguard-mcp/critics/*.md` (MCP analyzer) AND inline constants in `service-worker.js` (extension calls Anthropic directly, not through MCP). Known pairs: landing critic (`critics/landing.md` ↔ `LANDING_SYSTEM_PROMPT`), fingerprint (`analyzer.py:generate_fingerprint` ↔ `regenerateVoiceFingerprint`). Any change to one must update the other.
 - **Sync backend lives in 4 clients.** The same sync protocol is implemented in `src/sync/sync-client.js` (Chrome ext + PWA), `toneguard-mcp/sync.py` (MCP server, poll-only), and `android/.../SyncManager.kt` (Android). If you change the server API in `sync-server/src/index.js`, update all three. The server URL is hardcoded in each client — bump together when the Railway hostname changes.
+- **Canonical taxonomies live in `shared/analysis/*.json`; clients consume but don't redefine.** `voice-strengths.json` is the source of truth for the voice-strength enum in `service-worker.js`, `pwa/app.js`, `analyzer.py`, and `MainActivity.kt`. Drift is detected by `node scripts/parity_scan.mjs` against `scripts/parity_manifest.json`; CI regenerates `docs/client-parity.md` on every PR and fails on drift via `--check`. If you add a new client-replicated constant, promote to `shared/analysis/` and add a probe to the manifest — don't add a 5th copy.
+- **`docs/client-parity.md` is a generated build artifact — do not hand-edit.** Header carries `<!-- Generated from ... Do not edit directly. -->`. Regen via `node scripts/parity_scan.mjs`. Same convention as the outputs of `scripts/generate_shared_artifacts.mjs`.
+- **PWA cannot import `lib.js` (no bundler).** When the extension and PWA need the same helper (e.g. `buildTelemetryClipboardPayload`), inline a copy in `pwa/app.js` with a sync-pointer comment back to `lib.js`. This is the third axis of the "Dual code paths" gotcha above — same helper, three places (lib.js for ext + service worker, inline in pwa/app.js, separate in MCP if applicable). Update all sides together.
 
 ## Chrome Extension Dev Loop
 
