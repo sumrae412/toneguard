@@ -631,6 +631,8 @@
     if (editor._tgReviewBtn) return;
 
     const btn = document.createElement("button");
+    btn.className = "tg-review-btn";
+    btn._tgEditor = editor;
     btn.textContent = "Review";
     btn.title = "Check tone and clarity with ToneGuard";
     btn.style.cssText = [
@@ -656,11 +658,21 @@
       e.preventDefault();
       e.stopPropagation();
 
-      const text = currentPlatform.getEditorText(editor);
+      // The captured `editor` may be detached after a composer re-render
+      // (Slack Quill / Gmail rebuild their editor nodes). Read from the
+      // live editor on the page, not the node we bound at injection time —
+      // otherwise getEditorText returns stale/empty text and we bail
+      // silently, which reads to the user as "the button does nothing."
+      const liveEditor = document.contains(editor)
+        ? editor
+        : document.querySelector(currentPlatform.editorSelector);
+      if (!liveEditor) return;
+
+      const text = currentPlatform.getEditorText(liveEditor);
       if (!text || text.length < 10) return;
 
       // Run analysis in draft mode (advisory, no send interception)
-      draftReview(text, editor);
+      draftReview(text, liveEditor);
     });
 
     // Make editor's parent position:relative so the button positions correctly
@@ -814,6 +826,13 @@
           btn._tgBound = true;
           btn.addEventListener("click", handleSendBtnClick, true);
         }
+      });
+
+      // Remove orphaned review buttons whose editor was detached by a
+      // composer re-render — otherwise a dead button lingers on screen
+      // (and in Gmail blocks a fresh one from looking right).
+      document.querySelectorAll("button.tg-review-btn").forEach((b) => {
+        if (!document.contains(b._tgEditor)) b.remove();
       });
 
       // Inject review buttons on editors
