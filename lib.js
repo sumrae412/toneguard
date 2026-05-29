@@ -248,6 +248,12 @@ const ANALYSIS_ERROR_MAP = {
     retryable: true,
     diagnostic_code: "TG_PARSE_001"
   },
+  truncated: {
+    type: "truncated_error",
+    message: "The analysis was too long and got cut off. Try a shorter message, then retry.",
+    retryable: true,
+    diagnostic_code: "TG_TRUNC_001"
+  },
   network: {
     type: "network_error",
     message: "Network error. Check your connection and try again.",
@@ -384,7 +390,9 @@ function makeAnalysisError(kind, details = {}) {
     status: details.status,
     phase: details.phase,
     route: details.route,
-    model: details.model
+    model: details.model,
+    stop_reason: details.stop_reason,
+    content_length: details.content_length
   };
 }
 

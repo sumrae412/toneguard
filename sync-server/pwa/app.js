@@ -281,6 +281,7 @@ let lastFailure = null;
 function makePwaAnalysisError(kind, details = {}) {
   const base = {
     parse: ["parse_error", "ToneGuard could not read the model response.", "TG_PARSE_001"],
+    truncated: ["truncated_error", "The analysis was too long and got cut off. Try a shorter message, then retry.", "TG_TRUNC_001"],
     network: ["network_error", "Network error. Check your connection and try again.", "TG_NET_001"],
     api: ["api_error", "The analysis API returned an error.", "TG_API_001"],
     runtime: ["runtime_error", "ToneGuard hit an unexpected error.", "TG_RUNTIME_001"]
@@ -294,7 +295,9 @@ function makePwaAnalysisError(kind, details = {}) {
     status: details.status,
     phase: details.phase,
     route: details.route,
-    model: details.model
+    model: details.model,
+    stop_reason: details.stop_reason,
+    content_length: details.content_length
   };
 }
 
@@ -463,8 +466,11 @@ async function analyze() {
           "anthropic-dangerous-direct-browser-access": "true"
         },
         body: JSON.stringify({
+          // 4096 (was 1024): mirror service-worker.js — the analysis payload
+          // (rewrite + diff + categories + explanations) truncated at 1024 on
+          // longer messages, leaving unclosed JSON that failed to parse.
           model: MODEL,
-          max_tokens: 1024,
+          max_tokens: 4096,
           system: systemPrompt,
           messages: [{ role: "user", content: "Review this message before sending:\n\n" + text }]
         })
@@ -490,13 +496,19 @@ async function analyze() {
 
     const data = await response.json();
     const rawContent = data.content[0]?.text || "";
+    const stopReason = data.stop_reason || "";
     const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
 
     if (!jsonMatch) {
-      showFailure(makePwaAnalysisError("parse", {
-        phase: "parse",
+      // max_tokens stop_reason → JSON cut off mid-stream (no closing brace).
+      // Surface as truncation, not the generic "couldn't read response".
+      const kind = stopReason === "max_tokens" ? "truncated" : "parse";
+      showFailure(makePwaAnalysisError(kind, {
+        phase: kind,
         route: "blocked_error",
-        model: MODEL
+        model: MODEL,
+        stop_reason: stopReason,
+        content_length: rawContent.length
       }));
       return;
     }
@@ -598,7 +610,9 @@ copyDiagnosticsBtn.addEventListener("click", () => {
     route: lastFailure.route || "",
     model: lastFailure.model || "",
     status: lastFailure.status || "",
-    phase: lastFailure.phase || ""
+    phase: lastFailure.phase || "",
+    stop_reason: lastFailure.stop_reason || "",
+    content_length: lastFailure.content_length ?? ""
   };
   copyToClipboard(JSON.stringify(diagnostics, null, 2), "Diagnostics copied.");
 });

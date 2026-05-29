@@ -626,7 +626,9 @@
         route: failure.route || "",
         model: failure.model || "",
         status: failure.status || "",
-        phase: failure.phase || ""
+        phase: failure.phase || "",
+        stop_reason: failure.stop_reason || "",
+        content_length: failure.content_length ?? ""
       };
       const payload = JSON.stringify(diagnostics, null, 2);
       try {
