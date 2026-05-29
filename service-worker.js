@@ -473,8 +473,11 @@ async function handleAnalyze(text, context, site, requestedIntentMode) {
   await saveRecipientInteraction(text);
 
   const requestBody = JSON.stringify({
+    // 4096 (was 1024): the analysis payload carries a full rewrite + word-level
+    // diff + categories + explanations. 1024 truncated longer messages, leaving
+    // unclosed JSON that failed to parse (TG_PARSE_001 / blocked_error).
     model: MODEL,
-    max_tokens: 1024,
+    max_tokens: 4096,
     system: fullPrompt,
     messages: [
       {
@@ -554,17 +557,28 @@ async function handleAnalyze(text, context, site, requestedIntentMode) {
 
     const data = await response.json();
     const rawContent = data.content[0]?.text || "";
+    const stopReason = data.stop_reason || "";
 
     // parseApiResponse (from lib.js) handles markdown fences, surrounding
     // text, and literal control chars inside string values. Returns null on
     // unrecoverable parse failure — don't silently pass through.
     const result = parseApiResponse(rawContent);
     if (!result) {
-      console.error("ToneGuard: could not parse JSON from response:", rawContent);
-      const error = makeAnalysisError("parse", {
+      // A `max_tokens` stop_reason means the JSON was cut off mid-stream, so
+      // it has no closing brace and can never parse. Surface this as its own
+      // actionable error instead of the generic "couldn't read response".
+      const kind = stopReason === "max_tokens" ? "truncated" : "parse";
+      console.error(
+        "ToneGuard: could not parse response (stop_reason=" +
+          stopReason + ", length=" + rawContent.length + "):",
+        rawContent
+      );
+      const error = makeAnalysisError(kind, {
         route: "blocked_error",
         model: MODEL,
-        phase: "parse"
+        phase: kind === "truncated" ? "truncated" : "parse",
+        stop_reason: stopReason,
+        content_length: rawContent.length
       });
       await recordTelemetry({
         event: "analysis_failed",
@@ -581,7 +595,7 @@ async function handleAnalyze(text, context, site, requestedIntentMode) {
         error,
         routing: {
           route: "blocked_error",
-          precheck_hits: ["error:parse"],
+          precheck_hits: ["error:" + kind],
           model: MODEL
         }
       };

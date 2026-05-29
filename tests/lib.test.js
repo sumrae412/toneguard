@@ -108,6 +108,16 @@ describe("parseApiResponse", () => {
     const result = parseApiResponse(raw);
     expect(result).toEqual({ suggestion: "line 1\nline 2" });
   });
+
+  // Regression (TG_PARSE_001 / TG_TRUNC_001): when the analysis is cut off at
+  // max_tokens the JSON has an opening brace but no closing brace, so the
+  // {...} matcher finds nothing and parsing returns null. service-worker.js /
+  // app.js map this to a truncation error when stop_reason === "max_tokens".
+  it("returns null for JSON truncated mid-stream (no closing brace)", () => {
+    const raw =
+      '{\n  "flagged": true,\n  "suggestion": "Here is a much longer rewrite that got cut';
+    expect(parseApiResponse(raw)).toBeNull();
+  });
 });
 
 describe("cleanSiteInput", () => {
@@ -302,6 +312,25 @@ describe("makeAnalysisError", () => {
     expect(error).not.toHaveProperty("message_text");
     expect(error).not.toHaveProperty("prompt");
     expect(error).not.toHaveProperty("api_key");
+  });
+
+  it("maps truncation to TG_TRUNC_001 and surfaces diagnostic fields", () => {
+    const error = makeAnalysisError("truncated", {
+      route: "blocked_error",
+      model: "test-model",
+      phase: "truncated",
+      stop_reason: "max_tokens",
+      content_length: 4096
+    });
+    expect(error).toMatchObject({
+      type: "truncated_error",
+      diagnostic_code: "TG_TRUNC_001",
+      retryable: true,
+      safe_to_send: "user_decides",
+      phase: "truncated",
+      stop_reason: "max_tokens",
+      content_length: 4096
+    });
   });
 });
 
