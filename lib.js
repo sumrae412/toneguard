@@ -87,6 +87,33 @@ function parseApiResponse(rawContent) {
 }
 
 /**
+ * Extract the analysis result from an Anthropic Messages API response.
+ *
+ * With forced tool use, the result arrives as the already-parsed `input` of a
+ * tool_use content block — no free-text JSON to parse, which is what eliminates
+ * the stray-quote / control-char / markdown-fence parse failures (TG_PARSE_001).
+ * Falls back to parsing a text block (defensive: a non-tool reply or older path).
+ *
+ * @param {object} data - Parsed API response body.
+ * @param {string} [toolName] - Expected tool name; any tool_use accepted if omitted.
+ * @returns {object|null} The analysis object, or null if none could be extracted.
+ */
+function extractToolResult(data, toolName) {
+  if (!data || !Array.isArray(data.content)) return null;
+  const toolBlock = data.content.find(
+    (b) =>
+      b &&
+      b.type === "tool_use" &&
+      (!toolName || b.name === toolName) &&
+      b.input &&
+      typeof b.input === "object"
+  );
+  if (toolBlock) return toolBlock.input;
+  const textBlock = data.content.find((b) => b && b.type === "text" && b.text);
+  return textBlock ? parseApiResponse(textBlock.text) : null;
+}
+
+/**
  * Clean a site input for storage (strip protocol, trailing slashes).
  * Returns cleaned domain or null if invalid.
  */
@@ -524,6 +551,7 @@ if (typeof globalThis !== "undefined") {
   globalThis.__toneGuardLib = {
     detectPlatform,
     parseApiResponse,
+    extractToolResult,
     cleanSiteInput,
     validateApiKey,
     getStrictnessLabel,

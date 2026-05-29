@@ -10,6 +10,44 @@ const STORAGE_KEY = "toneguard_api_key";
 const ANALYSIS_MAX_TOKENS = 4096;
 const ANALYSIS_MAX_TOKENS_CEILING = 8192;
 
+// Forced-tool schema, generated from shared/analysis/schema.json and served
+// alongside the PWA (sync-server/pwa/analysis-tool.json). Using tool use makes
+// the API return the analysis as a parsed object instead of free-text JSON,
+// eliminating the stray-quote / control-char parse failures (TG_PARSE_001).
+let pwaAnalysisTool = null;
+async function loadPwaAnalysisTool() {
+  if (pwaAnalysisTool) return pwaAnalysisTool;
+  try {
+    const r = await fetch("analysis-tool.json");
+    pwaAnalysisTool = await r.json();
+  } catch (err) {
+    console.error("ToneGuard: failed to load analysis tool schema", err);
+    return null;
+  }
+  return pwaAnalysisTool;
+}
+
+// Inline mirror of lib.js:extractToolResult (PWA can't bundle lib.js). Returns
+// the tool_use block's parsed input, or falls back to parsing a text block.
+function extractPwaToolResult(data, toolName) {
+  if (!data || !Array.isArray(data.content)) return null;
+  const block = data.content.find(
+    (b) =>
+      b && b.type === "tool_use" && (!toolName || b.name === toolName) &&
+      b.input && typeof b.input === "object"
+  );
+  if (block) return block.input;
+  const textBlock = data.content.find((b) => b && b.type === "text" && b.text);
+  if (!textBlock) return null;
+  const m = textBlock.text.match(/\{[\s\S]*\}/);
+  if (!m) return null;
+  try {
+    return JSON.parse(m[0]);
+  } catch {
+    return null;
+  }
+}
+
 // Sync manager (initialized when API key is available)
 let pwaSyncManager = null;
 
@@ -459,8 +497,21 @@ async function analyze() {
 
   try {
     const systemPrompt = getSystemPrompt(intentMode, PWA_SITE_PROFILE, voiceStrength);
+    const analysisTool = await loadPwaAnalysisTool();
 
     const fetchAnalysis = async (maxTokens) => {
+      const body = {
+        model: MODEL,
+        max_tokens: maxTokens,
+        system: systemPrompt,
+        messages: [{ role: "user", content: "Review this message before sending:\n\n" + text }]
+      };
+      // Forced tool use: API returns the result as a parsed object (no JSON to
+      // repair). Falls back to text parsing if the schema failed to load.
+      if (analysisTool) {
+        body.tools = [analysisTool];
+        body.tool_choice = { type: "tool", name: analysisTool.name };
+      }
       let r;
       for (let attempt = 0; attempt < 3; attempt++) {
         r = await fetch(CLAUDE_API_URL, {
@@ -471,12 +522,7 @@ async function analyze() {
             "anthropic-version": "2023-06-01",
             "anthropic-dangerous-direct-browser-access": "true"
           },
-          body: JSON.stringify({
-            model: MODEL,
-            max_tokens: maxTokens,
-            system: systemPrompt,
-            messages: [{ role: "user", content: "Review this message before sending:\n\n" + text }]
-          })
+          body: JSON.stringify(body)
         });
 
         if (r.status === 401 || r.status === 400 || r.status === 403) break;
@@ -502,38 +548,41 @@ async function analyze() {
     }
 
     let data = await response.json();
-    let rawContent = data.content[0]?.text || "";
     let stopReason = data.stop_reason || "";
-    let jsonMatch = rawContent.match(/\{[\s\S]*\}/);
+    // A max_tokens stop means the tool input was cut off and is unreliable even
+    // if partially populated — treat as no result so escalation fires.
+    const extract = (d) =>
+      (d.stop_reason || "") === "max_tokens"
+        ? null
+        : extractPwaToolResult(d, analysisTool && analysisTool.name);
+    let parsed = extract(data);
 
-    // Response-length-aware escalation (mirror service-worker.js): a max_tokens
-    // truncation means the JSON was cut off mid-stream — retry once at the
-    // ceiling before surfacing the truncation error.
-    if (!jsonMatch && stopReason === "max_tokens" && ANALYSIS_MAX_TOKENS < ANALYSIS_MAX_TOKENS_CEILING) {
+    // Response-length-aware escalation (mirror service-worker.js): retry once at
+    // the ceiling before surfacing the truncation error.
+    if (!parsed && stopReason === "max_tokens" && ANALYSIS_MAX_TOKENS < ANALYSIS_MAX_TOKENS_CEILING) {
       const escalated = await fetchAnalysis(ANALYSIS_MAX_TOKENS_CEILING);
       if (escalated.ok) {
         data = await escalated.json();
-        rawContent = data.content[0]?.text || "";
         stopReason = data.stop_reason || "";
-        jsonMatch = rawContent.match(/\{[\s\S]*\}/);
+        parsed = extract(data);
       }
     }
 
-    if (!jsonMatch) {
-      // max_tokens stop_reason → JSON cut off mid-stream (no closing brace).
-      // Surface as truncation, not the generic "couldn't read response".
+    if (!parsed) {
+      // max_tokens stop → tool call cut off (truncated); anything else → the
+      // model didn't return a usable tool call (parse).
       const kind = stopReason === "max_tokens" ? "truncated" : "parse";
+      const contentLength = JSON.stringify((data && data.content) || "").length;
       showFailure(makePwaAnalysisError(kind, {
         phase: kind,
         route: "blocked_error",
         model: MODEL,
         stop_reason: stopReason,
-        content_length: rawContent.length
+        content_length: contentLength
       }));
       return;
     }
 
-    const parsed = JSON.parse(jsonMatch[0]);
     parsed.routing = {
       route: precheck.route,
       precheck_hits: precheck.precheck_hits,
