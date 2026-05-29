@@ -619,7 +619,7 @@
       textContent: "Copy diagnostics",
       type: "button"
     });
-    copyBtn.addEventListener("click", () => {
+    copyBtn.addEventListener("click", async () => {
       const diagnostics = {
         diagnostic_code: failure.diagnostic_code || "TG_UNKNOWN",
         type: failure.type || "unknown",
@@ -628,8 +628,31 @@
         status: failure.status || "",
         phase: failure.phase || ""
       };
-      navigator.clipboard.writeText(JSON.stringify(diagnostics, null, 2)).catch(() => {});
-      copyBtn.textContent = "Copied";
+      const payload = JSON.stringify(diagnostics, null, 2);
+      try {
+        await navigator.clipboard.writeText(payload);
+        copyBtn.textContent = "Copied";
+        return;
+      } catch (_) {
+        // Clipboard API blocked (overlay iframe focus / permissions-policy).
+        // Fall back to a selectable textarea the user can copy manually.
+      }
+      let fallback = panel.querySelector(".tg-diagnostics-fallback");
+      if (!fallback) {
+        fallback = el("textarea", {
+          className: "tg-diagnostics-fallback",
+          readonly: "readonly"
+        });
+        fallback.style.width = "100%";
+        fallback.style.minHeight = "120px";
+        fallback.style.marginTop = "8px";
+        fallback.style.fontFamily = "monospace";
+        panel.appendChild(fallback);
+      }
+      fallback.value = payload;
+      fallback.focus();
+      fallback.select();
+      copyBtn.textContent = "Copy blocked — select text below";
     });
     actions.appendChild(retryBtn);
     actions.appendChild(sendBtn);
