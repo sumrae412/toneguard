@@ -396,6 +396,28 @@ function makeAnalysisError(kind, details = {}) {
   };
 }
 
+// Output-token budgets for the main analysis. The payload (rewrite + word-level
+// diff + categories + explanations) scales with message length. ANALYSIS_MAX_TOKENS
+// covers the vast majority; ANALYSIS_MAX_TOKENS_CEILING is the one-time escalation
+// budget used when the model still truncates (stop_reason === "max_tokens").
+const ANALYSIS_MAX_TOKENS = 4096;
+const ANALYSIS_MAX_TOKENS_CEILING = 8192;
+
+/**
+ * Decide whether to retry the analysis at a higher token budget.
+ *
+ * Returns true only when the response failed to parse specifically because the
+ * model hit its output cap (stop_reason === "max_tokens") AND we have headroom
+ * below the ceiling. A null/empty parse from any other cause does NOT escalate
+ * — retrying wouldn't help and would just double latency/cost.
+ *
+ * @param {{parsed: object|null, stopReason: string, currentMax: number, ceiling: number}} args
+ * @returns {boolean}
+ */
+function shouldEscalateMaxTokens({ parsed, stopReason, currentMax, ceiling }) {
+  return !parsed && stopReason === "max_tokens" && currentMax < ceiling;
+}
+
 /**
  * Truncate text for display.
  */
@@ -510,6 +532,9 @@ if (typeof globalThis !== "undefined") {
     shouldAnalyze,
     precheckAnalysis,
     makeAnalysisError,
+    shouldEscalateMaxTokens,
+    ANALYSIS_MAX_TOKENS,
+    ANALYSIS_MAX_TOKENS_CEILING,
     getSiteProfile,
     sanitizeTelemetryEvent,
     buildTelemetryClipboardPayload,

@@ -4,6 +4,11 @@
 const CLAUDE_API_URL = "https://api.anthropic.com/v1/messages";
 const MODEL = "claude-haiku-4-5-20251001";
 const STORAGE_KEY = "toneguard_api_key";
+// Mirrors lib.js ANALYSIS_MAX_TOKENS / ANALYSIS_MAX_TOKENS_CEILING — the PWA
+// does not bundle lib.js, so the analysis token budget is inlined here. Keep
+// in sync with service-worker.js. Escalate once on a max_tokens truncation.
+const ANALYSIS_MAX_TOKENS = 4096;
+const ANALYSIS_MAX_TOKENS_CEILING = 8192;
 
 // Sync manager (initialized when API key is available)
 let pwaSyncManager = null;
@@ -455,32 +460,34 @@ async function analyze() {
   try {
     const systemPrompt = getSystemPrompt(intentMode, PWA_SITE_PROFILE, voiceStrength);
 
-    let response;
-    for (let attempt = 0; attempt < 3; attempt++) {
-      response = await fetch(CLAUDE_API_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": apiKey,
-          "anthropic-version": "2023-06-01",
-          "anthropic-dangerous-direct-browser-access": "true"
-        },
-        body: JSON.stringify({
-          // 4096 (was 1024): mirror service-worker.js — the analysis payload
-          // (rewrite + diff + categories + explanations) truncated at 1024 on
-          // longer messages, leaving unclosed JSON that failed to parse.
-          model: MODEL,
-          max_tokens: 4096,
-          system: systemPrompt,
-          messages: [{ role: "user", content: "Review this message before sending:\n\n" + text }]
-        })
-      });
+    const fetchAnalysis = async (maxTokens) => {
+      let r;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        r = await fetch(CLAUDE_API_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": apiKey,
+            "anthropic-version": "2023-06-01",
+            "anthropic-dangerous-direct-browser-access": "true"
+          },
+          body: JSON.stringify({
+            model: MODEL,
+            max_tokens: maxTokens,
+            system: systemPrompt,
+            messages: [{ role: "user", content: "Review this message before sending:\n\n" + text }]
+          })
+        });
 
-      if (response.status === 401 || response.status === 400 || response.status === 403) break;
-      if (response.ok || response.status < 500) break;
+        if (r.status === 401 || r.status === 400 || r.status === 403) break;
+        if (r.ok || r.status < 500) break;
 
-      await new Promise((r) => setTimeout(r, Math.pow(2, attempt) * 500));
-    }
+        await new Promise((rs) => setTimeout(rs, Math.pow(2, attempt) * 500));
+      }
+      return r;
+    };
+
+    let response = await fetchAnalysis(ANALYSIS_MAX_TOKENS);
 
     if (!response.ok) {
       const errBody = await response.text();
@@ -494,10 +501,23 @@ async function analyze() {
       return;
     }
 
-    const data = await response.json();
-    const rawContent = data.content[0]?.text || "";
-    const stopReason = data.stop_reason || "";
-    const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
+    let data = await response.json();
+    let rawContent = data.content[0]?.text || "";
+    let stopReason = data.stop_reason || "";
+    let jsonMatch = rawContent.match(/\{[\s\S]*\}/);
+
+    // Response-length-aware escalation (mirror service-worker.js): a max_tokens
+    // truncation means the JSON was cut off mid-stream — retry once at the
+    // ceiling before surfacing the truncation error.
+    if (!jsonMatch && stopReason === "max_tokens" && ANALYSIS_MAX_TOKENS < ANALYSIS_MAX_TOKENS_CEILING) {
+      const escalated = await fetchAnalysis(ANALYSIS_MAX_TOKENS_CEILING);
+      if (escalated.ok) {
+        data = await escalated.json();
+        rawContent = data.content[0]?.text || "";
+        stopReason = data.stop_reason || "";
+        jsonMatch = rawContent.match(/\{[\s\S]*\}/);
+      }
+    }
 
     if (!jsonMatch) {
       // max_tokens stop_reason → JSON cut off mid-stream (no closing brace).
