@@ -472,22 +472,9 @@ async function handleAnalyze(text, context, site, requestedIntentMode) {
 
   await saveRecipientInteraction(text);
 
-  const requestBody = JSON.stringify({
-    // 4096 (was 1024): the analysis payload carries a full rewrite + word-level
-    // diff + categories + explanations. 1024 truncated longer messages, leaving
-    // unclosed JSON that failed to parse (TG_PARSE_001 / blocked_error).
-    model: MODEL,
-    max_tokens: 4096,
-    system: fullPrompt,
-    messages: [
-      {
-        role: "user",
-        content: context
-          ? context + "\n\nMESSAGE TO REVIEW (about to be sent):\n" + text
-          : "Review this message before sending:\n\n" + text
-      }
-    ]
-  });
+  const userContent = context
+    ? context + "\n\nMESSAGE TO REVIEW (about to be sent):\n" + text
+    : "Review this message before sending:\n\n" + text;
 
   const requestHeaders = {
     "Content-Type": "application/json",
@@ -496,27 +483,42 @@ async function handleAnalyze(text, context, site, requestedIntentMode) {
     "anthropic-dangerous-direct-browser-access": "true"
   };
 
+  // Build the analysis request at a given output budget. The payload (rewrite +
+  // word-level diff + categories + explanations) scales with message length, so
+  // the budget is escalated once if the model truncates. See ANALYSIS_MAX_TOKENS
+  // / ANALYSIS_MAX_TOKENS_CEILING in lib.js.
+  const buildAnalysisBody = (maxTokens) =>
+    JSON.stringify({
+      model: MODEL,
+      max_tokens: maxTokens,
+      system: fullPrompt,
+      messages: [{ role: "user", content: userContent }]
+    });
+
+  // POST the analysis with bounded retry on 5xx. Auth/client errors (400/401/403)
+  // break immediately — retrying them is pointless.
+  const fetchAnalysis = async (maxTokens) => {
+    let r;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      r = await fetch(CLAUDE_API_URL, {
+        method: "POST",
+        headers: requestHeaders,
+        body: buildAnalysisBody(maxTokens)
+      });
+      if (r.status === 401 || r.status === 400 || r.status === 403) break;
+      if (r.ok || r.status < 500) break;
+      await new Promise((rs) => setTimeout(rs, Math.pow(2, attempt) * 500));
+    }
+    return r;
+  };
+
   try {
     // Run the main tone/clarity analysis and the landing critic in parallel.
     // Landing is descriptive ("how this reads on a skim"), Haiku-tier, and
     // must NOT block the main result — a landing failure returns null and
     // the rewrite path keeps working.
     const [response, landing] = await Promise.all([
-      (async () => {
-        let r;
-        for (let attempt = 0; attempt < 3; attempt++) {
-          r = await fetch(CLAUDE_API_URL, {
-            method: "POST",
-            headers: requestHeaders,
-            body: requestBody
-          });
-          if (r.status === 401 || r.status === 400 || r.status === 403) break;
-          if (r.ok || r.status < 500) break;
-          const delay = Math.pow(2, attempt) * 500;
-          await new Promise((rs) => setTimeout(rs, delay));
-        }
-        return r;
-      })(),
+      fetchAnalysis(ANALYSIS_MAX_TOKENS),
       callLandingCritic(text, context, apiKey).catch((err) => {
         console.warn("ToneGuard landing critic failed:", err && err.message ? err.message : err);
         return null;
@@ -555,14 +557,39 @@ async function handleAnalyze(text, context, site, requestedIntentMode) {
       };
     }
 
-    const data = await response.json();
-    const rawContent = data.content[0]?.text || "";
-    const stopReason = data.stop_reason || "";
+    let data = await response.json();
+    let rawContent = data.content[0]?.text || "";
+    let stopReason = data.stop_reason || "";
 
     // parseApiResponse (from lib.js) handles markdown fences, surrounding
     // text, and literal control chars inside string values. Returns null on
     // unrecoverable parse failure — don't silently pass through.
-    const result = parseApiResponse(rawContent);
+    let result = parseApiResponse(rawContent);
+
+    // Response-length-aware escalation: if the analysis was cut off at the
+    // token budget, retry the main analysis ONCE at the ceiling before giving
+    // up. The landing critic result is reused — only the main call re-fetches.
+    if (
+      shouldEscalateMaxTokens({
+        parsed: result,
+        stopReason,
+        currentMax: ANALYSIS_MAX_TOKENS,
+        ceiling: ANALYSIS_MAX_TOKENS_CEILING
+      })
+    ) {
+      console.warn(
+        "ToneGuard: analysis truncated at " + ANALYSIS_MAX_TOKENS +
+          " tokens — retrying at " + ANALYSIS_MAX_TOKENS_CEILING
+      );
+      const escalated = await fetchAnalysis(ANALYSIS_MAX_TOKENS_CEILING);
+      if (escalated.ok) {
+        data = await escalated.json();
+        rawContent = data.content[0]?.text || "";
+        stopReason = data.stop_reason || "";
+        result = parseApiResponse(rawContent);
+      }
+    }
+
     if (!result) {
       // A `max_tokens` stop_reason means the JSON was cut off mid-stream, so
       // it has no closing brace and can never parse. Surface this as its own

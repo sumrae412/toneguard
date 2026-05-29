@@ -10,6 +10,9 @@ import {
   shouldAnalyze,
   precheckAnalysis,
   makeAnalysisError,
+  shouldEscalateMaxTokens,
+  ANALYSIS_MAX_TOKENS,
+  ANALYSIS_MAX_TOKENS_CEILING,
   getSiteProfile,
   buildTelemetryClipboardPayload,
   truncate,
@@ -314,6 +317,51 @@ describe("makeAnalysisError", () => {
     expect(error).not.toHaveProperty("api_key");
   });
 
+});
+
+describe("shouldEscalateMaxTokens", () => {
+  const base = {
+    currentMax: ANALYSIS_MAX_TOKENS,
+    ceiling: ANALYSIS_MAX_TOKENS_CEILING
+  };
+
+  it("has a ceiling above the base budget", () => {
+    expect(ANALYSIS_MAX_TOKENS_CEILING).toBeGreaterThan(ANALYSIS_MAX_TOKENS);
+  });
+
+  it("escalates when parse failed AND the model hit max_tokens", () => {
+    expect(
+      shouldEscalateMaxTokens({ ...base, parsed: null, stopReason: "max_tokens" })
+    ).toBe(true);
+  });
+
+  it("does not escalate when the response parsed successfully", () => {
+    expect(
+      shouldEscalateMaxTokens({ ...base, parsed: { flagged: false }, stopReason: "max_tokens" })
+    ).toBe(false);
+  });
+
+  it("does not escalate on a non-truncation parse failure", () => {
+    // e.g. the model returned prose / malformed JSON but finished normally —
+    // retrying at a higher budget wouldn't help.
+    expect(
+      shouldEscalateMaxTokens({ ...base, parsed: null, stopReason: "end_turn" })
+    ).toBe(false);
+  });
+
+  it("does not escalate once already at the ceiling", () => {
+    expect(
+      shouldEscalateMaxTokens({
+        parsed: null,
+        stopReason: "max_tokens",
+        currentMax: ANALYSIS_MAX_TOKENS_CEILING,
+        ceiling: ANALYSIS_MAX_TOKENS_CEILING
+      })
+    ).toBe(false);
+  });
+});
+
+describe("makeAnalysisError (truncation)", () => {
   it("maps truncation to TG_TRUNC_001 and surfaces diagnostic fields", () => {
     const error = makeAnalysisError("truncated", {
       route: "blocked_error",
