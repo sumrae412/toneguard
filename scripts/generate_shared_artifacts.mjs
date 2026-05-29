@@ -94,6 +94,23 @@ function buildAnalysisTool(schema) {
   };
 }
 
+const LANDING_TOOL_NAME = "report_landing";
+
+// Build the landing-view forced-tool schema from shared/analysis/landing-schema.json.
+function buildLandingTool(schema) {
+  const inputSchema = JSON.parse(JSON.stringify(schema));
+  delete inputSchema.$schema;
+  delete inputSchema.$id;
+  delete inputSchema.title;
+  return {
+    name: LANDING_TOOL_NAME,
+    description:
+      "Report how the message lands on a single skim: the takeaway, the tone " +
+      "felt, and the next action. Use null for messages too short to analyze.",
+    input_schema: inputSchema
+  };
+}
+
 function buildPwaPromptModule(basePrompt, landingPrompt) {
   return (
     JS_GENERATED_HEADER +
@@ -107,6 +124,7 @@ function buildPwaPromptModule(basePrompt, landingPrompt) {
 }
 
 const schema = readJson("shared/analysis/schema.json");
+const landingSchema = readJson("shared/analysis/landing-schema.json");
 const modes = readJson("shared/analysis/modes.json");
 const categories = readJson("shared/analysis/categories.json");
 const voiceStrengths = readJson("shared/analysis/voice-strengths.json");
@@ -115,6 +133,7 @@ validateTaxonomies(schema, modes, categories, voiceStrengths);
 const basePrompt = readText("shared/prompts/base.md");
 const landingPrompt = readText("shared/prompts/landing.md");
 const analysisTool = buildAnalysisTool(schema);
+const landingTool = buildLandingTool(landingSchema);
 const stale = [
   ...writeOrCheck("prompts/base.txt", GENERATED_HEADER + basePrompt),
   ...writeOrCheck("prompts/landing.txt", GENERATED_HEADER + landingPrompt),
@@ -122,6 +141,8 @@ const stale = [
   // prompts/, PWA from its own served directory). Pure JSON — no header comment.
   ...writeOrCheck("prompts/analysis-tool.json", JSON.stringify(analysisTool, null, 2)),
   ...writeOrCheck("sync-server/pwa/analysis-tool.json", JSON.stringify(analysisTool, null, 2)),
+  ...writeOrCheck("prompts/landing-tool.json", JSON.stringify(landingTool, null, 2)),
+  ...writeOrCheck("toneguard-mcp/critics/landing-tool.json", JSON.stringify(landingTool, null, 2)),
   ...writeOrCheck("toneguard-mcp/critics/landing.md", GENERATED_HEADER + landingPrompt),
   ...writeOrCheck("sync-server/pwa/generated-prompts.js", buildPwaPromptModule(basePrompt, landingPrompt)),
   ...writeOrCheck("android/app/src/main/res/raw/toneguard_base_prompt.txt", GENERATED_HEADER + basePrompt)

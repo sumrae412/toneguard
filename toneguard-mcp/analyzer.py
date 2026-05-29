@@ -70,6 +70,86 @@ GRADE_THRESHOLD = 83  # B
 # Maximum refinement passes before returning best attempt
 MAX_REFINEMENT_PASSES = 2
 
+# Forced-tool schemas. Using tool use makes the Anthropic API return results as
+# already-parsed objects instead of free-text JSON, which eliminates the
+# stray-quote / control-char parse failures that broke _parse_json. The landing
+# schema is generated from shared/analysis/landing-schema.json (critics/landing-tool.json);
+# the critic/synthesis/refinement shapes are MCP-specific and defined here.
+CRITIC_TOOL = {
+    "name": "report_critique",
+    "description": (
+        "Report the tone/clarity critique of the message: whether it should be "
+        "flagged, the specific issues, and a competing rewrite."
+    ),
+    "input_schema": {
+        "type": "object",
+        "additionalProperties": True,
+        "required": ["flagged"],
+        "properties": {
+            "flagged": {"type": "boolean"},
+            "confidence": {"type": "number"},
+            "suggestion": {"type": "string"},
+            "rewrite": {"type": "string"},
+            "issues": {"type": "array", "items": {"type": "object"}},
+        },
+    },
+}
+
+_RUBRIC_SCHEMA = {
+    "type": "object",
+    "additionalProperties": True,
+    "properties": {
+        dim: {
+            "type": "object",
+            "properties": {
+                "score": {"type": "number"},
+                "note": {"type": "string"},
+            },
+        }
+        for dim in RUBRIC_DIMENSIONS
+    },
+}
+
+SYNTHESIS_TOOL = {
+    "name": "report_synthesis",
+    "description": (
+        "Report the synthesized rewrite: adopted issues, the best rewrite, its "
+        "source, and a 0-100 rubric score for each of the six dimensions."
+    ),
+    "input_schema": {
+        "type": "object",
+        "additionalProperties": True,
+        "required": ["flagged", "rewrite"],
+        "properties": {
+            "flagged": {"type": "boolean"},
+            "confidence": {"type": "number"},
+            "rewrite": {"type": "string"},
+            "rewrite_source": {
+                "type": "string",
+                "enum": ["claude", "gpt", "merged"],
+            },
+            "issues": {"type": "array", "items": {"type": "object"}},
+            "rubric": _RUBRIC_SCHEMA,
+        },
+    },
+}
+
+REFINEMENT_TOOL = {
+    "name": "report_refinement",
+    "description": (
+        "Report the refined rewrite and a re-scored rubric for all six dimensions."
+    ),
+    "input_schema": {
+        "type": "object",
+        "additionalProperties": True,
+        "required": ["rewrite"],
+        "properties": {
+            "rewrite": {"type": "string"},
+            "rubric": _RUBRIC_SCHEMA,
+        },
+    },
+}
+
 
 def _score_to_grade(score: int) -> str:
     """Convert numeric score (0-100) to letter grade."""
@@ -102,6 +182,21 @@ def _read_prompt(path: Path) -> str:
     if prompt.startswith(GENERATED_PROMPT_HEADER):
         return prompt[len(GENERATED_PROMPT_HEADER) :]
     return prompt
+
+
+def _read_landing_tool() -> Optional[dict[str, Any]]:
+    """Load the landing forced-tool schema generated from shared/analysis/.
+
+    Returns None if the file is missing — callers fall back to text parsing.
+    """
+    path = CRITICS_DIR / "landing-tool.json"
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text())
+    except (json.JSONDecodeError, OSError):
+        logger.warning("Could not read landing-tool.json; falling back to text parse")
+        return None
 
 
 def _normalize_for_precheck(text: str) -> str:
@@ -195,6 +290,7 @@ class ToneAnalyzer:
         self._claude_prompt = _read_prompt(claude_path)
         self._gpt_prompt = _read_prompt(gpt_path)
         self._landing_prompt = _read_prompt(landing_path)
+        self._landing_tool = _read_landing_tool()
 
     def _reload_style_rules(self) -> None:
         try:
@@ -360,13 +456,23 @@ class ToneAnalyzer:
         if context:
             user_content += f"\n\n## Context\n\n{context}"
 
-        resp = await self._anthropic.messages.create(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=256,
-            system=self._landing_prompt,
-            messages=[{"role": "user", "content": user_content}],
-        )
-        parsed = self._parse_json(resp.content[0].text)
+        messages = [{"role": "user", "content": user_content}]
+        if self._landing_tool:
+            parsed = await self._create_with_tool(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=256,
+                system=self._landing_prompt,
+                messages=messages,
+                tool=self._landing_tool,
+            )
+        else:
+            resp = await self._anthropic.messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=256,
+                system=self._landing_prompt,
+                messages=messages,
+            )
+            parsed = self._parse_json(resp.content[0].text)
         # Normalize: only keep the three known fields, coerce missing to None
         return {
             "takeaway": parsed.get("takeaway") or None,
@@ -375,18 +481,22 @@ class ToneAnalyzer:
         }
 
     async def _call_claude(self, user_context: str) -> dict[str, Any]:
-        resp = await self._anthropic.messages.create(
+        return await self._create_with_tool(
             model="claude-haiku-4-5-20251001",
             max_tokens=1024,
             system=self._claude_prompt,
             messages=[{"role": "user", "content": user_context}],
+            tool=CRITIC_TOOL,
         )
-        return self._parse_json(resp.content[0].text)
 
     async def _call_gpt(self, user_context: str) -> dict[str, Any]:
+        # JSON mode: OpenAI guarantees syntactically valid JSON, so the critic
+        # output can't fail json.loads the way free-text output could. The
+        # gpt-tone.md prompt instructs JSON output (required for this mode).
         resp = await self._openai.chat.completions.create(
             model="gpt-4o-mini",
             max_tokens=1024,
+            response_format={"type": "json_object"},
             messages=[
                 {"role": "system", "content": self._gpt_prompt},
                 {"role": "user", "content": user_context},
@@ -570,12 +680,12 @@ class ToneAnalyzer:
         )
 
         try:
-            resp = await self._anthropic.messages.create(
+            result = await self._create_with_tool(
                 model="claude-sonnet-4-20250514",
                 max_tokens=2048,
                 messages=[{"role": "user", "content": prompt}],
+                tool=SYNTHESIS_TOOL,
             )
-            result = self._parse_json(resp.content[0].text)
         except Exception as e:
             logger.error("Synthesizer failed: %s", e)
             # Fallback: merge issues from both critics, no rubric
@@ -650,12 +760,12 @@ class ToneAnalyzer:
             )
 
             try:
-                resp = await self._anthropic.messages.create(
+                refined = await self._create_with_tool(
                     model="claude-sonnet-4-20250514",
                     max_tokens=2048,
                     messages=[{"role": "user", "content": refinement_prompt}],
+                    tool=REFINEMENT_TOOL,
                 )
-                refined = self._parse_json(resp.content[0].text)
             except Exception as e:
                 logger.error("Self-grade refinement failed on pass %d: %s",
                              refinement_attempts + 1, e)
@@ -694,6 +804,54 @@ class ToneAnalyzer:
 
         result["refinement_passes"] = refinement_attempts
         return result
+
+    async def _create_with_tool(
+        self,
+        *,
+        model: str,
+        messages: list[dict[str, Any]],
+        tool: dict[str, Any],
+        max_tokens: int,
+        system: Optional[str] = None,
+    ) -> dict[str, Any]:
+        """Call Anthropic with a forced tool and return the parsed tool input.
+
+        Forcing tool use means the API returns the result as an already-parsed
+        object (tool_use.input) rather than free-text JSON we have to repair.
+        Falls back to text parsing via _extract_tool_result.
+        """
+        kwargs: dict[str, Any] = {
+            "model": model,
+            "max_tokens": max_tokens,
+            "messages": messages,
+            "tools": [tool],
+            "tool_choice": {"type": "tool", "name": tool["name"]},
+        }
+        if system is not None:
+            kwargs["system"] = system
+        resp = await self._anthropic.messages.create(**kwargs)
+        return self._extract_tool_result(resp, tool["name"])
+
+    @staticmethod
+    def _extract_tool_result(resp: Any, tool_name: str | None = None) -> dict[str, Any]:
+        """Extract a forced-tool result from an Anthropic response.
+
+        Prefers the tool_use block's parsed `input`; falls back to parsing a
+        text block (defensive: a non-tool reply, or a mocked text response).
+        """
+        content = getattr(resp, "content", None) or []
+        for block in content:
+            if (
+                getattr(block, "type", None) == "tool_use"
+                and (tool_name is None or getattr(block, "name", None) == tool_name)
+                and isinstance(getattr(block, "input", None), dict)
+            ):
+                return block.input
+        for block in content:
+            text = getattr(block, "text", None)
+            if isinstance(text, str) and text.strip():
+                return ToneAnalyzer._parse_json(text)
+        return {}
 
     @staticmethod
     def _parse_json(text: str) -> dict[str, Any]:
