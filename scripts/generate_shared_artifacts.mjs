@@ -70,6 +70,30 @@ function validateTaxonomies(schema, modes, categories, voiceStrengths) {
   }
 }
 
+// Forced-tool name shared by every analysis caller. The model is told to call
+// this tool, and the API returns its arguments as an already-parsed object —
+// no free-text JSON parsing, which eliminates the stray-quote / control-char /
+// markdown-fence parse failures (TG_PARSE_001).
+const ANALYSIS_TOOL_NAME = "report_analysis";
+
+// Build the forced-tool input schema from the canonical analysis schema.
+// `routing` is attached client-side (not produced by the model), so it is
+// stripped. Everything else mirrors shared/analysis/schema.json.
+function buildAnalysisTool(schema) {
+  const inputSchema = JSON.parse(JSON.stringify(schema));
+  delete inputSchema.$schema;
+  delete inputSchema.$id;
+  delete inputSchema.title;
+  if (inputSchema.properties) delete inputSchema.properties.routing;
+  return {
+    name: ANALYSIS_TOOL_NAME,
+    description:
+      "Report the tone, clarity, and professionalism analysis of the reviewed " +
+      "message. Always call this tool with the complete structured result.",
+    input_schema: inputSchema
+  };
+}
+
 function buildPwaPromptModule(basePrompt, landingPrompt) {
   return (
     JS_GENERATED_HEADER +
@@ -90,9 +114,14 @@ validateTaxonomies(schema, modes, categories, voiceStrengths);
 
 const basePrompt = readText("shared/prompts/base.md");
 const landingPrompt = readText("shared/prompts/landing.md");
+const analysisTool = buildAnalysisTool(schema);
 const stale = [
   ...writeOrCheck("prompts/base.txt", GENERATED_HEADER + basePrompt),
   ...writeOrCheck("prompts/landing.txt", GENERATED_HEADER + landingPrompt),
+  // Forced-tool schema, fetched at runtime by each client (extension from
+  // prompts/, PWA from its own served directory). Pure JSON — no header comment.
+  ...writeOrCheck("prompts/analysis-tool.json", JSON.stringify(analysisTool, null, 2)),
+  ...writeOrCheck("sync-server/pwa/analysis-tool.json", JSON.stringify(analysisTool, null, 2)),
   ...writeOrCheck("toneguard-mcp/critics/landing.md", GENERATED_HEADER + landingPrompt),
   ...writeOrCheck("sync-server/pwa/generated-prompts.js", buildPwaPromptModule(basePrompt, landingPrompt)),
   ...writeOrCheck("android/app/src/main/res/raw/toneguard_base_prompt.txt", GENERATED_HEADER + basePrompt)

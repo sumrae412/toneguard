@@ -16,6 +16,7 @@ const MODEL = "claude-haiku-4-5-20251001";
 // Cache packaged prompts after first load
 let basePromptCache = null;
 let landingPromptCache = null;
+let analysisToolCache = null;
 
 function stripGeneratedPromptHeader(prompt) {
   return prompt.replace(/^Generated from shared\/\. Do not edit directly\.\n\n/, "");
@@ -55,6 +56,22 @@ async function loadBasePrompt() {
     return "You are ToneGuard, a writing assistant. Check messages for tone and clarity. Respond with JSON: {flagged, confidence, mode, readability, red_flags, categories, reasoning, suggestion, has_questions, questions}.";
   }
   return basePromptCache;
+}
+
+// Load the forced-tool schema (generated from shared/analysis/schema.json).
+// Using tool use means the API returns the analysis as a parsed object, not
+// free-text JSON we have to repair — see lib.js:extractToolResult.
+async function loadAnalysisTool() {
+  if (analysisToolCache) return analysisToolCache;
+  try {
+    const url = chrome.runtime.getURL("prompts/analysis-tool.json");
+    const response = await fetch(url);
+    analysisToolCache = JSON.parse(await response.text());
+  } catch (err) {
+    console.error("ToneGuard: failed to load analysis tool schema", err);
+    return null;
+  }
+  return analysisToolCache;
 }
 
 async function loadLandingPrompt() {
@@ -433,6 +450,7 @@ async function handleAnalyze(text, context, site, requestedIntentMode) {
 
   // Build full prompt: base file + dynamic sections
   const basePrompt = await loadBasePrompt();
+  const analysisTool = await loadAnalysisTool();
   const learnedExamples = await getLearnedExamples();
   const customRules = await getCustomRules();
   let fullPrompt = basePrompt;
@@ -487,13 +505,22 @@ async function handleAnalyze(text, context, site, requestedIntentMode) {
   // word-level diff + categories + explanations) scales with message length, so
   // the budget is escalated once if the model truncates. See ANALYSIS_MAX_TOKENS
   // / ANALYSIS_MAX_TOKENS_CEILING in lib.js.
-  const buildAnalysisBody = (maxTokens) =>
-    JSON.stringify({
+  const buildAnalysisBody = (maxTokens) => {
+    const body = {
       model: MODEL,
       max_tokens: maxTokens,
       system: fullPrompt,
       messages: [{ role: "user", content: userContent }]
-    });
+    };
+    // Forced tool use: the model must return the result as tool arguments, which
+    // the API delivers as a parsed object — no free-text JSON to repair. Falls
+    // back to text parsing if the schema failed to load (see extractToolResult).
+    if (analysisTool) {
+      body.tools = [analysisTool];
+      body.tool_choice = { type: "tool", name: analysisTool.name };
+    }
+    return JSON.stringify(body);
+  };
 
   // POST the analysis with bounded retry on 5xx. Auth/client errors (400/401/403)
   // break immediately — retrying them is pointless.
@@ -558,13 +585,17 @@ async function handleAnalyze(text, context, site, requestedIntentMode) {
     }
 
     let data = await response.json();
-    let rawContent = data.content[0]?.text || "";
     let stopReason = data.stop_reason || "";
 
-    // parseApiResponse (from lib.js) handles markdown fences, surrounding
-    // text, and literal control chars inside string values. Returns null on
-    // unrecoverable parse failure — don't silently pass through.
-    let result = parseApiResponse(rawContent);
+    // extractToolResult (lib.js) returns the tool_use block's already-parsed
+    // input — no free-text JSON to repair. A max_tokens stop means the tool
+    // input was cut off mid-generation and is unreliable even if partially
+    // populated, so treat it as no result to trigger the escalation path.
+    const extract = (d) =>
+      (d.stop_reason || "") === "max_tokens"
+        ? null
+        : extractToolResult(d, analysisTool && analysisTool.name);
+    let result = extract(data);
 
     // Response-length-aware escalation: if the analysis was cut off at the
     // token budget, retry the main analysis ONCE at the ceiling before giving
@@ -584,28 +615,28 @@ async function handleAnalyze(text, context, site, requestedIntentMode) {
       const escalated = await fetchAnalysis(ANALYSIS_MAX_TOKENS_CEILING);
       if (escalated.ok) {
         data = await escalated.json();
-        rawContent = data.content[0]?.text || "";
         stopReason = data.stop_reason || "";
-        result = parseApiResponse(rawContent);
+        result = extract(data);
       }
     }
 
     if (!result) {
-      // A `max_tokens` stop_reason means the JSON was cut off mid-stream, so
-      // it has no closing brace and can never parse. Surface this as its own
-      // actionable error instead of the generic "couldn't read response".
+      // No usable result. A max_tokens stop means the tool call was cut off
+      // (truncated); anything else means the model didn't return a valid tool
+      // call at all (parse). Surface the distinct, actionable code.
       const kind = stopReason === "max_tokens" ? "truncated" : "parse";
+      const contentLength = JSON.stringify((data && data.content) || "").length;
       console.error(
-        "ToneGuard: could not parse response (stop_reason=" +
-          stopReason + ", length=" + rawContent.length + "):",
-        rawContent
+        "ToneGuard: could not extract analysis (stop_reason=" +
+          stopReason + ", content_length=" + contentLength + "):",
+        data && data.content
       );
       const error = makeAnalysisError(kind, {
         route: "blocked_error",
         model: MODEL,
         phase: kind === "truncated" ? "truncated" : "parse",
         stop_reason: stopReason,
-        content_length: rawContent.length
+        content_length: contentLength
       });
       await recordTelemetry({
         event: "analysis_failed",

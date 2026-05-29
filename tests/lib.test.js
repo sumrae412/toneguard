@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   detectPlatform,
   parseApiResponse,
+  extractToolResult,
   cleanSiteInput,
   validateApiKey,
   getStrictnessLabel,
@@ -317,6 +318,51 @@ describe("makeAnalysisError", () => {
     expect(error).not.toHaveProperty("api_key");
   });
 
+});
+
+describe("extractToolResult", () => {
+  it("returns the tool_use block's parsed input", () => {
+    const data = {
+      stop_reason: "tool_use",
+      content: [
+        { type: "tool_use", name: "report_analysis", input: { flagged: true, suggestion: "ok" } }
+      ]
+    };
+    expect(extractToolResult(data, "report_analysis")).toEqual({ flagged: true, suggestion: "ok" });
+  });
+
+  // The whole point of tool use: content that would break text JSON.parse
+  // (unescaped inner quotes — the TG_PARSE_001 report) is delivered intact as
+  // a structured object, because the API never round-trips it through text.
+  it("returns input with embedded quotes intact (the failure parseApiResponse can't handle)", () => {
+    const tricky = 'They screen against "do not adopt" flags.';
+    const data = {
+      stop_reason: "tool_use",
+      content: [{ type: "tool_use", name: "report_analysis", input: { flagged: true, suggestion: tricky } }]
+    };
+    // Sanity: the equivalent free-text JSON does fail the text parser.
+    expect(parseApiResponse('{"suggestion": "' + tricky + '"}')).toBeNull();
+    // Tool use sidesteps it entirely.
+    expect(extractToolResult(data).suggestion).toBe(tricky);
+  });
+
+  it("falls back to parsing a text block when there is no tool_use", () => {
+    const data = { stop_reason: "end_turn", content: [{ type: "text", text: '{"flagged": false}' }] };
+    expect(extractToolResult(data)).toEqual({ flagged: false });
+  });
+
+  it("returns null when there is no usable content", () => {
+    expect(extractToolResult({ content: [] })).toBeNull();
+    expect(extractToolResult({})).toBeNull();
+    expect(extractToolResult(null)).toBeNull();
+  });
+
+  it("ignores a tool_use whose name does not match the requested tool", () => {
+    const data = {
+      content: [{ type: "tool_use", name: "something_else", input: { flagged: true } }]
+    };
+    expect(extractToolResult(data, "report_analysis")).toBeNull();
+  });
 });
 
 describe("shouldEscalateMaxTokens", () => {
