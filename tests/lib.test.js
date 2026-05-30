@@ -14,6 +14,10 @@ import {
   shouldEscalateMaxTokens,
   buildSystemPayload,
   PROMPT_CACHE_MIN_CHARS,
+  clampLearnedField,
+  clampCustomRules,
+  LEARNED_FIELD_MAX_CHARS,
+  CUSTOM_RULES_MAX_CHARS,
   ANALYSIS_MAX_TOKENS,
   ANALYSIS_MAX_TOKENS_CEILING,
   getSiteProfile,
@@ -645,5 +649,54 @@ describe("buildSystemPayload", () => {
 
   it("returns the plain string when basePrompt is empty (load fallback)", () => {
     expect(buildSystemPayload("", "anything")).toBe("anything");
+  });
+});
+
+describe("clampLearnedField", () => {
+  it("returns short strings unchanged", () => {
+    expect(clampLearnedField("short message")).toBe("short message");
+  });
+
+  it("returns empty string for null/undefined/empty input", () => {
+    expect(clampLearnedField(null)).toBe("");
+    expect(clampLearnedField(undefined)).toBe("");
+    expect(clampLearnedField("")).toBe("");
+  });
+
+  it("clamps a string at exactly the limit without truncation", () => {
+    const exactly = "X".repeat(LEARNED_FIELD_MAX_CHARS);
+    expect(clampLearnedField(exactly)).toBe(exactly);
+  });
+
+  it("truncates with ellipsis when the input exceeds the limit", () => {
+    const tooLong = "Y".repeat(LEARNED_FIELD_MAX_CHARS + 50);
+    const out = clampLearnedField(tooLong);
+    expect(out.length).toBe(LEARNED_FIELD_MAX_CHARS);
+    expect(out.endsWith("...")).toBe(true);
+  });
+});
+
+describe("clampCustomRules", () => {
+  it("returns empty string for null/undefined/empty input", () => {
+    expect(clampCustomRules(null)).toBe("");
+    expect(clampCustomRules(undefined)).toBe("");
+    expect(clampCustomRules("")).toBe("");
+  });
+
+  it("returns short rules unchanged", () => {
+    expect(clampCustomRules("Be polite.")).toBe("Be polite.");
+  });
+
+  it("returns rules at exactly the limit unchanged", () => {
+    const exactly = "R".repeat(CUSTOM_RULES_MAX_CHARS);
+    expect(clampCustomRules(exactly)).toBe(exactly);
+  });
+
+  it("truncates rules longer than the limit and appends a guidance marker", () => {
+    const tooLong = "Z".repeat(CUSTOM_RULES_MAX_CHARS + 500);
+    const out = clampCustomRules(tooLong);
+    expect(out.startsWith("Z".repeat(CUSTOM_RULES_MAX_CHARS))).toBe(true);
+    expect(out).toContain("truncated at " + CUSTOM_RULES_MAX_CHARS);
+    expect(out).toContain("shorten in extension options");
   });
 });

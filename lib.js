@@ -486,6 +486,45 @@ function truncate(text, max) {
 }
 
 /**
+ * Cap for individual fields inside learned-decision examples (`original`,
+ * `suggestion`, `finalText`). Roughly 50 tokens each; with 9 decisions × 3
+ * fields, total worst-case is ~1350 tokens vs. unbounded prior to this cap.
+ * The user's full decision history stays on disk untouched — only the prompt
+ * is truncated.
+ */
+const LEARNED_FIELD_MAX_CHARS = 200;
+
+/**
+ * Cap for the user-provided custom-rules block (~500 tokens). Power users with
+ * sprawling rule sheets get a single truncation marker telling them to shorten;
+ * the full block remains in their settings storage.
+ */
+const CUSTOM_RULES_MAX_CHARS = 2000;
+
+/**
+ * Truncate a single learned-decision field. Marker is short on purpose — the
+ * model needs to know the message was clipped without paying for explanatory
+ * prose.
+ */
+function clampLearnedField(text) {
+  if (!text) return "";
+  if (text.length <= LEARNED_FIELD_MAX_CHARS) return text;
+  return text.slice(0, LEARNED_FIELD_MAX_CHARS - 3) + "...";
+}
+
+/**
+ * Truncate the user's custom-rules block. Marker tells the user where to shorten
+ * (model doesn't need the prose; it's for human grep when reviewing telemetry).
+ */
+function clampCustomRules(rules) {
+  if (!rules) return "";
+  if (rules.length <= CUSTOM_RULES_MAX_CHARS) return rules;
+  return rules.slice(0, CUSTOM_RULES_MAX_CHARS) +
+    "\n\n[... rules truncated at " + CUSTOM_RULES_MAX_CHARS +
+    " chars; shorten in extension options to send all rules]";
+}
+
+/**
  * Hash an API key using SHA-256. Returns hex string.
  * The raw key never leaves the device — only the hash is sent for sync identity.
  */
@@ -595,6 +634,10 @@ if (typeof globalThis !== "undefined") {
     shouldEscalateMaxTokens,
     buildSystemPayload,
     PROMPT_CACHE_MIN_CHARS,
+    clampLearnedField,
+    clampCustomRules,
+    LEARNED_FIELD_MAX_CHARS,
+    CUSTOM_RULES_MAX_CHARS,
     ANALYSIS_MAX_TOKENS,
     ANALYSIS_MAX_TOKENS_CEILING,
     getSiteProfile,
