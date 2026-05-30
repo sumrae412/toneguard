@@ -494,6 +494,13 @@ async function handleAnalyze(text, context, site, requestedIntentMode) {
     ? context + "\n\nMESSAGE TO REVIEW (about to be sent):\n" + text
     : "Review this message before sending:\n\n" + text;
 
+  // Build system as a cache-enabled 2-block array when basePrompt is large
+  // enough to actually cache; otherwise fall back to a plain string. The stable
+  // basePrompt becomes the cacheable prefix; volatile sections appended above
+  // (intent, site profile, strictness, custom rules, learned, voice,
+  // relationship) land in an uncached suffix block. See lib.js:buildSystemPayload.
+  const systemPayload = buildSystemPayload(basePrompt, fullPrompt);
+
   const requestHeaders = {
     "Content-Type": "application/json",
     "x-api-key": apiKey,
@@ -509,7 +516,7 @@ async function handleAnalyze(text, context, site, requestedIntentMode) {
     const body = {
       model: MODEL,
       max_tokens: maxTokens,
-      system: fullPrompt,
+      system: systemPayload,
       messages: [{ role: "user", content: userContent }]
     };
     // Forced tool use: the model must return the result as tool arguments, which
@@ -669,6 +676,11 @@ async function handleAnalyze(text, context, site, requestedIntentMode) {
     if (!result.flagged) {
       await saveVoiceSample(text);
     }
+    // Token-usage breakdown. `cache_read_input_tokens` proves prompt caching is
+    // hitting (basePrompt served at ~0.1x cost after the first call within TTL).
+    // Fields default to 0 when absent (older Anthropic API versions, or a
+    // sub-threshold basePrompt that didn't cache). See shared/prompt-caching.md.
+    const usage = (data && data.usage) || {};
     await recordTelemetry({
       event: "analysis_completed",
       platform: "chrome",
@@ -677,7 +689,11 @@ async function handleAnalyze(text, context, site, requestedIntentMode) {
       model: routing.model,
       latency_bucket: latencyBucket(Date.now() - startedAt),
       issue_categories: result.categories || [],
-      outcome: result.flagged ? undefined : "passed"
+      outcome: result.flagged ? undefined : "passed",
+      usage_input_tokens: usage.input_tokens ?? 0,
+      usage_output_tokens: usage.output_tokens ?? 0,
+      usage_cache_read_input_tokens: usage.cache_read_input_tokens ?? 0,
+      usage_cache_creation_input_tokens: usage.cache_creation_input_tokens ?? 0
     });
 
     // Attach landing view. Null when the call failed or the message was
