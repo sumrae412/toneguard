@@ -828,12 +828,15 @@ async function getLearnedExamples() {
 
   const examples = [];
 
+  // Clamp each field — a single long user message would otherwise inflate every
+  // analysis. The full decision is preserved in chrome.storage; only the prompt
+  // sees the truncated view. See lib.js:clampLearnedField.
   const falsePositives = decisions
     .filter((d) => d.action === "sent_original")
     .slice(-3);
 
   for (const d of falsePositives) {
-    examples.push('FALSE POSITIVE (do NOT flag similar messages):\n  Message: "' + d.original + '"');
+    examples.push('FALSE POSITIVE (do NOT flag similar messages):\n  Message: "' + clampLearnedField(d.original) + '"');
   }
 
   const edited = decisions
@@ -841,7 +844,7 @@ async function getLearnedExamples() {
     .slice(-3);
 
   for (const d of edited) {
-    examples.push('GOOD CATCH, BETTER REWRITE (learn from user version):\n  Original: "' + d.original + '"\n  Your suggestion: "' + d.suggestion + '"\n  User preferred: "' + d.finalText + '"');
+    examples.push('GOOD CATCH, BETTER REWRITE (learn from user version):\n  Original: "' + clampLearnedField(d.original) + '"\n  Your suggestion: "' + clampLearnedField(d.suggestion) + '"\n  User preferred: "' + clampLearnedField(d.finalText) + '"');
   }
 
   const accepted = decisions
@@ -849,7 +852,7 @@ async function getLearnedExamples() {
     .slice(-3);
 
   for (const d of accepted) {
-    examples.push('GOOD EXAMPLE (user accepted):\n  Original: "' + d.original + '"\n  Rewrite: "' + d.suggestion + '"');
+    examples.push('GOOD EXAMPLE (user accepted):\n  Original: "' + clampLearnedField(d.original) + '"\n  Rewrite: "' + clampLearnedField(d.suggestion) + '"');
   }
 
   return examples.join("\n\n");
@@ -857,7 +860,9 @@ async function getLearnedExamples() {
 
 async function getCustomRules() {
   const { tg_custom_rules: rules } = await chrome.storage.sync.get(["tg_custom_rules"]);
-  return rules || "";
+  // Storage keeps the full block; the prompt sees a capped view to keep the
+  // per-call input cost predictable. See lib.js:clampCustomRules.
+  return clampCustomRules(rules || "");
 }
 
 // Voice sample storage with per-source caps.
