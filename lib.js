@@ -446,6 +446,38 @@ function shouldEscalateMaxTokens({ parsed, stopReason, currentMax, ceiling }) {
 }
 
 /**
+ * Anthropic's prompt-cache minimum prefix for Haiku 4.5 is 4096 tokens.
+ * Approximating 4 chars/token, we only attempt caching when basePrompt is at
+ * least ~16K chars. Below this, cache_control silently no-ops (no error,
+ * cache_creation_input_tokens stays 0). See shared/prompt-caching.md.
+ */
+const PROMPT_CACHE_MIN_CHARS = 16000;
+
+/**
+ * Build the Anthropic `system` field as either a cache-enabled 2-block array
+ * (when basePrompt is long enough to actually cache) or a plain string fallback.
+ * The stable basePrompt becomes the cacheable prefix; whatever the caller has
+ * appended to it (intent, site profile, custom rules, learned examples, voice,
+ * relationship context) lands in an uncached suffix block. Returns a string
+ * unchanged when caching would no-op anyway — keeps the request shape simple.
+ *
+ * @param {string} basePrompt - The stable system prefix to cache.
+ * @param {string} fullPrompt - basePrompt + any appended volatile sections.
+ * @returns {string | Array<{type: string, text: string, cache_control?: object}>}
+ */
+function buildSystemPayload(basePrompt, fullPrompt) {
+  if (!basePrompt || basePrompt.length < PROMPT_CACHE_MIN_CHARS) {
+    return fullPrompt;
+  }
+  const suffix = fullPrompt.slice(basePrompt.length);
+  const blocks = [
+    { type: "text", text: basePrompt, cache_control: { type: "ephemeral" } }
+  ];
+  if (suffix) blocks.push({ type: "text", text: suffix });
+  return blocks;
+}
+
+/**
  * Truncate text for display.
  */
 function truncate(text, max) {
@@ -561,6 +593,8 @@ if (typeof globalThis !== "undefined") {
     precheckAnalysis,
     makeAnalysisError,
     shouldEscalateMaxTokens,
+    buildSystemPayload,
+    PROMPT_CACHE_MIN_CHARS,
     ANALYSIS_MAX_TOKENS,
     ANALYSIS_MAX_TOKENS_CEILING,
     getSiteProfile,

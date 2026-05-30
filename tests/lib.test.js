@@ -12,6 +12,8 @@ import {
   precheckAnalysis,
   makeAnalysisError,
   shouldEscalateMaxTokens,
+  buildSystemPayload,
+  PROMPT_CACHE_MIN_CHARS,
   ANALYSIS_MAX_TOKENS,
   ANALYSIS_MAX_TOKENS_CEILING,
   getSiteProfile,
@@ -608,5 +610,40 @@ describe("buildTelemetryClipboardPayload", () => {
     const out = buildTelemetryClipboardPayload({ counts: { x: 1 } }, "extension", FIXED_NOW);
     expect(out).toContain("\n  \"platform\"");
     expect(out).toContain("\n  \"summary\"");
+  });
+});
+
+describe("buildSystemPayload", () => {
+  it("returns a cache-enabled 2-block array when basePrompt is at or above the threshold", () => {
+    const basePrompt = "B".repeat(PROMPT_CACHE_MIN_CHARS);
+    const fullPrompt = basePrompt + "\n\nSUFFIX";
+    const out = buildSystemPayload(basePrompt, fullPrompt);
+    expect(Array.isArray(out)).toBe(true);
+    expect(out.length).toBe(2);
+    expect(out[0]).toEqual({
+      type: "text",
+      text: basePrompt,
+      cache_control: { type: "ephemeral" }
+    });
+    expect(out[1]).toEqual({ type: "text", text: "\n\nSUFFIX" });
+  });
+
+  it("omits the suffix block when fullPrompt equals basePrompt", () => {
+    const basePrompt = "B".repeat(PROMPT_CACHE_MIN_CHARS + 100);
+    const out = buildSystemPayload(basePrompt, basePrompt);
+    expect(Array.isArray(out)).toBe(true);
+    expect(out.length).toBe(1);
+    expect(out[0].cache_control).toEqual({ type: "ephemeral" });
+  });
+
+  it("returns the plain string when basePrompt is below the cacheable threshold", () => {
+    const shortBase = "Too short to cache.";
+    const fullPrompt = shortBase + "\n\nSUFFIX";
+    const out = buildSystemPayload(shortBase, fullPrompt);
+    expect(out).toBe(fullPrompt);
+  });
+
+  it("returns the plain string when basePrompt is empty (load fallback)", () => {
+    expect(buildSystemPayload("", "anything")).toBe("anything");
   });
 });
