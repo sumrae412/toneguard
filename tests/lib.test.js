@@ -566,6 +566,40 @@ describe("verifyInsertedText", () => {
     const afterExpanded = "Hi @Sam Rivera, could you take a look when you get a chance?";
     expect(verifyInsertedText(before, afterExpanded, proposed)).toBe(true);
   });
+
+  it("passes when the expanded display name contains an apostrophe", () => {
+    // "@sam" → "@Samuel O'Brien": the apostrophe is not a [A-Z] word char, so
+    // the old heuristic stranded "'Brien" on the after-side and false-nacked.
+    const before = "hey @sam can you check this";
+    const proposed = "Hi @sam, could you take a look?";
+    const afterExpanded = "Hi @Samuel O'Brien, could you take a look?";
+    expect(verifyInsertedText(before, afterExpanded, proposed)).toBe(true);
+  });
+
+  it("passes when the expanded display name contains a lowercase particle", () => {
+    // "@sam" → "@Sam von Trapp": "von" is lowercase, so the old heuristic
+    // stopped at "@Sam" and stranded "von Trapp".
+    const before = "ping @sam";
+    const proposed = "Thanks @sam, appreciate it.";
+    const afterExpanded = "Thanks @Sam von Trapp, appreciate it.";
+    expect(verifyInsertedText(before, afterExpanded, proposed)).toBe(true);
+  });
+
+  it("passes when multiple @mentions expand on insert", () => {
+    const before = "x";
+    const proposed = "Hi @sam and @bob, thoughts?";
+    const afterExpanded = "Hi @Sam Rivera and @Bob Jones, thoughts?";
+    expect(verifyInsertedText(before, afterExpanded, proposed)).toBe(true);
+  });
+
+  it("still nacks a true no-op even when the draft has a mention", () => {
+    // Guard against the mention-stripping loosening into a false-ack: if the
+    // editor content never changed, the insert silently failed and we must
+    // not claim success.
+    const draft = "hi @sam there";
+    const proposed = "Hi @sam, a totally different rewrite here";
+    expect(verifyInsertedText(draft, draft, proposed)).toBe(false);
+  });
 });
 
 describe("buildTelemetryClipboardPayload", () => {

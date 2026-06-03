@@ -474,6 +474,17 @@
     pendingEditor = editor;
     console.log("[ToneGuard:diag] pendingEditor set, analysis starting");
 
+    // Tracks whether the safety timeout already gave up on this run. The
+    // in-flight analysis promise is NOT abortable, so a slow analysis can
+    // still resolve after the timeout fired and cleared pendingEditor. If
+    // that resolve path were allowed to call showResult()/releaseSend(), it
+    // would paint a live, clickable suggestion over null pending state — the
+    // user clicks "Use suggestion", the decision reaches us with
+    // pendingEditor === null, and we nack with "no pending compose" and a
+    // false "message did not send" card. Guard every post-await branch on
+    // this flag so a superseded run stays silent.
+    let superseded = false;
+
     // Safety timeout: if analysis hangs much longer than the multi-model
     // path's worst case (~15s), surface a stale-state notice and clear
     // the concurrency guard. Do NOT dispatch a synthetic Enter here —
@@ -483,6 +494,7 @@
     // later "Use edited version" click with a "no pending compose" error).
     const safetyTimeout = setTimeout(() => {
       console.warn("[ToneGuard:diag] safety timeout fired after 30s; clearing pending state");
+      superseded = true;
       hideCheckingIndicator();
       if (window.__toneGuard) {
         window.__toneGuard.showError({
@@ -528,6 +540,16 @@
       clearTimeout(safetyTimeout);
       hideCheckingIndicator();
 
+      // The safety timeout already fired and tore down pending state. Dropping
+      // here keeps a slow result from painting a live overlay (showResult) or
+      // auto-releasing the send over null pendingEditor — both would strand the
+      // user on a phantom suggestion that can never ack. The timeout notice is
+      // already on screen; say nothing more.
+      if (superseded) {
+        console.warn("[ToneGuard:diag] analysis resolved after timeout; dropping superseded result");
+        return;
+      }
+
       if (result.error) {
         console.warn("ToneGuard:", formatErrorForLog(result.error));
         if (window.__toneGuard) window.__toneGuard.showError(result.error);
@@ -568,6 +590,13 @@
     } catch (err) {
       clearTimeout(safetyTimeout);
       hideCheckingIndicator();
+
+      // Superseded by the timeout — pending state is already cleared and the
+      // timeout notice is shown. Don't releaseSend() over null state.
+      if (superseded) {
+        console.warn("[ToneGuard:diag] analysis rejected after timeout; dropping superseded error");
+        return;
+      }
 
       // Extension was reloaded — show reload prompt and block the send.
       // The message is unchecked; don't let it go out automatically.
