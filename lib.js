@@ -585,9 +585,20 @@ function verifyInsertedText(before, after, suggestion) {
   // name on insert (see [AUTOSLUG] events), so the suggestion text is no
   // longer a substring of the resulting editor content even though the
   // insert succeeded. Stripping mentions from both sides neutralizes that.
-  // Also consume any trailing capitalized words after the handle so Slack's
+  // Also consume the display-name run after the handle so Slack's
   // "@sam" → "@Sam Rivera" expansion strips to the same shape on both sides.
-  const stripMentions = (s) => s.replace(/@[\w.-]+(?:\s+[A-Z][\w.-]*)*/g, "").replace(/\s+/g, " ").trim();
+  // The run is: capitalized words ([A-Z]…), plus name characters the
+  // capitalized-word heuristic alone would strand — apostrophes/curly-quotes
+  // and hyphens inside a token (O'Brien, Smith-Lee), and the common lowercase
+  // particles (von, van, de/der/del, di, da, la, le, …). Without these the
+  // after-side keeps a dangling "'Brien" / "von Trapp" and the compare
+  // silently fails, nacking a successful insert. These tokens are consumed
+  // symmetrically, so eating one that's really sentence text stays aligned on
+  // both sides.
+  const stripMentions = (s) =>
+    s.replace(/@[\w.'’-]+(?:\s+(?:[A-Z][\w.'’-]*|von|van|de[rl]?|del|dos|das|la|le|di|da|du|bin|ben|al))*/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
   const sBefore = stripMentions(nBefore);
   const sAfter = stripMentions(nAfter);
   const sSuggestion = stripMentions(nSuggestion);
