@@ -33,8 +33,26 @@
 
   // --- Iframe creation ---
 
+  // Detect if the extension context was invalidated (extension reloaded/updated
+  // while this tab stayed open). chrome.runtime.id becomes undefined and
+  // chrome.runtime.getURL() throws "Extension context invalidated". Mirrors the
+  // guard in content.js and overlay-frame.js.
+  function isContextValid() {
+    try {
+      return !!(chrome.runtime && chrome.runtime.id);
+    } catch (_) {
+      return false;
+    }
+  }
+
   function ensureIframe() {
     if (iframe) return;
+
+    // After the extension reloads, getURL() throws and — because the overlay
+    // API is called from content.js's async analysis flow — surfaces as an
+    // uncaught promise rejection. Bail quietly: the overlay can't load its
+    // extension-hosted iframe anyway. content.js separately blocks the send.
+    if (!isContextValid()) return;
 
     iframe = document.createElement("iframe");
     iframe.id = "toneguard-overlay-frame";
