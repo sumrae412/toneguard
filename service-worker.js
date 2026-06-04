@@ -17,6 +17,7 @@ const MODEL = "claude-haiku-4-5-20251001";
 let basePromptCache = null;
 let landingPromptCache = null;
 let analysisToolCache = null;
+let landingToolCache = null;
 
 function stripGeneratedPromptHeader(prompt) {
   return prompt.replace(/^Generated from shared\/\. Do not edit directly\.\n\n/, "");
@@ -72,6 +73,19 @@ async function loadAnalysisTool() {
     return null;
   }
   return analysisToolCache;
+}
+
+async function loadLandingTool() {
+  if (landingToolCache) return landingToolCache;
+  try {
+    const url = chrome.runtime.getURL("prompts/landing-tool.json");
+    const response = await fetch(url);
+    landingToolCache = JSON.parse(await response.text());
+  } catch (err) {
+    console.error("ToneGuard: failed to load landing tool schema", err);
+    return null;
+  }
+  return landingToolCache;
 }
 
 async function loadLandingPrompt() {
@@ -766,6 +780,20 @@ async function callLandingCritic(text, context, apiKey) {
   const userContent =
     "## Message\n\n" + text + (context ? "\n\n## Context\n\n" + context : "");
 
+  const landingTool = await loadLandingTool();
+  const body = {
+    model: "claude-haiku-4-5-20251001",
+    max_tokens: 256,
+    system: await loadLandingPrompt(),
+    messages: [{ role: "user", content: userContent }]
+  };
+  // Forced tool use: the landing view returns as a parsed object, not free-text
+  // JSON. Falls back to text parsing if the schema failed to load.
+  if (landingTool) {
+    body.tools = [landingTool];
+    body.tool_choice = { type: "tool", name: landingTool.name };
+  }
+
   const response = await fetch(CLAUDE_API_URL, {
     method: "POST",
     headers: {
@@ -774,12 +802,7 @@ async function callLandingCritic(text, context, apiKey) {
       "anthropic-version": "2023-06-01",
       "anthropic-dangerous-direct-browser-access": "true"
     },
-    body: JSON.stringify({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 256,
-      system: await loadLandingPrompt(),
-      messages: [{ role: "user", content: userContent }]
-    })
+    body: JSON.stringify(body)
   });
 
   if (!response.ok) {
@@ -787,8 +810,7 @@ async function callLandingCritic(text, context, apiKey) {
   }
 
   const data = await response.json();
-  const raw = (data.content && data.content[0] && data.content[0].text) || "";
-  const parsed = parseApiResponse(raw);
+  const parsed = extractToolResult(data, landingTool && landingTool.name);
   if (!parsed) return null;
   // Normalize: only keep the three known fields
   return {

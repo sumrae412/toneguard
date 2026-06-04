@@ -1,0 +1,33 @@
+{
+  "name": "report_landing",
+  "description": "Report how the message lands on a single skim: the takeaway, the tone felt, and the next action. Use null for messages too short to analyze.",
+  "input_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "takeaway",
+      "tone_felt",
+      "next_action"
+    ],
+    "properties": {
+      "takeaway": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "tone_felt": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "next_action": {
+        "type": [
+          "string",
+          "null"
+        ]
+      }
+    }
+  }
+}

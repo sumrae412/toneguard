@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://toneguard.local/shared/analysis/landing-schema.json",
+  "title": "ToneGuard Landing View",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["takeaway", "tone_felt", "next_action"],
+  "properties": {
+    "takeaway": {
+      "type": ["string", "null"]
+    },
+    "tone_felt": {
+      "type": ["string", "null"]
+    },
+    "next_action": {
+      "type": ["string", "null"]
+    }
+  }
+}

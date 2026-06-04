@@ -24,6 +24,8 @@ Generated files include:
 - `prompts/landing.txt`
 - `prompts/analysis-tool.json` — forced-tool schema for the extension (derived from `schema.json`, `routing` stripped)
 - `sync-server/pwa/analysis-tool.json` — same schema, served to the PWA at runtime
+- `prompts/landing-tool.json` — landing-view forced-tool schema for the extension (derived from `landing-schema.json`)
+- `toneguard-mcp/critics/landing-tool.json` — same landing schema, read by the MCP analyzer
 - `toneguard-mcp/critics/landing.md`
 - `pwa/generated-prompts.js`
 - `android/app/src/main/res/raw/toneguard_base_prompt.txt`
@@ -32,6 +34,12 @@ The extension and PWA call the analysis model with forced tool use (`tool_choice
 so the result returns as a parsed `tool_use.input` object rather than free-text
 JSON. This eliminates the stray-quote / control-char / markdown-fence parse
 failures (`TG_PARSE_001`). See `lib.js:extractToolResult`.
+
+The same forced-tool approach is applied to:
+
+- the **landing critic** in both the extension (`service-worker.js:callLandingCritic`) and the MCP (`analyzer.py:_call_landing`);
+- the MCP **tone critic, synthesizer, and self-grade refinement** (`analyzer.py`, schemas `CRITIC_TOOL` / `SYNTHESIS_TOOL` / `REFINEMENT_TOOL`), extracted via `analyzer.py:_extract_tool_result`;
+- the MCP **GPT critic**, which uses OpenAI JSON mode (`response_format={"type": "json_object"}`) so its output is always valid JSON.
 
 The response keeps legacy fields (`flagged`, `confidence`, `mode`, `readability`, `red_flags`, `categories`, `reasoning`, `suggestion`, `has_questions`, `questions`) and adds:
 

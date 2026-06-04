@@ -21,6 +21,17 @@ from analyzer import (
     MAX_REFINEMENT_PASSES,
     RUBRIC_DIMENSIONS,
 )
+
+
+def _tool_use_response(tool_name, payload):
+    """Build a mock Anthropic response carrying a forced tool_use block."""
+    block = MagicMock()
+    block.type = "tool_use"
+    block.name = tool_name
+    block.input = payload
+    resp = MagicMock()
+    resp.content = [block]
+    return resp
 from learning_store import LearningStore
 
 
@@ -804,3 +815,81 @@ class TestLandingCritic:
         assert result.get("landing") is None
         assert result["agents"]["landing"] == "error"
         assert result.get("rewrite")
+
+
+class TestToolUseExtraction:
+    """Forced tool use returns parsed objects, sidestepping text JSON parsing."""
+
+    def test_extracts_tool_use_input(self):
+        resp = _tool_use_response("report_critique", {"flagged": True, "rewrite": "x"})
+        assert ToneAnalyzer._extract_tool_result(resp, "report_critique") == {
+            "flagged": True,
+            "rewrite": "x",
+        }
+
+    def test_tool_input_with_embedded_quotes_survives(self):
+        # The exact failure class that broke _parse_json: unescaped inner quotes.
+        tricky = 'They screen against "do not adopt" flags.'
+        resp = _tool_use_response("report_critique", {"flagged": True, "rewrite": tricky})
+        assert ToneAnalyzer._extract_tool_result(resp)["rewrite"] == tricky
+
+    def test_falls_back_to_text_block(self):
+        block = MagicMock()
+        block.type = "text"
+        block.text = '{"flagged": false}'
+        resp = MagicMock()
+        resp.content = [block]
+        assert ToneAnalyzer._extract_tool_result(resp) == {"flagged": False}
+
+    def test_returns_empty_when_no_usable_content(self):
+        resp = MagicMock()
+        resp.content = []
+        assert ToneAnalyzer._extract_tool_result(resp) == {}
+
+    def test_ignores_mismatched_tool_name(self):
+        resp = _tool_use_response("something_else", {"flagged": True})
+        # No matching tool and no text block → empty.
+        assert ToneAnalyzer._extract_tool_result(resp, "report_critique") == {}
+
+    @pytest.mark.asyncio
+    async def test_call_landing_uses_tool_result(self, analyzer):
+        """_call_landing extracts the landing fields from a tool_use block."""
+        captured = {}
+
+        async def mock_create(**kwargs):
+            captured.update(kwargs)
+            return _tool_use_response(
+                "report_landing",
+                {
+                    "takeaway": "They want the deploy status",
+                    "tone_felt": "urgent",
+                    "next_action": "post an update",
+                },
+            )
+
+        analyzer._anthropic.messages.create = mock_create
+        result = await analyzer._call_landing(
+            "Hey, what is happening with the deploy? I have not heard anything all day.",
+            context="",
+        )
+        assert result["takeaway"] == "They want the deploy status"
+        assert result["next_action"] == "post an update"
+        # The call forced the landing tool.
+        assert captured.get("tool_choice") == {"type": "tool", "name": "report_landing"}
+
+    @pytest.mark.asyncio
+    async def test_gpt_critic_requests_json_mode(self, analyzer):
+        """The GPT critic forces JSON mode so output can't fail json.loads."""
+        captured = {}
+
+        async def mock_gpt(**kwargs):
+            captured.update(kwargs)
+            choice = MagicMock()
+            choice.message.content = _make_critic_response()
+            resp = MagicMock()
+            resp.choices = [choice]
+            return resp
+
+        analyzer._openai.chat.completions.create = mock_gpt
+        await analyzer._call_gpt("some context")
+        assert captured.get("response_format") == {"type": "json_object"}
