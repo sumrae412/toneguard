@@ -31,6 +31,9 @@ import {
   categorizePattern,
   extractPatterns,
   renderMemoryMd,
+  buildPatternBlock,
+  PATTERN_INJECT_MAX_CHARS,
+  PATTERN_INJECT_MAX_COUNT,
   PATTERN_CATEGORIES
 } from "./lib-exports.mjs";
 
@@ -962,5 +965,80 @@ describe("renderMemoryMd", () => {
     const md = renderMemoryMd(patterns, { generatedAt: "2026-06-01" });
     expect(md).toContain("(1 pattern)");
     expect(md).not.toContain("(1 patterns)");
+  });
+});
+
+describe("buildPatternBlock", () => {
+  it("returns empty string for null/empty input", () => {
+    expect(buildPatternBlock(null)).toBe("");
+    expect(buildPatternBlock([])).toBe("");
+    expect(buildPatternBlock(undefined)).toBe("");
+  });
+
+  it("renders a header + one bullet per pattern", () => {
+    const patterns = [
+      { from_token: "asap", to_token: "soon", category: "softening", recipients: [], occurrences: 3 },
+      { from_token: "ok", to_token: "sounds good", category: "softening", recipients: [], occurrences: 2 }
+    ];
+    const block = buildPatternBlock(patterns);
+    expect(block).toContain("PATTERNS LEARNED FROM PAST EDITS");
+    expect(block).toContain('"asap" → "soon" (3×)');
+    expect(block).toContain('"ok" → "sounds good" (2×)');
+  });
+
+  it("attaches a 'especially with @X' hint for single-recipient patterns", () => {
+    const patterns = [
+      { from_token: "now", to_token: "later", category: "softening", recipients: ["sam"], occurrences: 4 }
+    ];
+    const block = buildPatternBlock(patterns);
+    expect(block).toContain("especially with @sam");
+  });
+
+  it("attaches a 'with @X, @Y' hint for multi-recipient patterns", () => {
+    const patterns = [
+      { from_token: "now", to_token: "later", category: "softening", recipients: ["sam", "dana"], occurrences: 6 }
+    ];
+    const block = buildPatternBlock(patterns);
+    expect(block).toContain("with @sam, @dana");
+    expect(block).not.toContain("especially");
+  });
+
+  it("caps output at PATTERN_INJECT_MAX_COUNT patterns", () => {
+    const many = [];
+    for (let i = 0; i < PATTERN_INJECT_MAX_COUNT + 5; i++) {
+      many.push({
+        from_token: "x" + i,
+        to_token: "y" + i,
+        category: "other",
+        recipients: [],
+        occurrences: PATTERN_INJECT_MAX_COUNT - i
+      });
+    }
+    const block = buildPatternBlock(many);
+    // Header + at most MAX_COUNT bullets
+    const bulletLines = block.split("\n").filter((l) => l.startsWith("- "));
+    expect(bulletLines.length).toBeLessThanOrEqual(PATTERN_INJECT_MAX_COUNT);
+  });
+
+  it("respects PATTERN_INJECT_MAX_CHARS budget even when far below MAX_COUNT", () => {
+    const huge = "Z".repeat(PATTERN_INJECT_MAX_CHARS);
+    const patterns = [
+      { from_token: huge, to_token: "y", category: "other", recipients: [], occurrences: 1 },
+      { from_token: "a", to_token: "b", category: "other", recipients: [], occurrences: 1 }
+    ];
+    const block = buildPatternBlock(patterns);
+    // The first pattern alone exceeds the budget — should produce empty.
+    // (Second pattern would fit but the loop breaks on first oversize line.)
+    expect(block).toBe("");
+  });
+
+  it("skips invalid pattern entries (missing from/to)", () => {
+    const patterns = [
+      { from_token: "", to_token: "y", category: "other", recipients: [], occurrences: 1 },
+      { from_token: "x", to_token: "y", category: "other", recipients: [], occurrences: 1 }
+    ];
+    const block = buildPatternBlock(patterns);
+    expect(block).toContain('"x" → "y"');
+    expect(block.split("\n").filter((l) => l.startsWith("- ")).length).toBe(1);
   });
 });

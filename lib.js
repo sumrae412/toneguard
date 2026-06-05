@@ -845,6 +845,62 @@ function renderMemoryMd(patterns, opts) {
   return lines.join("\n").replace(/\n+$/, "\n");
 }
 
+// ===========================================================================
+// Pattern block for system prompt injection (Phase 5c)
+// ===========================================================================
+
+/**
+ * Cap for the injected pattern block. ~600 tokens (~2400 chars at 4 chars/tok).
+ * Comfortably small relative to the analysis prompt; large enough to carry
+ * 10-15 substantial patterns. The block goes into the VOLATILE suffix (NOT
+ * the cached basePrompt) — caching invariant preserved.
+ */
+const PATTERN_INJECT_MAX_CHARS = 2400;
+const PATTERN_INJECT_MAX_COUNT = 10;
+
+/**
+ * Render top-N learned patterns as a system-prompt block ready to append to
+ * the volatile suffix. Returns "" when there's nothing useful to inject.
+ *
+ * Format choices:
+ *   - Header tells the model HOW to use the patterns (consistency, not just
+ *     reference).
+ *   - Each line is a single substitution with occurrence count, so the model
+ *     has a usage-frequency signal.
+ *   - Recipient hints attached for patterns dominated by a specific @mention.
+ *
+ * @param {Array<object>} patterns - output of extractPatterns()
+ * @returns {string}
+ */
+function buildPatternBlock(patterns) {
+  if (!Array.isArray(patterns) || patterns.length === 0) return "";
+
+  const lines = [
+    "PATTERNS LEARNED FROM PAST EDITS (apply consistently — prefer these over generic softeners):"
+  ];
+
+  let charBudget = PATTERN_INJECT_MAX_CHARS - lines[0].length;
+  let used = 0;
+
+  for (const p of patterns.slice(0, PATTERN_INJECT_MAX_COUNT)) {
+    if (!p || !p.from_token || !p.to_token) continue;
+    const recipients = Array.isArray(p.recipients) ? p.recipients : [];
+    const recPart = recipients.length === 1
+      ? ` (especially with @${recipients[0]})`
+      : recipients.length > 1
+        ? ` (with ${recipients.map((r) => "@" + r).join(", ")})`
+        : "";
+    const line = `- "${p.from_token}" → "${p.to_token}" (${p.occurrences || 1}×${recPart})`;
+    if (line.length > charBudget) break;
+    lines.push(line);
+    charBudget -= line.length + 1; // +1 for newline
+    used += 1;
+  }
+
+  if (used === 0) return "";
+  return lines.join("\n");
+}
+
 // Make functions available globally when loaded as a content script (non-module),
 // and via the test wrapper (tests/lib-exports.mjs) for vitest.
 if (typeof globalThis !== "undefined") {
@@ -880,6 +936,9 @@ if (typeof globalThis !== "undefined") {
     categorizePattern,
     extractPatterns,
     renderMemoryMd,
+    buildPatternBlock,
+    PATTERN_INJECT_MAX_CHARS,
+    PATTERN_INJECT_MAX_COUNT,
     PATTERN_CATEGORIES,
     hashApiKey,
     normalizeEditorText,
