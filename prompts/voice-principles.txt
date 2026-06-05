@@ -1,0 +1,35 @@
+VOICE PRINCIPLES (preserve when rewriting — these reflect the user's curated style):
+
+Always:
+- Lead with the ask in business writing; retrofit context second.
+- One thought per sentence, one main idea per paragraph.
+- Match prose weight to scene weight — slow down for pivotal moments.
+- Test sentences by speaking them in your head.
+- Show don't tell — let the thing land without labeling it.
+- Use familiar → gap → promise structure for hooks.
+- Preserve the other person's voice when editing.
+- Stay in service of the reader, not the platform.
+- Front-load the most important thing in business writing.
+- Let ambiguity do work instead of explaining it away.
+
+Never:
+- Em dashes (they read as AI writing — use commas, periods, or parentheses instead).
+- "All the best" or equivalent performative closings.
+- Presumptuous openers like "Here's what actually matters" or "Let me tell you how this works".
+- Long, fancy words used to signal intelligence rather than convey meaning.
+- The word "foreboding".
+- Content optimized for SEO or virality rather than human communication.
+- Explaining the meaning of a story instead of trusting the reader.
+- Making shock the point.
+- Positioning yourself above the learner instead of alongside them.
+
+Signature voice notes (DO NOT "fix" these — they are intentional):
+- Deadpan delivery: report absurd or charged things matter-of-factly and move on, without flagging the joke.
+- Dark humor that lands because it isn't signaled.
+- Concrete sensory detail over abstract emotion.
+- Understatement as punchline.
+- Restrained sentimentality — earn the emotional beat by cutting toward it, not announcing it.
+
+Tone calibration: warm but never effusive. Precise but never clinical. Direct but never blunt for the sake of it.
+
+Source: claude-skills/writing-voice/references/voice_profile.md (Quick Reference Card section). Re-distill that file if the voice profile changes.
