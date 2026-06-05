@@ -84,6 +84,10 @@
     .install-help p { font-size: 13px; color: var(--text-secondary); line-height: 1.5; margin: 4px 0; }
     .install-help small { color: var(--text-muted); }
     .install-help a { color: var(--green); text-decoration: none; }
+    .install-btn-row { margin: 12px 0; }
+    .install-btn { width: 100%; padding: 12px; font-size: 15px; font-weight: 600; background: var(--green); color: #fff; border: none; border-radius: 8px; cursor: pointer; }
+    .install-btn:hover { background: var(--green-hover); }
+    .install-btn[hidden] { display: none; }
 
     /* ── Setup Panel ── */
     .setup {
@@ -523,6 +527,10 @@
   <div class="body" id="setupView" style="display:none">
     <aside class="install-help" id="install-help">
       <h2>Install ToneGuard on your phone</h2>
+
+      <div class="install-btn-row">
+        <button class="install-btn" id="installBtn" hidden>📥 Install ToneGuard</button>
+      </div>
 
       <details>
         <summary><strong>Android (Chrome) — 2 taps</strong></summary>
