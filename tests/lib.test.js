@@ -31,6 +31,8 @@ import {
   categorizePattern,
   extractPatterns,
   renderMemoryMd,
+  buildMemoryGraph,
+  renderMemoryGraph,
   buildPatternBlock,
   PATTERN_INJECT_MAX_CHARS,
   PATTERN_INJECT_MAX_COUNT,
@@ -1040,5 +1042,135 @@ describe("buildPatternBlock", () => {
     const block = buildPatternBlock(patterns);
     expect(block).toContain('"x" → "y"');
     expect(block.split("\n").filter((l) => l.startsWith("- ")).length).toBe(1);
+  });
+});
+
+describe("buildMemoryGraph", () => {
+  it("returns empty arrays for empty input", () => {
+    const g = buildMemoryGraph([]);
+    expect(g.patterns).toEqual([]);
+    expect(g.recipients).toEqual([]);
+    expect(g.categories).toEqual([]);
+    expect(g.recipientAffinity).toEqual([]);
+    expect(g.orphans).toEqual([]);
+  });
+
+  it("classifies patterns with no recipients as orphans", () => {
+    const patterns = [
+      { from_token: "x", to_token: "y", category: "other", recipients: [], occurrences: 1 }
+    ];
+    const g = buildMemoryGraph(patterns);
+    expect(g.orphans).toHaveLength(1);
+    expect(g.recipients).toEqual([]);
+  });
+
+  it("computes recipient degree as count of distinct patterns", () => {
+    const patterns = [
+      { from_token: "a", to_token: "b", category: "softening", recipients: ["sam"], occurrences: 2 },
+      { from_token: "c", to_token: "d", category: "softening", recipients: ["sam"], occurrences: 1 }
+    ];
+    const g = buildMemoryGraph(patterns);
+    expect(g.recipients).toHaveLength(1);
+    expect(g.recipients[0].name).toBe("sam");
+    expect(g.recipients[0].degree).toBe(2);
+  });
+
+  it("computes recipient affinity from shared patterns", () => {
+    const patterns = [
+      { from_token: "a", to_token: "b", category: "softening", recipients: ["sam", "dana"], occurrences: 1 },
+      { from_token: "c", to_token: "d", category: "softening", recipients: ["sam", "dana"], occurrences: 1 },
+      { from_token: "e", to_token: "f", category: "softening", recipients: ["sam"], occurrences: 1 }
+    ];
+    const g = buildMemoryGraph(patterns);
+    expect(g.recipientAffinity).toHaveLength(1);
+    expect(g.recipientAffinity[0].sharedCount).toBe(2);
+    expect([g.recipientAffinity[0].a, g.recipientAffinity[0].b].sort()).toEqual(["dana", "sam"]);
+  });
+
+  it("sorts pattern nodes by degree (descending)", () => {
+    const patterns = [
+      { from_token: "low", to_token: "y", category: "other", recipients: [], occurrences: 1 },
+      { from_token: "high", to_token: "y", category: "other", recipients: ["a", "b", "c"], occurrences: 1 }
+    ];
+    const g = buildMemoryGraph(patterns);
+    expect(g.patterns[0].from_token).toBe("high");
+    expect(g.patterns[0].degree).toBeGreaterThan(g.patterns[1].degree);
+  });
+
+  it("groups patterns into categories by category field", () => {
+    const patterns = [
+      { from_token: "a", to_token: "b", category: "softening", recipients: [], occurrences: 1 },
+      { from_token: "c", to_token: "d", category: "hedging", recipients: [], occurrences: 1 }
+    ];
+    const g = buildMemoryGraph(patterns);
+    const cats = g.categories.map((c) => c.name).sort();
+    expect(cats).toEqual(["hedging", "softening"]);
+  });
+});
+
+describe("renderMemoryGraph", () => {
+  it("returns empty string when no patterns", () => {
+    expect(renderMemoryGraph([])).toBe("");
+    expect(renderMemoryGraph(null)).toBe("");
+  });
+
+  it("emits ## Graph view header and Hubs section", () => {
+    const patterns = [
+      { from_token: "asap", to_token: "soon", category: "softening", recipients: ["sam"], occurrences: 3 }
+    ];
+    const md = renderMemoryGraph(patterns);
+    expect(md).toContain("## Graph view");
+    expect(md).toContain("### Hubs");
+    expect(md).toContain('Pattern: "asap" → "soon"');
+  });
+
+  it("emits stable slugged anchors for cross-linking", () => {
+    const patterns = [
+      { from_token: "asap", to_token: "soon", category: "softening", recipients: ["sam"], occurrences: 2 }
+    ];
+    const md = renderMemoryGraph(patterns);
+    expect(md).toContain('id="pattern-asap-to-soon"');
+    expect(md).toContain('id="recipient-sam"');
+    expect(md).toContain('id="category-softening"');
+    // The category link in the hub bullet uses the slug
+    expect(md).toContain("[softening](#category-softening)");
+    expect(md).toContain("[@sam](#recipient-sam)");
+  });
+
+  it("renders a Recipient affinity section when affinities exist", () => {
+    const patterns = [
+      { from_token: "a", to_token: "b", category: "softening", recipients: ["sam", "dana"], occurrences: 1 }
+    ];
+    const md = renderMemoryGraph(patterns);
+    expect(md).toContain("### Recipient affinity");
+    // Recipient list is alphabetically sorted before pairing, so "dana" precedes "sam"
+    expect(md).toContain("[@dana](#recipient-dana) ↔ [@sam](#recipient-sam)");
+  });
+
+  it("omits Recipient affinity when no recipients overlap", () => {
+    const patterns = [
+      { from_token: "a", to_token: "b", category: "softening", recipients: ["sam"], occurrences: 1 },
+      { from_token: "c", to_token: "d", category: "softening", recipients: ["dana"], occurrences: 1 }
+    ];
+    const md = renderMemoryGraph(patterns);
+    expect(md).not.toContain("### Recipient affinity");
+  });
+
+  it("emits Orphan patterns section when patterns have no recipients", () => {
+    const patterns = [
+      { from_token: "x", to_token: "y", category: "other", recipients: [], occurrences: 1 }
+    ];
+    const md = renderMemoryGraph(patterns);
+    expect(md).toContain("### Orphan patterns");
+    expect(md).toContain('"x" → "y"');
+  });
+
+  it("renderMemoryMd now includes the graph section", () => {
+    const patterns = [
+      { from_token: "asap", to_token: "soon", category: "softening", recipients: ["sam"], occurrences: 1 }
+    ];
+    const md = renderMemoryMd(patterns, { generatedAt: "2026-06-05" });
+    expect(md).toContain("## Substitutions by category");
+    expect(md).toContain("## Graph view");
   });
 });

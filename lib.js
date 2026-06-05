@@ -842,6 +842,205 @@ function renderMemoryMd(patterns, opts) {
     }
   }
 
+  // Append the graph view (Phase 5e). Empty when patterns is empty.
+  const graphMd = renderMemoryGraph(safe);
+  if (graphMd) {
+    lines.push(graphMd);
+  }
+
+  return lines.join("\n").replace(/\n+$/, "\n");
+}
+
+// ===========================================================================
+// Memory graph view (Phase 5e — purpose-built, NOT a build_doc_graph.py reuse)
+// ===========================================================================
+
+/**
+ * Lowercase, replace non-alphanumeric runs with hyphens, trim hyphens. Used
+ * for stable markdown anchors (GitHub-flavored). Keeps the graph cross-links
+ * functional both in rendered MD viewers and in the downloaded file.
+ */
+function _slugify(s) {
+  return String(s)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function _patternAnchor(p) {
+  return "pattern-" + _slugify(p.from_token + "-to-" + p.to_token);
+}
+function _recipientAnchor(name) { return "recipient-" + _slugify(name); }
+function _categoryAnchor(cat) { return "category-" + _slugify(cat); }
+function _patternLabel(p) { return `"${p.from_token}" → "${p.to_token}"`; }
+
+/**
+ * Build a node/edge graph from the pattern store.
+ *
+ * Nodes:
+ *   - pattern nodes (one per distinct from→to)
+ *   - recipient nodes (one per @mention across all patterns)
+ *   - category nodes (one per occupied category)
+ *
+ * Edges:
+ *   - pattern ↔ recipient (pattern was used with recipient)
+ *   - pattern ↔ category
+ *   - recipient ↔ recipient (inferred — they share at least one pattern)
+ *
+ * Returns a structured graph object for direct rendering, plus rank metadata
+ * (degree per node so the renderer can list hubs).
+ *
+ * @param {Array<object>} patterns
+ * @returns {{patterns: Array, recipients: Array, categories: Array, recipientAffinity: Array, orphans: Array}}
+ */
+function buildMemoryGraph(patterns) {
+  const safe = Array.isArray(patterns) ? patterns : [];
+
+  // Index patterns and compute recipient counts
+  const recipientToPatterns = new Map();
+  const categoryToPatterns = new Map();
+  const orphans = [];
+
+  for (const p of safe) {
+    if (!p || !p.from_token || !p.to_token) continue;
+    const cat = p.category || "other";
+    if (!categoryToPatterns.has(cat)) categoryToPatterns.set(cat, []);
+    categoryToPatterns.get(cat).push(p);
+
+    const recipients = Array.isArray(p.recipients) ? p.recipients : [];
+    if (recipients.length === 0) {
+      orphans.push(p);
+      continue;
+    }
+    for (const r of recipients) {
+      if (!recipientToPatterns.has(r)) recipientToPatterns.set(r, []);
+      recipientToPatterns.get(r).push(p);
+    }
+  }
+
+  // Recipient ↔ recipient affinity: any two recipients sharing >= 1 pattern
+  const recipientList = Array.from(recipientToPatterns.keys()).sort();
+  const affinity = [];
+  for (let i = 0; i < recipientList.length; i++) {
+    for (let j = i + 1; j < recipientList.length; j++) {
+      const a = recipientList[i];
+      const b = recipientList[j];
+      const aSet = new Set(recipientToPatterns.get(a).map(_patternAnchor));
+      const shared = recipientToPatterns.get(b).filter((p) => aSet.has(_patternAnchor(p)));
+      if (shared.length > 0) {
+        affinity.push({ a, b, sharedCount: shared.length, shared });
+      }
+    }
+  }
+  affinity.sort((x, y) => y.sharedCount - x.sharedCount);
+
+  // Build pattern degree: edges = recipients + 1 (for category)
+  const patternNodes = safe
+    .filter((p) => p && p.from_token && p.to_token)
+    .map((p) => {
+      const recCount = (p.recipients || []).length;
+      return { ...p, degree: recCount + 1 };
+    })
+    .sort((a, b) => b.degree - a.degree || b.occurrences - a.occurrences);
+
+  const recipientNodes = recipientList
+    .map((r) => ({ name: r, patterns: recipientToPatterns.get(r), degree: recipientToPatterns.get(r).length }))
+    .sort((a, b) => b.degree - a.degree);
+
+  const categoryNodes = Array.from(categoryToPatterns.entries())
+    .map(([cat, ps]) => ({ name: cat, patterns: ps, degree: ps.length }))
+    .sort((a, b) => b.degree - a.degree);
+
+  return {
+    patterns: patternNodes,
+    recipients: recipientNodes,
+    categories: categoryNodes,
+    recipientAffinity: affinity,
+    orphans
+  };
+}
+
+/**
+ * Render the graph as cross-linked markdown sections suitable for appending
+ * to memory.md. Anchors are GitHub-flavored slugs so links work in any
+ * markdown viewer that auto-anchors headings (including GitHub itself).
+ *
+ * @param {Array<object>} patterns
+ * @returns {string}
+ */
+function renderMemoryGraph(patterns) {
+  const graph = buildMemoryGraph(patterns);
+  const lines = [];
+
+  if (graph.patterns.length === 0) return "";
+
+  lines.push("## Graph view", "");
+  lines.push("_Patterns, recipients, and categories as a cross-linked graph. Click a link to jump._", "");
+
+  // --- Hubs: most-connected pattern nodes (top 5) ---
+  lines.push("### Hubs — most connected patterns", "");
+  const hubs = graph.patterns.slice(0, 5);
+  for (const p of hubs) {
+    lines.push(`#### Pattern: ${_patternLabel(p)} <a id="${_patternAnchor(p)}"></a>`);
+    lines.push("");
+    lines.push(`- Occurrences: ${p.occurrences || 1}`);
+    lines.push(`- Category: [${p.category}](#${_categoryAnchor(p.category)})`);
+    if ((p.recipients || []).length > 0) {
+      const recLinks = p.recipients.map((r) => `[@${r}](#${_recipientAnchor(r)})`).join(", ");
+      lines.push(`- Recipients: ${recLinks}`);
+    } else {
+      lines.push(`- Recipients: _(none — orphan pattern)_`);
+    }
+    lines.push("");
+  }
+
+  // --- Recipients ---
+  if (graph.recipients.length > 0) {
+    lines.push("### Recipients", "");
+    for (const r of graph.recipients) {
+      lines.push(`#### @${r.name} <a id="${_recipientAnchor(r.name)}"></a> — ${r.degree} pattern${r.degree === 1 ? "" : "s"}`);
+      lines.push("");
+      for (const p of r.patterns) {
+        lines.push(`- [${_patternLabel(p)}](#${_patternAnchor(p)}) (${p.occurrences || 1}×)`);
+      }
+      lines.push("");
+    }
+  }
+
+  // --- Categories ---
+  if (graph.categories.length > 0) {
+    lines.push("### Categories", "");
+    for (const c of graph.categories) {
+      const label = c.name[0].toUpperCase() + c.name.slice(1);
+      lines.push(`#### ${label} <a id="${_categoryAnchor(c.name)}"></a> — ${c.degree} pattern${c.degree === 1 ? "" : "s"}`);
+      lines.push("");
+      for (const p of c.patterns) {
+        lines.push(`- [${_patternLabel(p)}](#${_patternAnchor(p)})`);
+      }
+      lines.push("");
+    }
+  }
+
+  // --- Recipient affinity ---
+  if (graph.recipientAffinity.length > 0) {
+    lines.push("### Recipient affinity", "");
+    lines.push("_Recipient pairs that share patterns — implicit communication-style clusters._", "");
+    for (const a of graph.recipientAffinity) {
+      lines.push(`- [@${a.a}](#${_recipientAnchor(a.a)}) ↔ [@${a.b}](#${_recipientAnchor(a.b)}) — ${a.sharedCount} shared pattern${a.sharedCount === 1 ? "" : "s"}`);
+    }
+    lines.push("");
+  }
+
+  // --- Orphan patterns ---
+  if (graph.orphans.length > 0) {
+    lines.push("### Orphan patterns", "");
+    lines.push("_Patterns with no recipient connection — 1:1 messages or no @mentions in the original._", "");
+    for (const p of graph.orphans) {
+      lines.push(`- ${_patternLabel(p)} (${p.occurrences || 1}×, ${p.category})`);
+    }
+    lines.push("");
+  }
+
   return lines.join("\n").replace(/\n+$/, "\n");
 }
 
@@ -936,6 +1135,8 @@ if (typeof globalThis !== "undefined") {
     categorizePattern,
     extractPatterns,
     renderMemoryMd,
+    buildMemoryGraph,
+    renderMemoryGraph,
     buildPatternBlock,
     PATTERN_INJECT_MAX_CHARS,
     PATTERN_INJECT_MAX_COUNT,
