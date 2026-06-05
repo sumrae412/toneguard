@@ -50,4 +50,5 @@ export const commonPrefixSuffixLengths = lib.commonPrefixSuffixLengths;
 export const extractEditSpan = lib.extractEditSpan;
 export const categorizePattern = lib.categorizePattern;
 export const extractPatterns = lib.extractPatterns;
+export const renderMemoryMd = lib.renderMemoryMd;
 export const PATTERN_CATEGORIES = lib.PATTERN_CATEGORIES;

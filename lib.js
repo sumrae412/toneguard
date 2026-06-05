@@ -759,6 +759,92 @@ function extractPatterns(decisions) {
   return Array.from(patternMap.values()).sort((a, b) => b.occurrences - a.occurrences);
 }
 
+// ===========================================================================
+// memory.md renderer (Phase 5b — see docs/plans/2026-05-30-virtual-brain.md)
+// ===========================================================================
+
+function _formatPatternBullet(p) {
+  const recipients = (p.recipients || []).map((r) => "@" + r).join(", ");
+  const recPart = recipients ? `, with ${recipients}` : "";
+  return `- **"${p.from_token}"** → **"${p.to_token}"** (${p.occurrences}×, ${p.category}${recPart})`;
+}
+
+/**
+ * Render a deduped patterns array as a human-readable markdown document.
+ * Sections: header → by category (most-frequent first) → by recipient.
+ * Empty input still produces a valid (minimal) document.
+ *
+ * @param {Array<object>} patterns - output of extractPatterns()
+ * @param {{generatedAt?: string, decisionCount?: number}} [opts]
+ * @returns {string} markdown source
+ */
+function renderMemoryMd(patterns, opts) {
+  const safe = Array.isArray(patterns) ? patterns : [];
+  const options = opts || {};
+  const generated = options.generatedAt || "(unknown timestamp)";
+  const decisionCount = typeof options.decisionCount === "number"
+    ? options.decisionCount
+    : null;
+
+  const lines = ["# ToneGuard Memory", ""];
+  const subtitle = decisionCount !== null
+    ? `_Generated ${generated} from ${decisionCount} decisions, ${safe.length} patterns._`
+    : `_Generated ${generated} — ${safe.length} patterns._`;
+  lines.push(subtitle, "");
+
+  if (safe.length === 0) {
+    lines.push(
+      "No patterns learned yet. Edit a few suggestions in the overlay and they'll appear here."
+    );
+    return lines.join("\n");
+  }
+
+  // --- By category (most-frequent category first) ---
+  lines.push("## Substitutions by category", "");
+
+  const byCat = new Map();
+  for (const p of safe) {
+    const cat = p.category || "other";
+    if (!byCat.has(cat)) byCat.set(cat, []);
+    byCat.get(cat).push(p);
+  }
+  const cats = Array.from(byCat.entries())
+    .map(([cat, ps]) => ({
+      cat,
+      ps,
+      total: ps.reduce((sum, p) => sum + (p.occurrences || 0), 0)
+    }))
+    .sort((a, b) => b.total - a.total);
+
+  for (const { cat, ps } of cats) {
+    lines.push(`### ${cat[0].toUpperCase()}${cat.slice(1)} (${ps.length} pattern${ps.length === 1 ? "" : "s"})`, "");
+    for (const p of ps) lines.push(_formatPatternBullet(p));
+    lines.push("");
+  }
+
+  // --- By recipient ---
+  const byRec = new Map();
+  for (const p of safe) {
+    for (const r of p.recipients || []) {
+      if (!byRec.has(r)) byRec.set(r, []);
+      byRec.get(r).push(p);
+    }
+  }
+  if (byRec.size > 0) {
+    lines.push("## By recipient", "");
+    const recs = Array.from(byRec.entries())
+      .map(([r, ps]) => ({ r, ps, total: ps.length }))
+      .sort((a, b) => b.total - a.total);
+    for (const { r, ps } of recs) {
+      lines.push(`### @${r} (${ps.length} pattern${ps.length === 1 ? "" : "s"})`, "");
+      for (const p of ps) lines.push(_formatPatternBullet(p));
+      lines.push("");
+    }
+  }
+
+  return lines.join("\n").replace(/\n+$/, "\n");
+}
+
 // Make functions available globally when loaded as a content script (non-module),
 // and via the test wrapper (tests/lib-exports.mjs) for vitest.
 if (typeof globalThis !== "undefined") {
@@ -793,6 +879,7 @@ if (typeof globalThis !== "undefined") {
     extractEditSpan,
     categorizePattern,
     extractPatterns,
+    renderMemoryMd,
     PATTERN_CATEGORIES,
     hashApiKey,
     normalizeEditorText,

@@ -345,6 +345,16 @@
   </div>
 
   <div class="section">
+    <h2>Memory</h2>
+    <p>Patterns ToneGuard has learned from your edits. <span id="memoryCount"></span></p>
+    <div id="memoryList" style="font-size: 13px;"></div>
+    <div class="btn-row" style="margin-top: 12px;">
+      <button class="btn btn-primary" id="downloadMemory">Download memory.md</button>
+      <span class="status" id="memoryStatus" style="margin-left: 10px;"></span>
+    </div>
+  </div>
+
+  <div class="section">
     <h2>Learning History</h2>
     <p>ToneGuard learns from your choices. Here are your recent decisions.</p>
     <div id="historyList"></div>
@@ -353,6 +363,7 @@
     </div>
   </div>
 
+  <script src="lib.js"></script>
   <script src="options.js"></script>
 </body>
 </html>

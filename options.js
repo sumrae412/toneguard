@@ -358,3 +358,110 @@ regenerateFingerprintBtn.addEventListener("click", async () => {
 
 // Initial load
 refreshVoiceProfile();
+
+// --- Memory section (Phase 5b) ---
+
+const memoryListEl = document.getElementById("memoryList");
+const memoryCountEl = document.getElementById("memoryCount");
+const memoryStatusEl = document.getElementById("memoryStatus");
+const downloadMemoryBtn = document.getElementById("downloadMemory");
+
+function renderMemorySummary(patterns) {
+  if (!memoryListEl || !memoryCountEl) return;
+  const count = (patterns || []).length;
+  memoryCountEl.textContent = count === 0
+    ? "(none yet — edit suggestions in the overlay to build memory)"
+    : "(" + count + " pattern" + (count === 1 ? "" : "s") + ")";
+
+  if (count === 0) {
+    memoryListEl.textContent = "";
+    return;
+  }
+
+  // Inline view: top 8 most-frequent patterns
+  const top = patterns.slice(0, 8);
+  memoryListEl.textContent = "";
+  for (const p of top) {
+    const recPart = (p.recipients && p.recipients.length)
+      ? " — with " + p.recipients.map((r) => "@" + r).join(", ")
+      : "";
+    const line = '"' + p.from_token + '" → "' + p.to_token +
+      '" (' + p.occurrences + "×, " + p.category + recPart + ")";
+    const div = document.createElement("div");
+    div.style.padding = "4px 0";
+    div.style.borderBottom = "1px solid #eee";
+    div.textContent = line;
+    memoryListEl.appendChild(div);
+  }
+  if (patterns.length > top.length) {
+    const moreDiv = document.createElement("div");
+    moreDiv.style.padding = "4px 0";
+    moreDiv.style.fontStyle = "italic";
+    moreDiv.textContent = "… and " + (patterns.length - top.length) + " more in the download.";
+    memoryListEl.appendChild(moreDiv);
+  }
+}
+
+async function refreshMemory() {
+  try {
+    const resp = await chrome.runtime.sendMessage({ type: "GET_PATTERNS" });
+    if (resp && Array.isArray(resp.patterns)) {
+      renderMemorySummary(resp.patterns);
+    } else {
+      renderMemorySummary([]);
+    }
+  } catch (err) {
+    console.warn("ToneGuard: failed to load memory", err);
+    if (memoryCountEl) memoryCountEl.textContent = "(failed to load)";
+  }
+}
+
+function setMemoryStatus(msg, color) {
+  if (!memoryStatusEl) return;
+  memoryStatusEl.textContent = msg;
+  memoryStatusEl.style.color = color || "#666";
+  if (msg) setTimeout(() => {
+    if (memoryStatusEl.textContent === msg) memoryStatusEl.textContent = "";
+  }, 3000);
+}
+
+if (downloadMemoryBtn) {
+  downloadMemoryBtn.addEventListener("click", async () => {
+    downloadMemoryBtn.disabled = true;
+    try {
+      const [patternsResp, decisionsResult] = await Promise.all([
+        chrome.runtime.sendMessage({ type: "GET_PATTERNS" }),
+        chrome.storage.local.get(["tg_decisions"])
+      ]);
+      const patterns = (patternsResp && patternsResp.patterns) || [];
+      const decisionCount = (decisionsResult.tg_decisions || []).length;
+
+      const lib = globalThis.__toneGuardLib;
+      if (!lib || typeof lib.renderMemoryMd !== "function") {
+        throw new Error("memory renderer not available");
+      }
+      const md = lib.renderMemoryMd(patterns, {
+        generatedAt: new Date().toISOString(),
+        decisionCount
+      });
+
+      const blob = new Blob([md], { type: "text/markdown" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "toneguard-memory-" + new Date().toISOString().slice(0, 10) + ".md";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      setMemoryStatus("Downloaded.", "#4CAF50");
+    } catch (err) {
+      console.error("ToneGuard: memory download failed", err);
+      setMemoryStatus("Download failed: " + (err.message || err), "#e53935");
+    } finally {
+      downloadMemoryBtn.disabled = false;
+    }
+  });
+}
+
+refreshMemory();

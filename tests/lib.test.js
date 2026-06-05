@@ -30,6 +30,7 @@ import {
   extractEditSpan,
   categorizePattern,
   extractPatterns,
+  renderMemoryMd,
   PATTERN_CATEGORIES
 } from "./lib-exports.mjs";
 
@@ -891,5 +892,75 @@ describe("extractPatterns", () => {
       { action: "used_edited", suggestion: "same", finalText: "same", original: "" }
     ];
     expect(extractPatterns(decisions)).toEqual([]);
+  });
+});
+
+describe("renderMemoryMd", () => {
+  it("renders a minimal doc for empty patterns", () => {
+    const md = renderMemoryMd([], { generatedAt: "2026-06-01" });
+    expect(md).toContain("# ToneGuard Memory");
+    expect(md).toContain("0 patterns");
+    expect(md).toContain("No patterns learned yet");
+  });
+
+  it("handles non-array input safely", () => {
+    const md = renderMemoryMd(null);
+    expect(md).toContain("# ToneGuard Memory");
+    expect(md).toContain("0 patterns");
+  });
+
+  it("includes the decision count when provided", () => {
+    const md = renderMemoryMd([], { generatedAt: "2026-06-01", decisionCount: 42 });
+    expect(md).toContain("from 42 decisions, 0 patterns");
+  });
+
+  it("renders categories sorted by total occurrences (most-frequent first)", () => {
+    const patterns = [
+      { from_token: "ok", to_token: "sounds good", category: "softening", recipients: [], occurrences: 5 },
+      { from_token: "asap", to_token: "when you can", category: "softening", recipients: [], occurrences: 3 },
+      { from_token: "will", to_token: "might", category: "hedging", recipients: [], occurrences: 2 }
+    ];
+    const md = renderMemoryMd(patterns, { generatedAt: "2026-06-01" });
+    const softeningIdx = md.indexOf("### Softening");
+    const hedgingIdx = md.indexOf("### Hedging");
+    expect(softeningIdx).toBeGreaterThan(-1);
+    expect(hedgingIdx).toBeGreaterThan(-1);
+    expect(softeningIdx).toBeLessThan(hedgingIdx);
+  });
+
+  it("renders a recipient section when patterns have mentions", () => {
+    const patterns = [
+      { from_token: "asap", to_token: "soon", category: "softening", recipients: ["sam"], occurrences: 3 },
+      { from_token: "now", to_token: "later", category: "softening", recipients: ["sam", "dana"], occurrences: 2 }
+    ];
+    const md = renderMemoryMd(patterns, { generatedAt: "2026-06-01" });
+    expect(md).toContain("## By recipient");
+    expect(md).toContain("### @sam");
+    expect(md).toContain("### @dana");
+  });
+
+  it("omits the recipient section entirely when no patterns have mentions", () => {
+    const patterns = [
+      { from_token: "x", to_token: "y", category: "other", recipients: [], occurrences: 1 }
+    ];
+    const md = renderMemoryMd(patterns, { generatedAt: "2026-06-01" });
+    expect(md).not.toContain("## By recipient");
+  });
+
+  it("formats pattern bullets with from/to, count, category, and recipients", () => {
+    const patterns = [
+      { from_token: "asap", to_token: "when you have a moment", category: "softening", recipients: ["sam"], occurrences: 4 }
+    ];
+    const md = renderMemoryMd(patterns, { generatedAt: "2026-06-01" });
+    expect(md).toContain('**"asap"** → **"when you have a moment"** (4×, softening, with @sam)');
+  });
+
+  it("singularizes the count word for exactly 1 pattern", () => {
+    const patterns = [
+      { from_token: "x", to_token: "y", category: "other", recipients: [], occurrences: 1 }
+    ];
+    const md = renderMemoryMd(patterns, { generatedAt: "2026-06-01" });
+    expect(md).toContain("(1 pattern)");
+    expect(md).not.toContain("(1 patterns)");
   });
 });
