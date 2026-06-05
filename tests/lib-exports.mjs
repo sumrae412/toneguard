@@ -51,4 +51,7 @@ export const extractEditSpan = lib.extractEditSpan;
 export const categorizePattern = lib.categorizePattern;
 export const extractPatterns = lib.extractPatterns;
 export const renderMemoryMd = lib.renderMemoryMd;
+export const buildPatternBlock = lib.buildPatternBlock;
+export const PATTERN_INJECT_MAX_CHARS = lib.PATTERN_INJECT_MAX_CHARS;
+export const PATTERN_INJECT_MAX_COUNT = lib.PATTERN_INJECT_MAX_COUNT;
 export const PATTERN_CATEGORIES = lib.PATTERN_CATEGORIES;

@@ -523,6 +523,16 @@ async function handleAnalyze(text, context, site, requestedIntentMode) {
     fullPrompt += "\n\n" + relationshipContext;
   }
 
+  // Inject the learned pattern block. CRITICAL: this MUST stay AFTER basePrompt
+  // so it lands in the volatile suffix (NOT the cached prefix). Patterns evolve
+  // per-edit; injecting them into the cached block would invalidate every call.
+  // See docs/plans/2026-05-30-virtual-brain.md.
+  const { tg_patterns: patterns } = await chrome.storage.local.get(["tg_patterns"]);
+  const patternBlock = buildPatternBlock(patterns);
+  if (patternBlock) {
+    fullPrompt += "\n\n" + patternBlock;
+  }
+
   await saveRecipientInteraction(text);
 
   const userContent = context
