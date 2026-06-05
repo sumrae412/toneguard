@@ -24,7 +24,13 @@ import {
   buildTelemetryClipboardPayload,
   truncate,
   extractMentions,
-  verifyInsertedText
+  verifyInsertedText,
+  tokenizeForPattern,
+  commonPrefixSuffixLengths,
+  extractEditSpan,
+  categorizePattern,
+  extractPatterns,
+  PATTERN_CATEGORIES
 } from "./lib-exports.mjs";
 
 describe("detectPlatform", () => {
@@ -732,5 +738,158 @@ describe("clampCustomRules", () => {
     expect(out.startsWith("Z".repeat(CUSTOM_RULES_MAX_CHARS))).toBe(true);
     expect(out).toContain("truncated at " + CUSTOM_RULES_MAX_CHARS);
     expect(out).toContain("shorten in extension options");
+  });
+});
+
+describe("tokenizeForPattern", () => {
+  it("splits on whitespace and skips empty", () => {
+    expect(tokenizeForPattern("hello  world")).toEqual(["hello", "world"]);
+  });
+  it("returns empty array for empty/null", () => {
+    expect(tokenizeForPattern("")).toEqual([]);
+    expect(tokenizeForPattern(null)).toEqual([]);
+  });
+  it("preserves punctuation glued to tokens", () => {
+    expect(tokenizeForPattern("hi, can you?")).toEqual(["hi,", "can", "you?"]);
+  });
+});
+
+describe("commonPrefixSuffixLengths", () => {
+  it("finds full match when identical", () => {
+    const a = ["a", "b", "c"];
+    expect(commonPrefixSuffixLengths(a, a.slice())).toEqual({ prefixLen: 3, suffixLen: 0 });
+  });
+  it("finds a 1-token middle substitution", () => {
+    const a = ["please", "do", "this", "asap"];
+    const b = ["please", "do", "this", "soon"];
+    expect(commonPrefixSuffixLengths(a, b)).toEqual({ prefixLen: 3, suffixLen: 0 });
+  });
+  it("finds both prefix and suffix around a multi-token middle", () => {
+    const a = ["could", "you", "send", "asap", "please"];
+    const b = ["could", "you", "send", "when", "you", "have", "a", "moment", "please"];
+    expect(commonPrefixSuffixLengths(a, b)).toEqual({ prefixLen: 3, suffixLen: 1 });
+  });
+});
+
+describe("extractEditSpan", () => {
+  it("returns null when suggestion equals finalText", () => {
+    expect(extractEditSpan("same", "same")).toBeNull();
+  });
+  it("returns null when either side is empty", () => {
+    expect(extractEditSpan("", "anything")).toBeNull();
+    expect(extractEditSpan("anything", "")).toBeNull();
+  });
+  it("captures a single-token substitution", () => {
+    const out = extractEditSpan(
+      "please do this asap",
+      "please do this soon"
+    );
+    expect(out).toEqual({ from: "asap", to: "soon" });
+  });
+  it("captures a multi-token softening", () => {
+    const out = extractEditSpan(
+      "could you send asap please",
+      "could you send when you have a moment please"
+    );
+    expect(out).toEqual({ from: "asap", to: "when you have a moment" });
+  });
+  it("handles pure insertion (from is empty)", () => {
+    const out = extractEditSpan(
+      "please review",
+      "please review the doc"
+    );
+    expect(out).toEqual({ from: "", to: "the doc" });
+  });
+});
+
+describe("categorizePattern", () => {
+  it("categorizes hedging when 'might' is added", () => {
+    expect(categorizePattern("will work", "might work")).toBe("hedging");
+  });
+  it("categorizes softening when a soft phrase appears", () => {
+    expect(categorizePattern("asap", "when you have a moment")).toBe("softening");
+  });
+  it("categorizes formality on length increase", () => {
+    expect(categorizePattern("k", "Sounds good, thanks for confirming")).toBe("formality");
+  });
+  it("categorizes brevity on length decrease", () => {
+    expect(categorizePattern("I just wanted to follow up on this thread to ask if", "Following up:")).toBe("brevity");
+  });
+  it("falls back to 'other' on small/ambiguous edits", () => {
+    // Similar length, no hedging, no softening → other
+    expect(categorizePattern("morning team", "hello team")).toBe("other");
+  });
+  it("respects word boundaries (does not match 'may' inside 'maybe' alone)", () => {
+    // both have 'maybe' → not a NEW hedge added, falls through
+    expect(categorizePattern("maybe yes", "maybe no")).toBe("other");
+  });
+  it("PATTERN_CATEGORIES list contains all expected labels", () => {
+    expect(PATTERN_CATEGORIES).toContain("softening");
+    expect(PATTERN_CATEGORIES).toContain("hedging");
+    expect(PATTERN_CATEGORIES).toContain("formality");
+    expect(PATTERN_CATEGORIES).toContain("brevity");
+    expect(PATTERN_CATEGORIES).toContain("other");
+  });
+});
+
+describe("extractPatterns", () => {
+  it("returns empty for non-array / empty input", () => {
+    expect(extractPatterns(null)).toEqual([]);
+    expect(extractPatterns([])).toEqual([]);
+  });
+
+  it("ignores decisions that are not 'used_edited'", () => {
+    const decisions = [
+      { action: "used_suggestion", suggestion: "a", finalText: "a" },
+      { action: "sent_original", suggestion: "x", finalText: "y" }
+    ];
+    expect(extractPatterns(decisions)).toEqual([]);
+  });
+
+  it("aggregates duplicate (from, to) pairs and increments occurrences", () => {
+    const decisions = [
+      {
+        action: "used_edited",
+        original: "@sam please reply asap",
+        suggestion: "please reply asap",
+        finalText: "please reply when you have a moment",
+        timestamp: "2026-05-01T00:00:00Z"
+      },
+      {
+        action: "used_edited",
+        original: "@dana check this asap",
+        suggestion: "check this asap",
+        finalText: "check this when you have a moment",
+        timestamp: "2026-05-15T00:00:00Z"
+      }
+    ];
+    const patterns = extractPatterns(decisions);
+    expect(patterns).toHaveLength(1);
+    expect(patterns[0].from_token).toBe("asap");
+    expect(patterns[0].to_token).toBe("when you have a moment");
+    expect(patterns[0].occurrences).toBe(2);
+    expect(patterns[0].category).toBe("softening");
+    expect(patterns[0].recipients.sort()).toEqual(["dana", "sam"]);
+    expect(patterns[0].first_seen).toBe("2026-05-01T00:00:00Z");
+    expect(patterns[0].last_seen).toBe("2026-05-15T00:00:00Z");
+  });
+
+  it("sorts patterns by occurrences (most frequent first)", () => {
+    const decisions = [
+      { action: "used_edited", suggestion: "x foo", finalText: "x bar", original: "" },
+      { action: "used_edited", suggestion: "y baz", finalText: "y qux", original: "" },
+      { action: "used_edited", suggestion: "z baz", finalText: "z qux", original: "" }
+    ];
+    const patterns = extractPatterns(decisions);
+    expect(patterns[0].occurrences).toBe(2);
+    expect(patterns[0].from_token).toBe("baz");
+    expect(patterns[1].occurrences).toBe(1);
+  });
+
+  it("skips decisions where suggestion === finalText (no real edit)", () => {
+    const decisions = [
+      { action: "used_edited", suggestion: "same", finalText: "same", original: "" }
+    ];
+    expect(extractPatterns(decisions)).toEqual([]);
   });
 });

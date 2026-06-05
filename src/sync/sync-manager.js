@@ -12,6 +12,11 @@ const STORAGE_KEYS = {
   stats_history: "tg_stats_history"
 };
 
+// NOTE: tg_patterns is NOT in DATA_TYPES. Patterns are derived deterministically
+// from tg_decisions (which IS synced), so each device regenerates locally and
+// caches in chrome.storage.local. No merge logic needed; brief between-device
+// inconsistency converges as soon as the extractor re-runs.
+
 const DEBOUNCE_MS = 5000;
 const POLL_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 

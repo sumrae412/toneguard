@@ -248,7 +248,28 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
   if (message.type === "SYNC_PUSH") {
     if (syncManager) syncManager.schedulePush(message.dataType);
+    // Side effect: when a new decision lands, refresh the derived patterns
+    // cache. Patterns are NOT synced (they're deterministically derivable
+    // from tg_decisions, which IS synced) — each device recomputes locally.
+    // See docs/plans/2026-05-30-virtual-brain.md.
+    if (message.dataType === "decisions") {
+      recomputePatterns().catch((err) => {
+        console.warn("ToneGuard: pattern recompute failed:", err && err.message);
+      });
+    }
     return false;
+  }
+
+  if (message.type === "GET_PATTERNS") {
+    // On-demand read for the Memory view in options. Forces a recompute first
+    // so the view reflects the latest tg_decisions (covers the case where
+    // patterns went stale across a sync pull from another device).
+    (async () => {
+      await recomputePatterns();
+      const { tg_patterns: patterns } = await chrome.storage.local.get(["tg_patterns"]);
+      sendResponse({ patterns: patterns || [] });
+    })();
+    return true;
   }
 
   if (message.type === "SYNC_STATUS") {
@@ -841,6 +862,21 @@ function getFriendlyApiError(status, body) {
     default:
       return "API error (" + status + "). Your message was sent without checking.";
   }
+}
+
+// Recompute the derived patterns cache from tg_decisions. Idempotent — safe
+// to call repeatedly. Each device runs this locally; the resulting cache is
+// NOT synced (patterns are deterministic given the synced decisions, so each
+// device independently converges to the same answer). See lib.js:extractPatterns
+// and docs/plans/2026-05-30-virtual-brain.md.
+async function recomputePatterns() {
+  const { tg_decisions: decisions } = await chrome.storage.local.get(["tg_decisions"]);
+  const patterns = extractPatterns(decisions || []);
+  await chrome.storage.local.set({
+    tg_patterns: patterns,
+    tg_patterns_updated_at: new Date().toISOString()
+  });
+  return patterns;
 }
 
 // Build learned examples from past decisions

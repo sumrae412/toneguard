@@ -627,6 +627,138 @@ function extractMentions(text) {
   return mentions;
 }
 
+// ===========================================================================
+// Pattern extraction (Phase 5a — see docs/plans/2026-05-30-virtual-brain.md)
+// ===========================================================================
+
+const PATTERN_HEDGING_WORDS = [
+  "maybe", "perhaps", "could", "would", "might", "may", "possibly",
+  "potentially", "kind of", "sort of"
+];
+
+const PATTERN_SOFTENING_PHRASES = [
+  "when you have a moment", "when you get a chance", "no rush",
+  "if you have time", "no worries", "no pressure"
+];
+
+const PATTERN_CATEGORIES = ["softening", "hedging", "formality", "brevity", "other"];
+
+/**
+ * Tokenize on whitespace, preserving punctuation as glued to adjacent tokens.
+ * Cheap; good enough for diffing typical chat/email messages.
+ */
+function tokenizeForPattern(text) {
+  if (!text) return [];
+  return text.match(/\S+/g) || [];
+}
+
+/**
+ * Find the lengths of the longest common token prefix and suffix between two
+ * token arrays. Used to isolate the "changed middle" — the most common edit
+ * shape (a single substitution) is captured exactly this way.
+ */
+function commonPrefixSuffixLengths(a, b) {
+  let prefixLen = 0;
+  while (prefixLen < a.length && prefixLen < b.length && a[prefixLen] === b[prefixLen]) {
+    prefixLen++;
+  }
+  let suffixLen = 0;
+  while (
+    suffixLen < a.length - prefixLen &&
+    suffixLen < b.length - prefixLen &&
+    a[a.length - 1 - suffixLen] === b[b.length - 1 - suffixLen]
+  ) {
+    suffixLen++;
+  }
+  return { prefixLen, suffixLen };
+}
+
+/**
+ * Extract the largest contiguous edit span from `suggestion` → `finalText`.
+ * Returns `{from, to}` strings, or null when nothing meaningful changed.
+ * For multi-edit messages, this collapses to the bounding diff (good enough
+ * for v1; LCS-based refinement is a later phase if needed).
+ */
+function extractEditSpan(suggestion, finalText) {
+  if (!suggestion || !finalText) return null;
+  if (suggestion === finalText) return null;
+  const a = tokenizeForPattern(suggestion);
+  const b = tokenizeForPattern(finalText);
+  const { prefixLen, suffixLen } = commonPrefixSuffixLengths(a, b);
+  const fromTokens = a.slice(prefixLen, a.length - suffixLen);
+  const toTokens = b.slice(prefixLen, b.length - suffixLen);
+  if (fromTokens.length === 0 && toTokens.length === 0) return null;
+  return { from: fromTokens.join(" "), to: toTokens.join(" ") };
+}
+
+/**
+ * Categorize an edit span. Heuristic-based — sufficient for grouping; later
+ * phases can swap in LLM-driven categorization if signal is too noisy.
+ */
+function categorizePattern(fromText, toText) {
+  const fromLow = (fromText || "").toLowerCase();
+  const toLow = (toText || "").toLowerCase();
+
+  for (const phrase of PATTERN_SOFTENING_PHRASES) {
+    if (toLow.includes(phrase)) return "softening";
+  }
+  for (const word of PATTERN_HEDGING_WORDS) {
+    // Word-boundary check so "may" doesn't match "maybe"
+    const re = new RegExp("\\b" + word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b");
+    if (re.test(toLow) && !re.test(fromLow)) return "hedging";
+  }
+  const fromLen = fromText.length || 1;
+  const toLen = toText.length;
+  if (toLen > fromLen * 1.5) return "formality";
+  if (toLen < fromLen * 0.5 && toLen > 0) return "brevity";
+  return "other";
+}
+
+/**
+ * Aggregate a flat list of `tg_decisions` into a deduped list of patterns.
+ * Only `used_edited` decisions contribute (an edit reveals user preference);
+ * `used_suggestion` and `sent_original` are ignored here — they're already
+ * surfaced via the existing recency window in service-worker.js:getLearnedExamples.
+ *
+ * @param {Array<object>} decisions - tg_decisions[] from chrome.storage.local
+ * @returns {Array<object>} Patterns sorted by occurrences (most frequent first).
+ */
+function extractPatterns(decisions) {
+  if (!Array.isArray(decisions)) return [];
+  const patternMap = new Map();
+
+  for (const decision of decisions) {
+    if (!decision || decision.action !== "used_edited") continue;
+    const edit = extractEditSpan(decision.suggestion, decision.finalText);
+    if (!edit) continue;
+
+    const key = edit.from + " → " + edit.to;
+    const recipients = extractMentions(decision.original || "");
+    const ts = decision.timestamp || null;
+    const existing = patternMap.get(key);
+
+    if (existing) {
+      existing.occurrences += 1;
+      if (ts) existing.last_seen = ts;
+      for (const r of recipients) {
+        if (!existing.recipients.includes(r)) existing.recipients.push(r);
+      }
+    } else {
+      patternMap.set(key, {
+        from_token: edit.from,
+        to_token: edit.to,
+        category: categorizePattern(edit.from, edit.to),
+        recipients: recipients.slice(),
+        occurrences: 1,
+        first_seen: ts,
+        last_seen: ts
+      });
+    }
+  }
+
+  return Array.from(patternMap.values()).sort((a, b) => b.occurrences - a.occurrences);
+}
+
 // Make functions available globally when loaded as a content script (non-module),
 // and via the test wrapper (tests/lib-exports.mjs) for vitest.
 if (typeof globalThis !== "undefined") {
@@ -656,6 +788,12 @@ if (typeof globalThis !== "undefined") {
     buildTelemetryClipboardPayload,
     truncate,
     extractMentions,
+    tokenizeForPattern,
+    commonPrefixSuffixLengths,
+    extractEditSpan,
+    categorizePattern,
+    extractPatterns,
+    PATTERN_CATEGORIES,
     hashApiKey,
     normalizeEditorText,
     verifyInsertedText
