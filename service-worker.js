@@ -18,6 +18,7 @@ let basePromptCache = null;
 let landingPromptCache = null;
 let analysisToolCache = null;
 let landingToolCache = null;
+let voicePrinciplesCache = null;
 
 function stripGeneratedPromptHeader(prompt) {
   return prompt.replace(/^Generated from shared\/\. Do not edit directly\.\n\n/, "");
@@ -44,18 +45,47 @@ async function initSync() {
   await syncManager.init(apiKey);
 }
 
+// Load the distilled writing-voice principles. The full voice_profile.md
+// is ~35KB / 9K tokens — too big to inject every call. The distilled
+// version is ~480 tok of Always/Never rules + signature notes, suitable
+// to concatenate into the cached basePrompt. Source: claude-skills/
+// writing-voice/references/voice_profile.md (Quick Reference Card section).
+async function loadVoicePrinciples() {
+  if (voicePrinciplesCache !== null) return voicePrinciplesCache;
+  try {
+    const url = chrome.runtime.getURL("prompts/voice-principles.txt");
+    const response = await fetch(url);
+    if (!response.ok) throw new Error("HTTP " + response.status);
+    voicePrinciplesCache = (await response.text()).trim();
+  } catch (err) {
+    console.warn("ToneGuard: voice-principles.txt not loaded, continuing without:", err && err.message);
+    // Cache the empty string so we don't retry the fetch every analysis.
+    voicePrinciplesCache = "";
+  }
+  return voicePrinciplesCache;
+}
+
 async function loadBasePrompt() {
   if (basePromptCache) return basePromptCache;
 
+  let rawBase;
   try {
     const url = chrome.runtime.getURL("prompts/base.txt");
     const response = await fetch(url);
-    basePromptCache = stripGeneratedPromptHeader(await response.text());
+    rawBase = stripGeneratedPromptHeader(await response.text());
   } catch (err) {
     console.error("ToneGuard: failed to load base prompt", err);
     // Don't cache the fallback — allow retry on next call
     return "You are ToneGuard, a writing assistant. Check messages for tone and clarity. Respond with JSON: {flagged, confidence, mode, readability, red_flags, categories, reasoning, suggestion, has_questions, questions}.";
   }
+
+  // Concatenate voice principles into the cached prefix. Voice principles
+  // change rarely (~monthly), so the cache miss on voice updates is
+  // acceptable. The combined string stays well above PROMPT_CACHE_MIN_CHARS,
+  // so prompt caching continues to apply. See PR #52 + docs/plans/
+  // 2026-05-30-virtual-brain.md.
+  const voice = await loadVoicePrinciples();
+  basePromptCache = voice ? rawBase + "\n\n" + voice : rawBase;
   return basePromptCache;
 }
 

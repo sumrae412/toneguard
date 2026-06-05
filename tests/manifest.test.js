@@ -65,6 +65,10 @@ describe("manifest.json", () => {
     const promptResource = resources.find((r) => r.resources.includes("prompts/base.txt"));
     expect(promptResource).toBeTruthy();
     expect(promptResource.resources).toContain("prompts/landing.txt");
+    // Phase 5d — voice profile distillation. Without this, the service
+    // worker's chrome.runtime.getURL("prompts/voice-principles.txt") would
+    // silently fail and the distilled voice would never reach the prompt.
+    expect(promptResource.resources).toContain("prompts/voice-principles.txt");
   });
 
   it("references files that exist", () => {
