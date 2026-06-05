@@ -938,6 +938,54 @@ if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("sw.js").catch(() => {});
 }
 
+// ── Custom install prompt (Android Chrome) ──
+// Chrome gates its native install banner behind an engagement heuristic that
+// often suppresses it on first visit. Stashing `beforeinstallprompt` and
+// surfacing our own button gives a reliable install path. iOS Safari has no
+// programmatic install API; the manual instructions remain for that path.
+(function setupInstallButton() {
+  const installBtn = document.getElementById("installBtn");
+  const installHelp = document.getElementById("install-help");
+  if (!installBtn) return;
+
+  let deferredPrompt = null;
+
+  // Already installed? Hide the whole install-help block.
+  const isStandalone =
+    window.matchMedia("(display-mode: standalone)").matches ||
+    window.navigator.standalone === true;
+  if (isStandalone && installHelp) {
+    installHelp.style.display = "none";
+    return;
+  }
+
+  window.addEventListener("beforeinstallprompt", (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    installBtn.hidden = false;
+  });
+
+  installBtn.addEventListener("click", async () => {
+    if (!deferredPrompt) return;
+    installBtn.disabled = true;
+    deferredPrompt.prompt();
+    try {
+      await deferredPrompt.userChoice;
+    } catch (_) {
+      // user dismissed or browser threw — fall back to manual instructions
+    }
+    deferredPrompt = null;
+    installBtn.hidden = true;
+    installBtn.disabled = false;
+  });
+
+  window.addEventListener("appinstalled", () => {
+    deferredPrompt = null;
+    installBtn.hidden = true;
+    if (installHelp) installHelp.style.display = "none";
+  });
+})();
+
 // ── Start ──
 init();
 initPwaSync();
