@@ -74,3 +74,29 @@ Phase 5c will append `buildPatternBlock()` output to `fullPrompt` AFTER `basePro
 - **5c:** Patterns visible in service-worker fetch requests' system prompt suffix. `usage.cache_read_input_tokens > 0` still hits on the cached prefix.
 - **5d:** `prompts/voice-principles.txt` exists. Service worker loads it and includes in basePrompt. CACHE INVARIANT: since it's part of basePrompt, voice-principles updates require a full cache write — acceptable since voice changes ~monthly.
 - **5e:** Graph rendered as cross-linked sections in memory.md. Bidirectional links work.
+
+## Empirical verification (2026-06-05)
+
+After all five phases merged (PRs #56–#60), ran an end-to-end Anthropic API
+verification against `claude-haiku-4-5-20251001` to confirm the prompt-cache
+contract from PR #52 survived stacking. Built the exact production system
+payload (combined `base.txt + voice-principles.txt` → cached prefix; pattern
+block → volatile suffix), sent two identical calls.
+
+Result: **PASS.**
+
+| Metric | Call 1 (cold) | Call 2 (warm) |
+|---|---|---|
+| `cache_creation_input_tokens` | 6,121 | 0 |
+| `cache_read_input_tokens` | 0 | **6,121** |
+| `input_tokens` (uncached) | 506 | 506 |
+| Latency | 2,297 ms | 1,978 ms |
+
+The exact `6,121 → 6,121` match confirms no silent invalidation. Cached
+portion serves at ~$0.10/1M (vs $1/1M uncached) — **~12.5× cheaper** on
+those tokens for every call after the first within the 5-min TTL.
+
+Re-verify if any future PR touches: `prompts/base.txt`, `prompts/voice-principles.txt`,
+`loadBasePrompt()`, `buildSystemPayload()`, or the `tools[]` declaration
+(render order is `tools → system → messages`; changing tools invalidates
+the cache key for system too).
