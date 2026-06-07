@@ -27,8 +27,32 @@ async function loadPwaAnalysisTool() {
   return pwaAnalysisTool;
 }
 
+// Inline mirror of lib.js:TOOL_CALL_XML_LEAK_RE / hasToolCallXmlLeak /
+// validateToolInput (PWA can't bundle lib.js). Keep in sync.
+const TOOL_CALL_XML_LEAK_RE = /<\/?(?:function_calls|invoke|parameter\b|antml:)/i;
+
+function hasToolCallXmlLeak(value) {
+  if (typeof value === "string") return TOOL_CALL_XML_LEAK_RE.test(value);
+  if (Array.isArray(value)) return value.some(hasToolCallXmlLeak);
+  if (value && typeof value === "object") {
+    for (const key in value) {
+      if (hasToolCallXmlLeak(value[key])) return true;
+    }
+  }
+  return false;
+}
+
+function validatePwaToolInput(input) {
+  if (!input || typeof input !== "object") return input;
+  return hasToolCallXmlLeak(input) ? null : input;
+}
+
 // Inline mirror of lib.js:extractToolResult (PWA can't bundle lib.js). Returns
 // the tool_use block's parsed input, or falls back to parsing a text block.
+// Validates against text-format tool-call XML leaks (`<parameter>` / `<invoke>`
+// / `<function_calls>` / `<*>`) — when the model emits those tags inside a
+// string field, return null so the existing escalation path surfaces a clean
+// failure instead of rendering the leak.
 function extractPwaToolResult(data, toolName) {
   if (!data || !Array.isArray(data.content)) return null;
   const block = data.content.find(
@@ -36,13 +60,13 @@ function extractPwaToolResult(data, toolName) {
       b && b.type === "tool_use" && (!toolName || b.name === toolName) &&
       b.input && typeof b.input === "object"
   );
-  if (block) return block.input;
+  if (block) return validatePwaToolInput(block.input);
   const textBlock = data.content.find((b) => b && b.type === "text" && b.text);
   if (!textBlock) return null;
   const m = textBlock.text.match(/\{[\s\S]*\}/);
   if (!m) return null;
   try {
-    return JSON.parse(m[0]);
+    return validatePwaToolInput(JSON.parse(m[0]));
   } catch {
     return null;
   }

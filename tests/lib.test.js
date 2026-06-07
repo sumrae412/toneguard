@@ -3,6 +3,7 @@ import {
   detectPlatform,
   parseApiResponse,
   extractToolResult,
+  validateToolInput,
   cleanSiteInput,
   validateApiKey,
   getStrictnessLabel,
@@ -139,6 +140,158 @@ describe("parseApiResponse", () => {
     const raw =
       '{\n  "flagged": true,\n  "suggestion": "Here is a much longer rewrite that got cut';
     expect(parseApiResponse(raw)).toBeNull();
+  });
+
+  // Regression: the model can occasionally emit Anthropic's text-format
+  // tool-call markup (<parameter name="X">value) inside a string field of
+  // an otherwise-valid JSON response. Caught in production 2026-06-05: a
+  // user's PWA rewrite ended with `,\n<parameter name="has_questions">false`
+  // because the model bled the next tool-call argument into the suggestion
+  // string. Reject the parse so escalation surfaces a clean failure.
+  it("returns null when text JSON contains <parameter> XML leak in a field", () => {
+    const raw =
+      '{"flagged": true, "suggestion": "Yay—I\'ll see what I can find.\\n\\nHave fun in Japan.\\",\\n<parameter name=\\"has_questions\\">false"}';
+    expect(parseApiResponse(raw)).toBeNull();
+  });
+
+  it("returns null when text JSON contains <invoke> XML leak", () => {
+    const raw = '{"suggestion": "ok<invoke name=\\"x\\">"}';
+    expect(parseApiResponse(raw)).toBeNull();
+  });
+
+  it("returns null when text JSON contains <function_calls> XML leak", () => {
+    const raw = '{"suggestion": "<function_calls>...</function_calls>"}';
+    expect(parseApiResponse(raw)).toBeNull();
+  });
+
+  it("returns null when XML leak is nested inside an object field", () => {
+    const raw =
+      '{"voice": {"hint": "<parameter name=\\"x\\">y"}, "flagged": true}';
+    expect(parseApiResponse(raw)).toBeNull();
+  });
+
+  it("returns null when XML leak is inside an array field", () => {
+    const raw =
+      '{"categories": ["clarity", "<parameter name=\\"x\\">"], "flagged": true}';
+    expect(parseApiResponse(raw)).toBeNull();
+  });
+});
+
+describe("validateToolInput (XML leak detection)", () => {
+  it("passes clean inputs through unchanged", () => {
+    expect(validateToolInput({ suggestion: "hi", flagged: true })).toEqual({
+      suggestion: "hi",
+      flagged: true
+    });
+  });
+
+  it("returns null/falsy inputs unchanged", () => {
+    expect(validateToolInput(null)).toBeNull();
+    expect(validateToolInput(undefined)).toBeUndefined();
+  });
+
+  it("rejects <parameter> leak in a top-level string field", () => {
+    expect(
+      validateToolInput({
+        suggestion: 'rewrite,\n<parameter name="has_questions">false',
+        flagged: true
+      })
+    ).toBeNull();
+  });
+
+  it("rejects </parameter> closing-tag leak", () => {
+    expect(
+      validateToolInput({ suggestion: "ok</parameter>" })
+    ).toBeNull();
+  });
+
+  it("rejects <invoke> and <function_calls> markers", () => {
+    expect(
+      validateToolInput({ suggestion: 'pre<invoke name="x">' })
+    ).toBeNull();
+    expect(
+      validateToolInput({ suggestion: "<function_calls>" })
+    ).toBeNull();
+  });
+
+  it("rejects nested object containing leak", () => {
+    expect(
+      validateToolInput({
+        voice: { hint: '<parameter name="x">y' },
+        flagged: true
+      })
+    ).toBeNull();
+  });
+
+  it("rejects array field containing leak", () => {
+    expect(
+      validateToolInput({
+        categories: ["normal", '<parameter name="x">']
+      })
+    ).toBeNull();
+  });
+
+  it("does NOT flag harmless angle brackets in prose", () => {
+    expect(
+      validateToolInput({
+        suggestion: "I think x < y, and y > z. Greater-than is fine."
+      })
+    ).not.toBeNull();
+  });
+
+  it("does NOT flag standalone XML-ish words without the tool-call signature", () => {
+    expect(
+      validateToolInput({ suggestion: "the parameter is set to 5" })
+    ).not.toBeNull();
+    expect(
+      validateToolInput({ suggestion: "she'll invoke the meeting at 3" })
+    ).not.toBeNull();
+  });
+});
+
+describe("extractToolResult (XML leak detection)", () => {
+  it("returns null when tool_use.input contains <parameter> leak", () => {
+    const resp = {
+      content: [
+        {
+          type: "tool_use",
+          name: "analyze_message",
+          input: {
+            flagged: true,
+            suggestion: 'rewrite,\n<parameter name="has_questions">false'
+          }
+        }
+      ]
+    };
+    expect(extractToolResult(resp, "analyze_message")).toBeNull();
+  });
+
+  it("returns null when text-block fallback JSON contains XML leak", () => {
+    const resp = {
+      content: [
+        {
+          type: "text",
+          text: '{"suggestion": "ok<parameter name=\\"x\\">y"}'
+        }
+      ]
+    };
+    expect(extractToolResult(resp, "analyze_message")).toBeNull();
+  });
+
+  it("passes clean tool_use.input through unchanged", () => {
+    const resp = {
+      content: [
+        {
+          type: "tool_use",
+          name: "analyze_message",
+          input: { flagged: false, suggestion: "no issues" }
+        }
+      ]
+    };
+    expect(extractToolResult(resp, "analyze_message")).toEqual({
+      flagged: false,
+      suggestion: "no issues"
+    });
   });
 });
 

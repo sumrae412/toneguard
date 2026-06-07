@@ -22,6 +22,7 @@ const lib = sandbox.globalThis.__toneGuardLib;
 export const detectPlatform = lib.detectPlatform;
 export const parseApiResponse = lib.parseApiResponse;
 export const extractToolResult = lib.extractToolResult;
+export const validateToolInput = lib.validateToolInput;
 export const cleanSiteInput = lib.cleanSiteInput;
 export const validateApiKey = lib.validateApiKey;
 export const getStrictnessLabel = lib.getStrictnessLabel;
