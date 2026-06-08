@@ -20,6 +20,7 @@ vm.runInNewContext(libCode, sandbox);
 const lib = sandbox.globalThis.__toneGuardLib;
 
 export const detectPlatform = lib.detectPlatform;
+export const buildStaleFallback = lib.buildStaleFallback;
 export const parseApiResponse = lib.parseApiResponse;
 export const extractToolResult = lib.extractToolResult;
 export const validateToolInput = lib.validateToolInput;
