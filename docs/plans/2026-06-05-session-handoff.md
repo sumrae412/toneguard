@@ -286,3 +286,42 @@ node -e "require('https').get('https://sync-server-production-3a24.up.railway.ap
 ### Mode directive
 
 Auto mode. Surface premise contradictions only.
+
+---
+
+## Execution log — 2026-06-06 (continuation /next + session-learnings cleanup)
+
+### Shipped (post-/next)
+
+**Toneguard:**
+- `3343528` — `docs(gotchas): Railway auto-deploy silent-break + zsh glob + curl SSL + XML leak` (direct to main, AGENTS.md byte-mirrored).
+- `668932f` — first-/next handoff doc append.
+
+**claude-config:** [PR #54](https://github.com/sumrae412/claude-config/pull/54) OPEN — auto-deploy probe corollary + Guardrail 5 corollaries (numbered-list, visual-asset) + 2 toneguard project-memory entries force-added per legacy-tracked policy. Awaiting merge consent.
+
+**agent-vault:** [PR #21](https://github.com/sumrae412/agent-vault/pull/21) OPEN — Railway GitHub auto-deploy silent-disconnect entry added to `agent/ci-and-deploys.md`. Awaiting merge consent.
+
+### Still in-flight (Guardrail 2 Corollary 2 — per-PR consent)
+
+- **[toneguard#63](https://github.com/sumrae412/toneguard/pull/63)** — XML-leak fix. CI green (test+mcp). Awaiting merge consent + manual `railway up` post-merge.
+- **claude-config #54** — auto-deploy + Guardrail 5 corollaries. Awaiting merge.
+- **agent-vault #21** — Railway gotcha. Awaiting merge.
+
+### Parked artifacts
+
+- **`~/.claude/settings.json`** — modified working tree (orca-hook removal carried forward from morning session + `model: opus` re-added by user/linter mid-session + harness drift like `autoCompactEnabled`). Intentionally NOT in PR #54. Disposition TBD next session.
+- **Toneguard `sync-server/pwa/icons/icon.svg`** lives in BOTH `icons/` and `sync-server/pwa/icons/` (committed in [PR #62](https://github.com/sumrae412/toneguard/pull/62)) — re-render via `rsvg-convert -w SZ -h SZ <dir>/icon.svg -o <dir>/iconSZ.png`.
+
+### Untouched (still deferred from morning handoff)
+
+1. **CWS submission (A6)** — outside Claude.
+2. **MCP `analyzer.py:_extract_tool_result`** — same XML-leak shape as `lib.js`; dev/CI-only surface, deferred from PR #63.
+3. **Railway auto-deploy debug for `toneguard-sync`** — root cause still unknown (webhook? branch filter? quota?). Manual `railway up` works; auto-deploy doesn't fire. Worth a Railway-dashboard investigation in a future session.
+
+### Exact next task
+
+Same as the morning handoff: **merge [toneguard#63](https://github.com/sumrae412/toneguard/pull/63), then manually `railway up` from `sync-server/` to deploy.** Plus: merge claude-config #54 + agent-vault #21 with per-PR consent.
+
+### Mode directive
+
+Auto mode. Surface premise contradictions only.
