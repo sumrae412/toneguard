@@ -83,6 +83,22 @@
     document.documentElement.appendChild(iframe);
   }
 
+  // Render a plain-DOM "reload this tab" banner for the invalidated-context
+  // case. The iframe overlay needs chrome.runtime.getURL(), which throws once
+  // the context is dead — so the only thing that can still paint is non-chrome
+  // DOM. Without this, showStale() silently no-ops (ensureIframe bails, the
+  // postMessage queues against an iframe that never loads) and the user gets a
+  // blocked send with zero feedback. location.reload() is a plain DOM API and
+  // stays safe in a dead context.
+  function renderStaleFallback() {
+    if (typeof document === "undefined") return;
+    if (document.getElementById("toneguard-stale-fallback")) return; // idempotent
+    const lib = globalThis.__toneGuardLib;
+    if (!lib || typeof lib.buildStaleFallback !== "function") return;
+    const banner = lib.buildStaleFallback(document, () => location.reload());
+    document.documentElement.appendChild(banner);
+  }
+
   // --- Message protocol ---
 
   function postToFrame(msg) {
@@ -193,6 +209,12 @@
       postToFrame({ type: "show_passed" });
     },
     showStale() {
+      // In a dead context the iframe can't load, so fall back to a plain-DOM
+      // banner instead of queueing a postMessage that never delivers.
+      if (!isContextValid()) {
+        renderStaleFallback();
+        return;
+      }
       ensureIframe();
       postToFrame({ type: "show_stale" });
     },

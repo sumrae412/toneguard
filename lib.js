@@ -1137,11 +1137,68 @@ function buildPatternBlock(patterns) {
   return lines.join("\n");
 }
 
+// Build a dependency-free "extension was updated — reload this tab" banner.
+//
+// When the extension context is invalidated (extension reloaded/updated while
+// the tab stayed open), chrome.runtime.getURL() throws, so overlay.js can never
+// inject its extension-hosted iframe. Without a fallback the send is silently
+// blocked with zero feedback — the user clicks Send, nothing happens, and they
+// have no idea why. This banner uses ONLY plain DOM (no chrome.* APIs), so it
+// can still render and tell the user their message was NOT sent and the tab
+// needs a reload.
+//
+// Pure and injectable for tests: takes the document and a reload callback, and
+// builds the node only. Idempotency and appending are the caller's job.
+function buildStaleFallback(doc, onReload) {
+  const root = doc.createElement("div");
+  root.id = "toneguard-stale-fallback";
+  root.setAttribute("role", "alert");
+  root.style.cssText =
+    "position:fixed;top:16px;right:16px;z-index:2147483647;max-width:360px;" +
+    "display:flex;gap:10px;align-items:flex-start;padding:12px 14px;" +
+    "background:#1f2430;color:#fff;border-radius:10px;" +
+    "font:13px/1.45 -apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;" +
+    "box-shadow:0 6px 24px rgba(0,0,0,.32);";
+
+  const msg = doc.createElement("div");
+  msg.style.cssText = "flex:1;";
+  msg.textContent =
+    "ToneGuard was updated. Reload this tab to re-enable tone checks — " +
+    "your last message was not sent.";
+
+  const reload = doc.createElement("button");
+  reload.type = "button";
+  reload.textContent = "Reload";
+  reload.style.cssText =
+    "flex:none;cursor:pointer;border:0;border-radius:6px;padding:6px 10px;" +
+    "background:#4c8bf5;color:#fff;font:inherit;font-weight:600;";
+  reload.addEventListener("click", () => {
+    if (typeof onReload === "function") onReload();
+  });
+
+  const dismiss = doc.createElement("button");
+  dismiss.type = "button";
+  dismiss.setAttribute("aria-label", "Dismiss");
+  dismiss.textContent = "×";
+  dismiss.style.cssText =
+    "flex:none;cursor:pointer;border:0;background:transparent;color:#fff;" +
+    "font:inherit;font-size:16px;line-height:1;opacity:.7;padding:2px 4px;";
+  dismiss.addEventListener("click", () => {
+    if (typeof root.remove === "function") root.remove();
+  });
+
+  root.appendChild(msg);
+  root.appendChild(reload);
+  root.appendChild(dismiss);
+  return root;
+}
+
 // Make functions available globally when loaded as a content script (non-module),
 // and via the test wrapper (tests/lib-exports.mjs) for vitest.
 if (typeof globalThis !== "undefined") {
   globalThis.__toneGuardLib = {
     detectPlatform,
+    buildStaleFallback,
     parseApiResponse,
     extractToolResult,
     validateToolInput,
