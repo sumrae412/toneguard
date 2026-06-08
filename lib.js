@@ -63,11 +63,42 @@ function escapeControlCharsInStrings(s) {
 }
 
 /**
+ * Detect text-format tool-call markup in an extracted tool-input value.
+ * Anthropic's legacy/fallback text format wraps tool arguments in
+ * `<function_calls>` / `<invoke>` / `<parameter>` / `<...>` tags. When
+ * the model emits one of these tags inside a string field of a forced
+ * tool_use response (or inside a fallback-parsed text-format JSON), the user
+ * ends up seeing raw markup appended to the rewrite. Treat any such payload
+ * as corrupted so the caller's escalation path can surface a clean failure.
+ */
+const TOOL_CALL_XML_LEAK_RE = /<\/?(?:function_calls|invoke|parameter\b|antml:)/i;
+
+function hasToolCallXmlLeak(value) {
+  if (typeof value === "string") return TOOL_CALL_XML_LEAK_RE.test(value);
+  if (Array.isArray(value)) return value.some(hasToolCallXmlLeak);
+  if (value && typeof value === "object") {
+    for (const key in value) {
+      if (hasToolCallXmlLeak(value[key])) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Pass a tool input through if it's clean, otherwise return null.
+ * Public so callers/tests can validate parsed structures directly.
+ */
+function validateToolInput(input) {
+  if (!input || typeof input !== "object") return input;
+  return hasToolCallXmlLeak(input) ? null : input;
+}
+
+/**
  * Extract JSON object from Claude API response text.
  * Handles raw JSON, markdown code blocks, or any wrapper text.
  * Tolerates literal control chars inside string values (Claude sometimes
  * emits unescaped \n in long rewrites).
- * Returns parsed object or null.
+ * Returns parsed object or null (also null when tool-call XML leaks in).
  */
 function parseApiResponse(rawContent) {
   if (!rawContent) return null;
@@ -75,12 +106,12 @@ function parseApiResponse(rawContent) {
   if (!jsonMatch) return null;
   // Fast path: valid JSON parses directly
   try {
-    return JSON.parse(jsonMatch[0]);
+    return validateToolInput(JSON.parse(jsonMatch[0]));
   } catch {
     // Fall through — try repairing in-string control chars
   }
   try {
-    return JSON.parse(escapeControlCharsInStrings(jsonMatch[0]));
+    return validateToolInput(JSON.parse(escapeControlCharsInStrings(jsonMatch[0])));
   } catch {
     return null;
   }
@@ -93,6 +124,12 @@ function parseApiResponse(rawContent) {
  * tool_use content block — no free-text JSON to parse, which is what eliminates
  * the stray-quote / control-char / markdown-fence parse failures (TG_PARSE_001).
  * Falls back to parsing a text block (defensive: a non-tool reply or older path).
+ *
+ * Tool input is validated for text-format tool-call XML leaks
+ * (`<parameter>` / `<invoke>` / `<function_calls>` / `<*>`) — when the
+ * model occasionally emits those tags inside a string field of an otherwise
+ * structured response, return null so the caller's escalation path surfaces
+ * a clean failure instead of rendering the leak.
  *
  * @param {object} data - Parsed API response body.
  * @param {string} [toolName] - Expected tool name; any tool_use accepted if omitted.
@@ -108,7 +145,7 @@ function extractToolResult(data, toolName) {
       b.input &&
       typeof b.input === "object"
   );
-  if (toolBlock) return toolBlock.input;
+  if (toolBlock) return validateToolInput(toolBlock.input);
   const textBlock = data.content.find((b) => b && b.type === "text" && b.text);
   return textBlock ? parseApiResponse(textBlock.text) : null;
 }
@@ -1107,6 +1144,7 @@ if (typeof globalThis !== "undefined") {
     detectPlatform,
     parseApiResponse,
     extractToolResult,
+    validateToolInput,
     cleanSiteInput,
     validateApiKey,
     getStrictnessLabel,
