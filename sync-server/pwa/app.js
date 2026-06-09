@@ -341,6 +341,20 @@ function showResult(data) {
 
   originalText.textContent = original;
   suggestionText.textContent = suggestion;
+
+  // Mirror of the extension overlay's empty-rewrite guard (overlay-frame.js
+  // applySuggestionAvailability). The model sometimes flags a message but
+  // returns no suggestion; show a note and disable Copy so the PWA doesn't
+  // copy an empty string and claim "Suggestion copied!". See CLAUDE.md
+  // "Dual code paths".
+  if (suggestion.trim()) {
+    suggestionText.classList.remove("suggestion-empty");
+    copyBtn.disabled = false;
+  } else {
+    suggestionText.textContent = "No rewrite generated — copy your message or edit it manually.";
+    suggestionText.classList.add("suggestion-empty");
+    copyBtn.disabled = true;
+  }
 }
 
 let lastFailure = null;
@@ -809,6 +823,8 @@ function precheckAnalysis(text, options = {}) {
 // ── Copy buttons ──
 copyBtn.addEventListener("click", () => {
   const text = suggestionText.textContent;
+  // No usable rewrite — nothing to copy (button is also disabled in this state).
+  if (copyBtn.disabled || !text.trim()) return;
   copyToClipboard(text, "Suggestion copied! Switch back to your app and paste.");
 
   logPwaDecision({

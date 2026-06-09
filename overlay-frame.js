@@ -312,6 +312,13 @@
     els.suggestion.textContent = result.suggestion;
     els.reasoning.textContent = result.reasoning;
 
+    // When the model flags a message but returns no rewrite, the green box is
+    // blank. Don't present an empty editable field as an acceptable
+    // suggestion — accepting it would overwrite the user's message with
+    // nothing. Mark the gap and disable the accept path; the user can still
+    // edit manually or send as-is.
+    applySuggestionAvailability(hasUsableSuggestion(result));
+
     // Inline diff view
     const existingDiff = els.diffSection.querySelector(".tg-diff");
     if (existingDiff) existingDiff.remove();
@@ -515,6 +522,37 @@
     els.landingPanel.open = true;
   }
 
+  // Sync-pointer: mirror of hasUsableSuggestion() in lib.js. The overlay
+  // iframe loads only overlay-frame.js (no lib.js), so the predicate is
+  // inlined here. Update both together. See CLAUDE.md "Dual code paths".
+  function hasUsableSuggestion(result) {
+    return !!(result && typeof result.suggestion === "string" && result.suggestion.trim());
+  }
+
+  // Toggle the rewrite box + accept button between "usable rewrite" and
+  // "no rewrite generated" states. The model sometimes flags a message but
+  // returns an empty suggestion; in that state the box becomes a non-editable
+  // note and Use-suggestion is disabled, so the user can't overwrite their
+  // message with nothing. They can still edit the original or send as-is.
+  function applySuggestionAvailability(usable) {
+    const editHint = els.drawer.querySelector(".tg-edit-hint");
+    if (usable) {
+      els.suggestion.setAttribute("contenteditable", "true");
+      els.suggestion.classList.remove("tg-suggestion-empty");
+      if (editHint) editHint.style.display = "";
+      els.useSuggestionBtn.disabled = false;
+      els.useSuggestionBtn.removeAttribute("aria-disabled");
+      return;
+    }
+    els.suggestion.setAttribute("contenteditable", "false");
+    els.suggestion.classList.add("tg-suggestion-empty");
+    els.suggestion.textContent =
+      "No rewrite generated — edit your message above or send as-is.";
+    if (editHint) editHint.style.display = "none";
+    els.useSuggestionBtn.disabled = true;
+    els.useSuggestionBtn.setAttribute("aria-disabled", "true");
+  }
+
   function showPassed() {
     clearToast();
     els.loading.style.display = "none";
@@ -706,6 +744,10 @@
   }
 
   function showUndoCountdown(finalText, wasEdited) {
+    // Defense in depth: an empty rewrite must never reach the parent's
+    // insert/send path (it would wipe the compose box). Callers already guard,
+    // but bail here too so no future caller can regress the data-loss path.
+    if (!finalText || !finalText.trim()) return;
     const savedResult = { ...currentResult };
     els.content.style.display = "none";
 
@@ -974,6 +1016,9 @@
     if (els.useSuggestionBtn.onclick) return;
     if (!currentResult) return;
     const finalText = els.suggestion.innerText.trim();
+    // Never overwrite the user's message with an empty rewrite — whether the
+    // model returned no suggestion or the user cleared the box manually.
+    if (!finalText) return;
     showUndoCountdown(finalText, suggestionWasEdited);
   });
 

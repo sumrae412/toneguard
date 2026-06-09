@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { buildStaleFallback } from "./lib-exports.mjs";
+import { buildStaleFallback, hasUsableSuggestion } from "./lib-exports.mjs";
 
 // Minimal fake DOM — the builder only uses createElement, setAttribute,
 // textContent, style.cssText, appendChild, addEventListener, and remove().
@@ -58,5 +58,28 @@ describe("buildStaleFallback", () => {
     const root = buildStaleFallback(makeDoc());
     const reload = findChild(root, (c) => c.textContent === "Reload");
     expect(() => reload.dispatch("click")).not.toThrow();
+  });
+});
+
+describe("hasUsableSuggestion", () => {
+  it("is true for a non-empty rewrite", () => {
+    expect(hasUsableSuggestion({ flagged: true, suggestion: "Please upload the file." })).toBe(true);
+  });
+
+  it("is false when the model flagged but returned an empty suggestion", () => {
+    // The reported bug: flagged message with red flags but no rewrite.
+    expect(hasUsableSuggestion({ flagged: true, red_flags: ["x"], suggestion: "" })).toBe(false);
+  });
+
+  it("is false for a whitespace-only suggestion", () => {
+    expect(hasUsableSuggestion({ suggestion: "   \n\t" })).toBe(false);
+  });
+
+  it("is false when suggestion is missing, non-string, or result is null", () => {
+    expect(hasUsableSuggestion({ flagged: true })).toBe(false);
+    expect(hasUsableSuggestion({ suggestion: null })).toBe(false);
+    expect(hasUsableSuggestion({ suggestion: 42 })).toBe(false);
+    expect(hasUsableSuggestion(null)).toBe(false);
+    expect(hasUsableSuggestion(undefined)).toBe(false);
   });
 });

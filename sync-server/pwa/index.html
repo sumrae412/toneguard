@@ -455,9 +455,17 @@
       border: 1px solid #A5D6A7;
       color: var(--text);
     }
+    /* "No rewrite generated" state — model flagged but returned no suggestion. */
+    .message-box.suggestion.suggestion-empty {
+      background: #f5f5f5;
+      border: 1px dashed #ddd;
+      color: #777;
+      font-style: italic;
+    }
 
     @media (prefers-color-scheme: dark) {
       .message-box.suggestion { background: #1b3a1b; border-color: #2e7d32; }
+      .message-box.suggestion.suggestion-empty { background: #2a2a2a; border-color: #444; color: #888; }
     }
 
     /* Actions */
