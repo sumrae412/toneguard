@@ -1193,12 +1193,28 @@ function buildStaleFallback(doc, onReload) {
   return root;
 }
 
+/**
+ * A flagged result is only actionable if it carries a non-empty rewrite.
+ * The model occasionally flags a message (red flags, categories, readability)
+ * but returns an empty/whitespace `suggestion`. Accepting that empty rewrite
+ * would overwrite the user's compose box with nothing — a silent data-loss
+ * default. The overlay uses this to treat "flagged but no suggestion" as a
+ * degraded result rather than a usable rewrite.
+ *
+ * @param {object} result - Analysis result (or null).
+ * @returns {boolean} True when `result.suggestion` is a non-empty string.
+ */
+function hasUsableSuggestion(result) {
+  return !!(result && typeof result.suggestion === "string" && result.suggestion.trim());
+}
+
 // Make functions available globally when loaded as a content script (non-module),
 // and via the test wrapper (tests/lib-exports.mjs) for vitest.
 if (typeof globalThis !== "undefined") {
   globalThis.__toneGuardLib = {
     detectPlatform,
     buildStaleFallback,
+    hasUsableSuggestion,
     parseApiResponse,
     extractToolResult,
     validateToolInput,

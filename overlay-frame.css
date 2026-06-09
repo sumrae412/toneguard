@@ -269,6 +269,15 @@ html, body {
   border-color: #4CAF50;
   box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.2);
 }
+/* "No rewrite generated" state — model flagged but returned no suggestion. */
+.tg-message-box.tg-suggestion.tg-suggestion-empty {
+  background: #f5f5f5;
+  border-color: #ddd;
+  border-style: dashed;
+  color: #777;
+  cursor: default;
+  font-style: italic;
+}
 
 .tg-edit-hint {
   font-weight: 400;
@@ -323,6 +332,12 @@ html, body {
 }
 .tg-btn-primary { background: #4CAF50; color: white; }
 .tg-btn-primary:hover { background: #43A047; }
+.tg-btn:disabled,
+.tg-btn[aria-disabled="true"] {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
 .tg-btn-secondary { background: #fff; color: #666; border: 1px solid #ddd; }
 .tg-btn-secondary:hover { background: #f5f5f5; }
 .tg-btn-tertiary {
@@ -502,6 +517,7 @@ html, body {
   .tg-message-box.tg-original { background: #2d2d2d; border-color: #404040; color: #999; }
   .tg-message-box.tg-suggestion { background: #1b3a1b; border-color: #2d5f2d; color: #e0e0e0; }
   .tg-message-box.tg-suggestion:focus { border-color: #4CAF50; box-shadow: 0 0 0 2px rgba(76,175,80,0.3); }
+  .tg-message-box.tg-suggestion.tg-suggestion-empty { background: #2a2a2a; border-color: #444; color: #888; }
   .tg-question-label { color: #ccc; }
   .tg-question-input { background: #2d2d2d; border-color: #404040; color: #e0e0e0; }
   .tg-question-input:focus { border-color: #4CAF50; }
