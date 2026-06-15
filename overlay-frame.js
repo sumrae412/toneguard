@@ -43,7 +43,6 @@
     content: document.getElementById("tgContent"),
     empty: document.getElementById("tgEmpty"),
     originalSection: document.getElementById("tgOriginalSection"),
-    diffSection: document.getElementById("tgDiffSection"),
     original: document.getElementById("tgOriginal"),
     suggestion: document.getElementById("tgSuggestion"),
     reasoning: document.getElementById("tgReasoning"),
@@ -126,65 +125,6 @@
     return node;
   }
 
-  // --- Word-level diff ---
-
-  function wordDiff(oldText, newText) {
-    const oldWords = oldText.split(/(\s+)/);
-    const newWords = newText.split(/(\s+)/);
-    const m = oldWords.length;
-    const n = newWords.length;
-
-    const dp = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
-    for (let i = 1; i <= m; i++) {
-      for (let j = 1; j <= n; j++) {
-        if (oldWords[i - 1] === newWords[j - 1]) {
-          dp[i][j] = dp[i - 1][j - 1] + 1;
-        } else {
-          dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
-        }
-      }
-    }
-
-    const stack = [];
-    let i = m, j = n;
-    while (i > 0 || j > 0) {
-      if (i > 0 && j > 0 && oldWords[i - 1] === newWords[j - 1]) {
-        stack.push({ type: "same", text: oldWords[i - 1] });
-        i--; j--;
-      } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
-        stack.push({ type: "added", text: newWords[j - 1] });
-        j--;
-      } else {
-        stack.push({ type: "removed", text: oldWords[i - 1] });
-        i--;
-      }
-    }
-    stack.reverse();
-
-    const segments = [];
-    for (const seg of stack) {
-      if (segments.length > 0 && segments[segments.length - 1].type === seg.type) {
-        segments[segments.length - 1].text += seg.text;
-      } else {
-        segments.push({ type: seg.type, text: seg.text });
-      }
-    }
-    return segments;
-  }
-
-  function buildDiffView(original, suggestion) {
-    const segments = wordDiff(original, suggestion);
-    const container = el("div", { className: "tg-diff" });
-    for (const seg of segments) {
-      const span = document.createElement("span");
-      span.textContent = seg.text;
-      if (seg.type === "removed") span.className = "tg-diff-removed";
-      else if (seg.type === "added") span.className = "tg-diff-added";
-      container.appendChild(span);
-    }
-    return container;
-  }
-
   // --- State ---
 
   function resetState() {
@@ -208,8 +148,6 @@
     els.cancelBtn.style.display = "";
     const oldReplace = els.drawer.querySelector(".tg-replace-btn");
     if (oldReplace) oldReplace.remove();
-    const diffEl = els.drawer.querySelector(".tg-diff");
-    if (diffEl) diffEl.remove();
     if (els.landingPanel) {
       els.landingPanel.style.display = "none";
       els.landingPanel.open = false;
@@ -319,17 +257,11 @@
     // edit manually or send as-is.
     applySuggestionAvailability(hasUsableSuggestion(result));
 
-    // Inline diff view
-    const existingDiff = els.diffSection.querySelector(".tg-diff");
-    if (existingDiff) existingDiff.remove();
-    if (result.original && result.suggestion && result.original !== result.suggestion) {
-      els.diffSection.appendChild(buildDiffView(result.original, result.suggestion));
-      els.diffSection.style.display = "block";
-      els.originalSection.style.display = "none";
-    } else {
-      els.diffSection.style.display = "none";
-      els.originalSection.style.display = "block";
-    }
+    // Always show the plain original message alongside the rewrite. (We used to
+    // render an inline word-level diff here, but it became unreadable whenever
+    // the synthesizer restructured the message — the common case. Removed in
+    // favor of original + clean rewrite. See docs/plans/2026-06-15-overlay-remove-diff-design.md)
+    els.originalSection.style.display = "block";
 
     // Badge
     if (result.refined) {
