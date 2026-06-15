@@ -410,30 +410,6 @@ html, body {
   padding: 8px 24px;
 }
 
-/* Diff view */
-.tg-diff {
-  padding: 12px;
-  border-radius: 8px;
-  font-size: 14px;
-  line-height: 1.6;
-  white-space: pre-wrap;
-  word-wrap: break-word;
-  background: #fff;
-  border: 1px solid #e0e0e0;
-}
-.tg-diff-removed {
-  text-decoration: line-through;
-  color: #C62828;
-  background: #FFEBEE;
-  border-radius: 2px;
-  padding: 0 2px;
-}
-.tg-diff-added {
-  color: #2E7D32;
-  background: #E8F5E9;
-  border-radius: 2px;
-  padding: 0 2px;
-}
 
 /* Undo countdown */
 .tg-undo-toast {
@@ -532,9 +508,6 @@ html, body {
   .tg-loading { color: #999; }
   .tg-empty { color: #777; }
   .tg-edit-hint { color: #666; }
-  .tg-diff { background: #2d2d2d; border-color: #404040; }
-  .tg-diff-removed { background: #3d1c1c; color: #EF9A9A; }
-  .tg-diff-added { background: #1b3a1b; color: #81C784; }
   .tg-undo-countdown { color: #999; }
   .tg-stale-title { color: #FFB74D; }
   .tg-stale-msg { color: #999; }
