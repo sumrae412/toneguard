@@ -721,6 +721,26 @@ async function handleAnalyze(text, context, site, requestedIntentMode) {
       }
     }
 
+    // Empty-suggestion re-roll: extraction SUCCEEDED and the model flagged the
+    // message, but the suggestion came back blank — without recovery, the overlay
+    // renders the "No rewrite generated" dead-end (overlay-frame.js). The model
+    // is the variance source (base.txt requires a rewrite whenever it flags), so
+    // retry ONCE at the same budget. The landing critic is reused. If the retry's
+    // extraction fails, keep the original result so the flagged phrases/categories
+    // still surface; if it's STILL flagged-with-empty-suggestion, the existing
+    // overlay note stands (no behavior change beyond the extra attempt).
+    if (shouldRetryEmptySuggestion({ parsed: result, stopReason })) {
+      console.warn(
+        "ToneGuard: flagged with an empty suggestion on a complete response — retrying once"
+      );
+      const retried = await fetchAnalysis(ANALYSIS_MAX_TOKENS);
+      if (retried.ok) {
+        data = await retried.json();
+        stopReason = data.stop_reason || "";
+        result = extract(data) || result;
+      }
+    }
+
     if (!result) {
       // No usable result. A max_tokens stop means the tool call was cut off
       // (truncated); anything else means the model didn't return a valid tool
@@ -773,6 +793,30 @@ async function handleAnalyze(text, context, site, requestedIntentMode) {
     result.intent_mode = intentMode;
     result.voice = { ...(result.voice || {}), strength: voiceStrength };
     result.site_profile = siteProfile;
+
+    // [diag] Flagged-but-no-rewrite breadcrumb. Extraction succeeded (we have a
+    // parsed result) yet the model flagged the message with an empty suggestion,
+    // which renders the "No rewrite generated" dead-end in the overlay. The
+    // existing payload logging only fires on extraction FAILURE (PR #68), so this
+    // success-with-empty-content case was previously invisible. Log the result
+    // shape as a STRING (objects render as "[object Object]" in the extensions
+    // error pane — see CLAUDE.md) so we can tell WHICH mechanism produced it:
+    // has_questions (model asked instead of rewriting), declined rewrite, or a
+    // silent truncation. Cap the suggestion preview so a long value can't flood.
+    if (result.flagged && !(typeof result.suggestion === "string" && result.suggestion.trim())) {
+      const sug = typeof result.suggestion === "string" ? result.suggestion : "";
+      console.warn(
+        "[ToneGuard:diag] flagged but empty suggestion — " +
+          "mode=" + JSON.stringify(result.mode) +
+          " has_questions=" + JSON.stringify(!!result.has_questions) +
+          " questions=" + ((result.questions && result.questions.length) || 0) +
+          " suggestion_len=" + sug.length +
+          " stop_reason=" + JSON.stringify(stopReason) +
+          " intent_mode=" + JSON.stringify(intentMode) +
+          " categories=" + JSON.stringify(result.categories || []) +
+          " suggestion_preview=" + JSON.stringify(sug.slice(0, 200))
+      );
+    }
 
     await trackStats(result.flagged, result.mode);
 
