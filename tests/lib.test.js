@@ -14,6 +14,7 @@ import {
   makeAnalysisError,
   shouldEscalateMaxTokens,
   shouldRetryDiscardedResult,
+  shouldRetryEmptySuggestion,
   buildSystemPayload,
   PROMPT_CACHE_MIN_CHARS,
   clampLearnedField,
@@ -605,6 +606,72 @@ describe("shouldRetryDiscardedResult", () => {
   it("does NOT retry on max_tokens (the escalation path owns that case)", () => {
     expect(
       shouldRetryDiscardedResult({ parsed: null, stopReason: "max_tokens" })
+    ).toBe(false);
+  });
+});
+
+describe("shouldRetryEmptySuggestion", () => {
+  // Regression: the model flags a message but returns an empty suggestion, which
+  // renders the "No rewrite generated" dead-end in the overlay. Extraction
+  // SUCCEEDED here (parsed is a real object) — the two sibling gates only fire on
+  // !parsed, so this case previously sailed through with no recovery.
+  it("retries when flagged with an empty-string suggestion", () => {
+    expect(
+      shouldRetryEmptySuggestion({
+        parsed: { flagged: true, suggestion: "" },
+        stopReason: "end_turn"
+      })
+    ).toBe(true);
+  });
+
+  it("retries when flagged with a whitespace-only suggestion", () => {
+    expect(
+      shouldRetryEmptySuggestion({
+        parsed: { flagged: true, suggestion: "   \n  " },
+        stopReason: "end_turn"
+      })
+    ).toBe(true);
+  });
+
+  it("retries when flagged with a missing suggestion field", () => {
+    expect(
+      shouldRetryEmptySuggestion({
+        parsed: { flagged: true },
+        stopReason: "tool_use"
+      })
+    ).toBe(true);
+  });
+
+  it("does NOT retry when the suggestion is usable", () => {
+    expect(
+      shouldRetryEmptySuggestion({
+        parsed: { flagged: true, suggestion: "Here is a cleaner rewrite." },
+        stopReason: "end_turn"
+      })
+    ).toBe(false);
+  });
+
+  it("does NOT retry when the message was not flagged", () => {
+    expect(
+      shouldRetryEmptySuggestion({
+        parsed: { flagged: false, suggestion: "" },
+        stopReason: "end_turn"
+      })
+    ).toBe(false);
+  });
+
+  it("does NOT retry on max_tokens (escalation owns truncation)", () => {
+    expect(
+      shouldRetryEmptySuggestion({
+        parsed: { flagged: true, suggestion: "" },
+        stopReason: "max_tokens"
+      })
+    ).toBe(false);
+  });
+
+  it("does NOT retry when there is no parsed result", () => {
+    expect(
+      shouldRetryEmptySuggestion({ parsed: null, stopReason: "end_turn" })
     ).toBe(false);
   });
 });

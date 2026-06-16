@@ -35,6 +35,7 @@ export const precheckAnalysis = lib.precheckAnalysis;
 export const makeAnalysisError = lib.makeAnalysisError;
 export const shouldEscalateMaxTokens = lib.shouldEscalateMaxTokens;
 export const shouldRetryDiscardedResult = lib.shouldRetryDiscardedResult;
+export const shouldRetryEmptySuggestion = lib.shouldRetryEmptySuggestion;
 export const buildSystemPayload = lib.buildSystemPayload;
 export const PROMPT_CACHE_MIN_CHARS = lib.PROMPT_CACHE_MIN_CHARS;
 export const clampLearnedField = lib.clampLearnedField;

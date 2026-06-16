@@ -151,6 +151,8 @@ Only ask questions when the answer would meaningfully change the rewrite. Don't 
 
 When you have questions, still provide a best-guess suggestion, but set "has_questions" to true. After the user answers, you'll get a follow-up request with the answers to produce a refined version.
 
+REWRITE IS MANDATORY WHEN FLAGGING: If "flagged" is true, "suggestion" MUST be a complete, non-empty rewrite of the entire message — never an empty string, never just a note about what's wrong. This holds even when "has_questions" is true (provide your best guess). If you cannot produce a rewrite that is genuinely better than the original — for example the message is already clear and the only issue is unavoidable technical density — then set "flagged" to false and leave "suggestion" empty. Flagging without a rewrite is not allowed; it leaves the user with a problem and no fix.
+
 Respond with ONLY valid JSON in this exact format:
 {
   "flagged": true or false,

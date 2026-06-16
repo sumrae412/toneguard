@@ -505,6 +505,32 @@ function shouldRetryDiscardedResult({ parsed, stopReason }) {
 }
 
 /**
+ * Decide whether to re-roll once because the model flagged the message but
+ * returned an empty suggestion.
+ *
+ * Distinct from the two gates above: those fire when extraction yielded NOTHING
+ * (`!parsed`). This one fires when extraction SUCCEEDED — we have a valid parsed
+ * result with `flagged: true` — but `suggestion` is missing/blank. With no
+ * recovery, that result renders the "No rewrite generated" dead-end in the
+ * overlay (see overlay-frame.js applySuggestionAvailability). The model is the
+ * variance source (base.txt requires a rewrite whenever it flags), so a single
+ * same-budget re-roll usually returns a usable rewrite. max_tokens is excluded:
+ * a truncated flag-with-empty-suggestion is the escalation path's job, and a
+ * same-budget retry wouldn't fit the rewrite the first one couldn't.
+ *
+ * @param {{parsed: object|null, stopReason: string}} args
+ * @returns {boolean}
+ */
+function shouldRetryEmptySuggestion({ parsed, stopReason }) {
+  return !!(
+    parsed &&
+    parsed.flagged &&
+    stopReason !== "max_tokens" &&
+    !hasUsableSuggestion(parsed)
+  );
+}
+
+/**
  * Anthropic's prompt-cache minimum prefix for Haiku 4.5 is 4096 tokens.
  * Approximating 4 chars/token, we only attempt caching when basePrompt is at
  * least ~16K chars. Below this, cache_control silently no-ops (no error,
@@ -1250,6 +1276,7 @@ if (typeof globalThis !== "undefined") {
     makeAnalysisError,
     shouldEscalateMaxTokens,
     shouldRetryDiscardedResult,
+    shouldRetryEmptySuggestion,
     buildSystemPayload,
     PROMPT_CACHE_MIN_CHARS,
     clampLearnedField,

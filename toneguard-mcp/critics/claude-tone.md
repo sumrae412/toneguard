@@ -40,6 +40,8 @@ Return ONLY valid JSON:
 
 If the message has no issues: `{"flagged": false, "issues": [], "suggestion": "", "rewrite": "", "confidence": 0.95}`
 
+When "flagged" is true, "rewrite" MUST be a complete, non-empty rewrite of the entire message — never empty, never just the note in "suggestion". If you cannot produce a rewrite that is genuinely better than the original, set "flagged" to false instead. Flagging without a rewrite leaves the user with a problem and no fix.
+
 ## Rules
 
 - Be specific: quote the exact problematic words
