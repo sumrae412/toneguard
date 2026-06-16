@@ -13,6 +13,7 @@ import {
   precheckAnalysis,
   makeAnalysisError,
   shouldEscalateMaxTokens,
+  shouldRetryDiscardedResult,
   buildSystemPayload,
   PROMPT_CACHE_MIN_CHARS,
   clampLearnedField,
@@ -574,6 +575,36 @@ describe("shouldEscalateMaxTokens", () => {
         currentMax: ANALYSIS_MAX_TOKENS_CEILING,
         ceiling: ANALYSIS_MAX_TOKENS_CEILING
       })
+    ).toBe(false);
+  });
+});
+
+describe("shouldRetryDiscardedResult", () => {
+  // The XML-leak detector (validateToolInput) discards a complete tool_use
+  // response when text-format function-call markup leaked into a string field.
+  // On a non-truncation stop there's otherwise no recovery, so the send fails —
+  // this gate re-rolls once. See service-worker.js / pwa app.js call sites.
+  it("retries when a complete response was discarded (leak case)", () => {
+    expect(
+      shouldRetryDiscardedResult({ parsed: null, stopReason: "tool_use" })
+    ).toBe(true);
+  });
+
+  it("retries on any non-truncation stop with no result", () => {
+    expect(
+      shouldRetryDiscardedResult({ parsed: null, stopReason: "end_turn" })
+    ).toBe(true);
+  });
+
+  it("does NOT retry when a result was extracted", () => {
+    expect(
+      shouldRetryDiscardedResult({ parsed: { flagged: true }, stopReason: "tool_use" })
+    ).toBe(false);
+  });
+
+  it("does NOT retry on max_tokens (the escalation path owns that case)", () => {
+    expect(
+      shouldRetryDiscardedResult({ parsed: null, stopReason: "max_tokens" })
     ).toBe(false);
   });
 });

@@ -606,6 +606,21 @@ async function analyze() {
       }
     }
 
+    // Leak re-roll (mirror service-worker.js shouldRetryDiscardedResult): a
+    // complete response (not max_tokens) that extraction discarded is almost
+    // always the XML-leak detector rejecting tool output where text-format
+    // function-call markup bled into a string field. That leak is intermittent
+    // (PR #63 — first reported on this PWA), so retry ONCE at the same budget;
+    // without it, a leak on a clean tool_use stop has no recovery.
+    if (!parsed && stopReason !== "max_tokens") {
+      const retried = await fetchAnalysis(ANALYSIS_MAX_TOKENS);
+      if (retried.ok) {
+        data = await retried.json();
+        stopReason = data.stop_reason || "";
+        parsed = extract(data);
+      }
+    }
+
     if (!parsed) {
       // max_tokens stop → tool call cut off (truncated); anything else → the
       // model didn't return a usable tool call (parse).

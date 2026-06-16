@@ -483,6 +483,28 @@ function shouldEscalateMaxTokens({ parsed, stopReason, currentMax, ceiling }) {
 }
 
 /**
+ * Decide whether to re-roll the analysis once at the same token budget.
+ *
+ * Returns true when the model returned a complete response (stop_reason is NOT
+ * "max_tokens") yet extraction yielded nothing — the dominant cause is the
+ * leak detector (validateToolInput / TOOL_CALL_XML_LEAK_RE) discarding a
+ * tool_use result because Anthropic's text-format function-call markup bled
+ * into a string field. That leak is intermittent (see PR #63), so a single
+ * re-roll almost always returns clean output. Without this, a leak on a normal
+ * tool_use stop has no recovery and the send just fails.
+ *
+ * Distinct from shouldEscalateMaxTokens: that path retries at a HIGHER budget
+ * for truncation; this path retries at the SAME budget for a length-independent
+ * glitch. The max_tokens case is explicitly excluded so the two never overlap.
+ *
+ * @param {{parsed: object|null, stopReason: string}} args
+ * @returns {boolean}
+ */
+function shouldRetryDiscardedResult({ parsed, stopReason }) {
+  return !parsed && stopReason !== "max_tokens";
+}
+
+/**
  * Anthropic's prompt-cache minimum prefix for Haiku 4.5 is 4096 tokens.
  * Approximating 4 chars/token, we only attempt caching when basePrompt is at
  * least ~16K chars. Below this, cache_control silently no-ops (no error,
@@ -1227,6 +1249,7 @@ if (typeof globalThis !== "undefined") {
     precheckAnalysis,
     makeAnalysisError,
     shouldEscalateMaxTokens,
+    shouldRetryDiscardedResult,
     buildSystemPayload,
     PROMPT_CACHE_MIN_CHARS,
     clampLearnedField,

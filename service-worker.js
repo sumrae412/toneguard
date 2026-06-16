@@ -702,6 +702,25 @@ async function handleAnalyze(text, context, site, requestedIntentMode) {
       }
     }
 
+    // Leak re-roll: the model returned a complete response (not truncated) but
+    // extraction discarded it — almost always the XML-leak detector
+    // (validateToolInput) rejecting tool output where Anthropic's text-format
+    // function-call markup bled into a string field. That leak is intermittent
+    // (see lib.js TOOL_CALL_XML_LEAK_RE / PR #63), so retry ONCE at the same
+    // budget — without this, a leak on a clean tool_use stop has no recovery
+    // and the send just fails. The landing critic is reused.
+    if (shouldRetryDiscardedResult({ parsed: result, stopReason })) {
+      console.warn(
+        "ToneGuard: tool output discarded on a complete response (likely XML-leak in a field) — retrying once"
+      );
+      const retried = await fetchAnalysis(ANALYSIS_MAX_TOKENS);
+      if (retried.ok) {
+        data = await retried.json();
+        stopReason = data.stop_reason || "";
+        result = extract(data);
+      }
+    }
+
     if (!result) {
       // No usable result. A max_tokens stop means the tool call was cut off
       // (truncated); anything else means the model didn't return a valid tool
