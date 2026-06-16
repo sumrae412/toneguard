@@ -69,6 +69,10 @@
       getEditorText(el) { return el.innerText.trim(); },
 
       replaceEditorText(el, text) {
+        if (!el) {
+          console.warn("[ToneGuard:diag] slack.replaceEditorText: no editor element (detached?)");
+          return;
+        }
         el.focus();
 
         // Strategy 1: execCommand (works in some browsers/editors)
@@ -92,6 +96,10 @@
       },
 
       releaseSend(el) {
+        if (!el) {
+          console.warn("[ToneGuard:diag] slack.releaseSend: no editor element (detached?) — cannot auto-release send");
+          return;
+        }
         releasing = true;
         el.focus();
         el.dispatchEvent(new KeyboardEvent("keydown", {
@@ -528,8 +536,12 @@
     }
     showCheckingIndicator();
 
+    // Hoisted so the catch can report the payload shape if sendMessage throws
+    // a "Could not serialize message" error (a non-string slipping into one of
+    // these fields). See the serialize breadcrumb in the catch below.
+    let context;
     try {
-      const context = getConversationContext();
+      context = getConversationContext();
       const result = await chrome.runtime.sendMessage({
         type: "ANALYZE",
         text: text,
@@ -608,7 +620,18 @@
         return;
       }
 
-      console.error("ToneGuard error:", err);
+      console.error("ToneGuard error:", err && err.message ? err.message : err);
+      // Serialize breadcrumb: if chrome.runtime.sendMessage rejected the
+      // ANALYZE payload, print the type/length of each field so we can see
+      // which one was non-serializable instead of guessing.
+      if (err && /serialize/i.test(err.message || "")) {
+        console.warn(
+          "[ToneGuard:diag] ANALYZE payload not serializable —" +
+            " text:" + typeof text + "(" + (text && text.length) + ")" +
+            " context:" + typeof context + "(" + (context && context.length) + ")" +
+            " site:" + typeof SITE + "(" + SITE + ")"
+        );
+      }
       if (window.__toneGuard) window.__toneGuard.hide();
       currentPlatform.releaseSend(editor);
       pendingEditor = null;

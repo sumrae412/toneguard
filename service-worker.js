@@ -726,11 +726,20 @@ async function handleAnalyze(text, context, site, requestedIntentMode) {
       // (truncated); anything else means the model didn't return a valid tool
       // call at all (parse). Surface the distinct, actionable code.
       const kind = stopReason === "max_tokens" ? "truncated" : "parse";
-      const contentLength = JSON.stringify((data && data.content) || "").length;
+      const contentJson = (() => {
+        try { return JSON.stringify((data && data.content) || ""); }
+        catch { return String(data && data.content); }
+      })();
+      const contentLength = contentJson.length;
+      // Log the offending payload as a STRING, not the raw object — objects
+      // render as "[object Object]" in the chrome://extensions error pane
+      // (see CLAUDE.md "Log structured errors as strings"), which hid the
+      // actual leak/parse trigger and made this failure undiagnosable. Cap at
+      // 4000 chars so a long rewrite can't flood the console.
       console.error(
         "ToneGuard: could not extract analysis (stop_reason=" +
-          stopReason + ", content_length=" + contentLength + "):",
-        data && data.content
+          stopReason + ", content_length=" + contentLength + "): " +
+          contentJson.slice(0, 4000)
       );
       const error = makeAnalysisError(kind, {
         route: "blocked_error",
