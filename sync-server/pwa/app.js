@@ -625,7 +625,19 @@ async function analyze() {
       // max_tokens stop → tool call cut off (truncated); anything else → the
       // model didn't return a usable tool call (parse).
       const kind = stopReason === "max_tokens" ? "truncated" : "parse";
-      const contentLength = JSON.stringify((data && data.content) || "").length;
+      const contentJson = (() => {
+        try { return JSON.stringify((data && data.content) || ""); }
+        catch { return String(data && data.content); }
+      })();
+      const contentLength = contentJson.length;
+      // Log the offending payload as a string so the actual leak/parse trigger
+      // is visible (mirror service-worker.js — objects render as
+      // "[object Object]" and hid the cause). Capped at 4000 chars.
+      console.error(
+        "ToneGuard: could not extract analysis (stop_reason=" +
+          stopReason + ", content_length=" + contentLength + "): " +
+          contentJson.slice(0, 4000)
+      );
       showFailure(makePwaAnalysisError(kind, {
         phase: kind,
         route: "blocked_error",
