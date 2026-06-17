@@ -610,10 +610,20 @@
         return;
       }
 
-      // Extension was reloaded — show reload prompt and block the send.
-      // The message is unchecked; don't let it go out automatically.
-      if (!isContextValid()) {
-        console.warn("ToneGuard: extension context invalidated, prompting reload");
+      // Extension was reloaded, OR the service worker died mid-analysis
+      // ("Could not establish connection. Receiving end does not exist." /
+      // "The message port closed before a response was received.") — the
+      // message never got a verdict. Show the reload banner and BLOCK the
+      // send. Never auto-release: an unchecked message must not go out just
+      // because the analysis round-trip failed. See CLAUDE.md "Never swallow
+      // parse errors into a destructive default."
+      const lib = globalThis.__toneGuardLib;
+      const connectionLost = lib && typeof lib.isConnectionLostError === "function"
+        ? lib.isConnectionLostError(err)
+        : false;
+      if (!isContextValid() || connectionLost) {
+        console.warn("ToneGuard: service worker unreachable, prompting reload:",
+          err && err.message ? err.message : err);
         if (window.__toneGuard) window.__toneGuard.showStale();
         pendingEditor = null;
         pendingText = null;
@@ -632,8 +642,16 @@
             " site:" + typeof SITE + "(" + SITE + ")"
         );
       }
-      if (window.__toneGuard) window.__toneGuard.hide();
-      currentPlatform.releaseSend(editor);
+      // Any other unexpected failure: surface a retryable error and BLOCK the
+      // send. The message stays in the composer; nothing goes out unchecked.
+      if (window.__toneGuard) {
+        window.__toneGuard.showError({
+          type: "analysis_failed",
+          message: "ToneGuard couldn't check this message, so it wasn't sent. Try again, or reload the tab if this keeps happening.",
+          retryable: true,
+          diagnostic_code: "TG_ANALYZE_FAIL"
+        });
+      }
       pendingEditor = null;
       pendingText = null;
     }

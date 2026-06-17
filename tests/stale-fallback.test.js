@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { buildStaleFallback, hasUsableSuggestion } from "./lib-exports.mjs";
+import { buildStaleFallback, hasUsableSuggestion, isConnectionLostError } from "./lib-exports.mjs";
 
 // Minimal fake DOM — the builder only uses createElement, setAttribute,
 // textContent, style.cssText, appendChild, addEventListener, and remove().
@@ -81,5 +81,33 @@ describe("hasUsableSuggestion", () => {
     expect(hasUsableSuggestion({ suggestion: 42 })).toBe(false);
     expect(hasUsableSuggestion(null)).toBe(false);
     expect(hasUsableSuggestion(undefined)).toBe(false);
+  });
+});
+
+describe("isConnectionLostError", () => {
+  // The reported bug: SW died mid-analysis, sendMessage rejected with this
+  // message, and the old catch block auto-released the unchecked send.
+  it("matches the 'receiving end does not exist' rejection", () => {
+    expect(isConnectionLostError(new Error("Could not establish connection. Receiving end does not exist."))).toBe(true);
+  });
+
+  it("matches the 'message port closed' rejection", () => {
+    expect(isConnectionLostError(new Error("The message port closed before a response was received."))).toBe(true);
+  });
+
+  it("matches 'Extension context invalidated'", () => {
+    expect(isConnectionLostError(new Error("Extension context invalidated."))).toBe(true);
+  });
+
+  it("accepts a bare string message", () => {
+    expect(isConnectionLostError("Receiving end does not exist")).toBe(true);
+  });
+
+  it("is false for unrelated errors and bad input", () => {
+    expect(isConnectionLostError(new Error("Could not serialize message"))).toBe(false);
+    expect(isConnectionLostError(new Error("boom"))).toBe(false);
+    expect(isConnectionLostError(null)).toBe(false);
+    expect(isConnectionLostError(undefined)).toBe(false);
+    expect(isConnectionLostError({})).toBe(false);
   });
 });

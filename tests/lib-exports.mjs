@@ -22,6 +22,7 @@ const lib = sandbox.globalThis.__toneGuardLib;
 export const detectPlatform = lib.detectPlatform;
 export const buildStaleFallback = lib.buildStaleFallback;
 export const hasUsableSuggestion = lib.hasUsableSuggestion;
+export const isConnectionLostError = lib.isConnectionLostError;
 export const parseApiResponse = lib.parseApiResponse;
 export const extractToolResult = lib.extractToolResult;
 export const validateToolInput = lib.validateToolInput;
