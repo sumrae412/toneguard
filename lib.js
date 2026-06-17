@@ -1256,6 +1256,21 @@ function hasUsableSuggestion(result) {
   return !!(result && typeof result.suggestion === "string" && result.suggestion.trim());
 }
 
+// True when a thrown error means the service worker was unreachable — the
+// message never got a verdict, so the send MUST be blocked (never released).
+// Chrome phrases SW-unavailable rejections a few ways; all mean the same
+// thing from the content script's side: the analysis round-trip failed and
+// the message is unchecked. Treated like context-invalidation: show the
+// reload banner, do NOT auto-release the send. See content.js
+// analyzeAndIntercept catch block and the "Never swallow parse errors into a
+// destructive default" invariant in CLAUDE.md.
+function isConnectionLostError(err) {
+  const msg = err && typeof err.message === "string"
+    ? err.message
+    : typeof err === "string" ? err : "";
+  return /could not establish connection|receiving end does not exist|message port closed|extension context invalidated/i.test(msg);
+}
+
 // Make functions available globally when loaded as a content script (non-module),
 // and via the test wrapper (tests/lib-exports.mjs) for vitest.
 if (typeof globalThis !== "undefined") {
@@ -1263,6 +1278,7 @@ if (typeof globalThis !== "undefined") {
     detectPlatform,
     buildStaleFallback,
     hasUsableSuggestion,
+    isConnectionLostError,
     parseApiResponse,
     extractToolResult,
     validateToolInput,
