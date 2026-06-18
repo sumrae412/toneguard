@@ -462,8 +462,12 @@ async function handleAnalyze(text, context, site, requestedIntentMode) {
     model: routing.model
   });
 
-  const { tg_api_key: apiKey, tg_enabled: enabled, tg_strictness: strictness } =
-    await chrome.storage.sync.get(["tg_api_key", "tg_enabled", "tg_strictness"]);
+  const {
+    tg_api_key: apiKey,
+    tg_enabled: enabled,
+    tg_strictness: strictness,
+    tg_landing_enabled: landingEnabled
+  } = await chrome.storage.sync.get(["tg_api_key", "tg_enabled", "tg_strictness", "tg_landing_enabled"]);
 
   if (enabled === false) {
     return { flagged: false, routing };
@@ -635,16 +639,22 @@ async function handleAnalyze(text, context, site, requestedIntentMode) {
   };
 
   try {
-    // Run the main tone/clarity analysis and the landing critic in parallel.
+    // Run the main tone/clarity analysis and, when enabled, the landing critic in parallel.
     // Landing is descriptive ("how this reads on a skim"), Haiku-tier, and
     // must NOT block the main result — a landing failure returns null and
     // the rewrite path keeps working.
+    // tg_landing_enabled defaults to FALSE (cost saving: ~15% per call).
+    // Summer can enable it in Settings to restore the "how this lands" panel.
+    const landingPromise = landingEnabled
+      ? callLandingCritic(text, context, apiKey).catch((err) => {
+          console.warn("ToneGuard landing critic failed:", err && err.message ? err.message : err);
+          return null;
+        })
+      : Promise.resolve(null);
+
     const [response, landing] = await Promise.all([
       fetchAnalysis(ANALYSIS_MAX_TOKENS),
-      callLandingCritic(text, context, apiKey).catch((err) => {
-        console.warn("ToneGuard landing critic failed:", err && err.message ? err.message : err);
-        return null;
-      })
+      landingPromise
     ]);
 
     if (!response.ok) {

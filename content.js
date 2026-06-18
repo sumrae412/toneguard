@@ -36,6 +36,31 @@
     return String(err);
   }
 
+  // Build lightweight issue stubs from red_flags + categories when the API
+  // response doesn't include a full `issues` array (change #3 — stripped from
+  // tool schema to cut output tokens ~15-20% on flagged calls).
+  //
+  // LIMITATION: stubs carry only quote + category. The model-generated
+  // `explanation` and `suggested_fix` fields are absent — those require the
+  // model to generate them and cannot be reconstructed client-side. The overlay
+  // renders stub cards without the explanation/fix rows (they're optional DOM
+  // nodes in overlay-frame.js renderIssueCard). This is the accepted UX tradeoff;
+  // see the PR body for the full before/after.
+  function buildIssueStubs(redFlags, categories) {
+    if (!redFlags.length && !categories.length) return [];
+    // Pair each red_flag with the first available category (best-effort).
+    // Extra flags beyond categories get the last category; extra categories
+    // with no matching flag produce a category-only stub with no quote.
+    const stubs = [];
+    const maxLen = Math.max(redFlags.length, categories.length || 1);
+    for (let i = 0; i < maxLen; i++) {
+      const quote = redFlags[i] || "";
+      const category = categories[i] || categories[categories.length - 1] || "tone";
+      stubs.push({ quote, category, severity: "medium" });
+    }
+    return stubs.slice(0, 3); // mirror server-side 1-3 cap
+  }
+
   // Detect if the extension context was invalidated (extension reloaded
   // without reloading this tab). chrome.runtime.id becomes undefined.
   function isContextValid() {
@@ -447,14 +472,16 @@
 
       if (!messageEls.length) return "";
 
-      // Grab the last 5 messages
+      // Grab the last 3 messages (was 5 — reduces input tokens ~3-5% on Slack calls).
+      // Each message is also capped at 200 chars; thread context beyond that rarely
+      // changes the analysis outcome and the full text is in chrome.storage if needed.
       const messages = [];
-      const els = Array.from(messageEls).slice(-5);
+      const els = Array.from(messageEls).slice(-3);
 
       for (const msgEl of els) {
         const text = msgEl.innerText?.trim();
         if (text && text.length > 0) {
-          messages.push(text);
+          messages.push(text.substring(0, 200));
         }
       }
 
@@ -587,7 +614,17 @@
         return;
       }
 
-      // Flagged — show result in overlay and wait for decision
+      // Flagged — show result in overlay and wait for decision.
+      // The API no longer returns `issues` (stripped from tool schema to cut
+      // output tokens). Reconstruct a lightweight stub from red_flags +
+      // categories so the overlay's issue-card section still renders something.
+      // LIMITATION: stub cards have no model-generated explanation or
+      // suggested_fix — only the flagged phrase (quote) and its category label.
+      // This is the intentional UX tradeoff for change #3; see PR body.
+      const issues = result.issues && result.issues.length > 0
+        ? result.issues  // model returned them anyway (schema is advisory for tool_use)
+        : buildIssueStubs(result.red_flags || [], result.categories || []);
+
       if (window.__toneGuard) {
         window.__toneGuard.showResult({
           original: text,
@@ -598,7 +635,7 @@
           readability: result.readability || 0,
           red_flags: result.red_flags || [],
           categories: result.categories || [],
-          issues: result.issues || [],
+          issues,
           intent_mode: result.intent_mode || "professional",
           site_profile: result.site_profile || null,
           has_questions: result.has_questions || false,
@@ -795,6 +832,9 @@
       if (!result.flagged) {
         if (window.__toneGuard) window.__toneGuard.showPassed();
       } else if (window.__toneGuard) {
+        const issues = result.issues && result.issues.length > 0
+          ? result.issues
+          : buildIssueStubs(result.red_flags || [], result.categories || []);
         window.__toneGuard.showResult({
           original: text,
           suggestion: result.suggestion,
@@ -804,7 +844,7 @@
           readability: result.readability || 0,
           red_flags: result.red_flags || [],
           categories: result.categories || [],
-          issues: result.issues || [],
+          issues,
           intent_mode: result.intent_mode || "professional",
           site_profile: result.site_profile || null,
           has_questions: result.has_questions || false,
@@ -864,6 +904,9 @@
       if (!result.flagged) {
         if (window.__toneGuard) window.__toneGuard.showPassed();
       } else if (window.__toneGuard) {
+        const issues = result.issues && result.issues.length > 0
+          ? result.issues
+          : buildIssueStubs(result.red_flags || [], result.categories || []);
         window.__toneGuard.showResult({
           original: text,
           suggestion: result.suggestion,
@@ -873,7 +916,7 @@
           readability: result.readability || 0,
           red_flags: result.red_flags || [],
           categories: result.categories || [],
-          issues: result.issues || [],
+          issues,
           intent_mode: result.intent_mode || "professional",
           site_profile: result.site_profile || null,
           has_questions: result.has_questions || false,
