@@ -306,6 +306,18 @@ const ANALYSIS_ERROR_MAP = {
     retryable: false,
     diagnostic_code: "TG_AUTH_001"
   },
+  invalid_api_key: {
+    type: "auth_error",
+    message: "Invalid API key. Open ToneGuard settings and check your key.",
+    retryable: false,
+    diagnostic_code: "TG_AUTH_002"
+  },
+  usage_limit: {
+    type: "usage_limit_error",
+    message: "Anthropic usage limit reached. Raise your limit at console.anthropic.com or wait until it resets.",
+    retryable: false,
+    diagnostic_code: "TG_LIMIT_001"
+  },
   parse: {
     type: "parse_error",
     message: "ToneGuard could not read the model response.",

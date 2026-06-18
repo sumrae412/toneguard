@@ -243,7 +243,15 @@
         pendingText = null;
         pendingEditor = null;
         if (editor && editor.isConnected) {
-          setTimeout(() => analyzeAndIntercept(editor), 0);
+          // Read the live text from the editor — pendingText was already cleared
+          // above and passing the DOM node directly (the prior bug) produced
+          // "text:object(undefined)" in the ANALYZE payload and a
+          // "Could not serialize message" rejection.
+          const retryText = currentPlatform.getEditorText(editor) || "";
+          if (!retryText) {
+            return { ok: false, error: "editor is empty; nothing to retry" };
+          }
+          setTimeout(() => analyzeAndIntercept(retryText, editor), 0);
           return { ok: true };
         }
         return { ok: false, error: "no pending compose to retry" };
