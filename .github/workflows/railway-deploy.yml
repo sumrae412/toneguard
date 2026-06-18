@@ -1,0 +1,69 @@
+# railway-deploy.yml
+#
+# WHY THIS EXISTS
+# ---------------
+# The Railway GitHub-App webhook that was supposed to trigger auto-deploys
+# silently stopped firing (confirmed 2026-06-18 — no Railway deployment event
+# appeared after multiple merges to main that touched sync-server source).
+# This workflow replaces it: it uses the Railway CLI directly, authenticated
+# via a RAILWAY_TOKEN repo secret (a Railway *project token* scoped to
+# toneguard-sync), so deploys are triggered by GitHub Actions rather than
+# depending on the webhook.
+#
+# REQUIRED SECRET
+# ---------------
+# Set RAILWAY_TOKEN in the repo's Settings → Secrets and variables → Actions.
+# Generate it in the Railway dashboard: toneguard-sync project →
+# Settings → Tokens → New Token. The token is project-scoped — no account
+# credentials leak.
+#
+# DO NOT MERGE until RAILWAY_TOKEN is set, or the first run will fail auth.
+
+name: Deploy sync-server to Railway
+
+on:
+  push:
+    branches: [main]
+    paths:
+      # sync-server source and its served PWA assets
+      - "sync-server/**"
+      # shared/ is the canonical source that generate_shared_artifacts.mjs
+      # reads to produce sync-server/pwa/generated-prompts.js and
+      # sync-server/pwa/analysis-tool.json — a change here means the build
+      # artifact for the PWA changes, so redeploy is needed
+      - "shared/**"
+      # the generator script itself
+      - "scripts/generate_shared_artifacts.mjs"
+      # changes to this workflow file should also trigger a deploy to validate
+      # the new workflow runs successfully
+      - ".github/workflows/railway-deploy.yml"
+
+# Cancel any in-flight deploy for the same ref so rapid successive pushes
+# don't queue up and race each other on Railway.
+concurrency:
+  group: railway-deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Railway CLI deploy
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Railway CLI
+        # Official installation method from docs.railway.com/guides/cli
+        run: npm install -g @railway/cli
+
+      - name: Deploy sync-server
+        # RAILWAY_TOKEN must be a Railway project token for toneguard-sync.
+        # --service names the Railway service to deploy (matches the service
+        # name in the Railway dashboard).
+        # --detach returns immediately after upload; Railway builds async.
+        # The Railway CLI reads RAILWAY_TOKEN from the environment automatically.
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        working-directory: sync-server
+        run: railway up --service sync-server --detach
