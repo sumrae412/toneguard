@@ -71,6 +71,19 @@ if (voiceStrengthSelect) {
   });
 }
 
+// Landing-critic toggle (tg_landing_enabled, default false = off)
+const landingEnabledEl = document.getElementById("landingEnabled");
+chrome.storage.sync.get(["tg_landing_enabled"], (result) => {
+  if (landingEnabledEl) {
+    landingEnabledEl.checked = result.tg_landing_enabled === true;
+  }
+});
+if (landingEnabledEl) {
+  landingEnabledEl.addEventListener("change", () => {
+    chrome.storage.sync.set({ tg_landing_enabled: landingEnabledEl.checked });
+  });
+}
+
 // Save custom rules
 saveRulesBtn.addEventListener("click", () => {
   const rules = customRulesEl.value.trim();

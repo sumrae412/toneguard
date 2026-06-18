@@ -302,6 +302,19 @@
   </div>
 
   <div class="section">
+    <h2>Cost &amp; Features</h2>
+    <p>Control optional API calls that add cost but are off by default.</p>
+    <label style="display:flex;align-items:center;gap:10px;cursor:pointer;margin-bottom:6px;">
+      <input type="checkbox" id="landingEnabled" style="width:16px;height:16px;cursor:pointer;">
+      <span style="font-size:13px;font-weight:500;">Show "how this lands" panel</span>
+    </label>
+    <p style="margin:0 0 0 26px;font-size:12px;color:#999;">
+      Adds a second Haiku call (~15% extra cost per message) that describes how the recipient reads your draft on first skim.
+      Off by default. Toggle on to restore the panel in the overlay.
+    </p>
+  </div>
+
+  <div class="section">
     <h2>Custom Rules</h2>
     <p>Add your own rules in plain English. These are added to the built-in rules.</p>
     <textarea id="customRules" placeholder="Example:&#10;- Never use the word 'urgent' unless it truly is&#10;- Always include a greeting&#10;- Don't use exclamation marks more than once per message"></textarea>
