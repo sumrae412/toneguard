@@ -1,0 +1,76 @@
+# railway-deploy.yml
+#
+# WHY THIS EXISTS
+# ---------------
+# The Railway GitHub-App webhook that was supposed to trigger auto-deploys
+# silently stopped firing (confirmed 2026-06-18 — no Railway deployment event
+# appeared after multiple merges to main that touched sync-server source).
+# This workflow replaces it: it uses the Railway CLI directly, authenticated
+# via RAILWAY_API_TOKEN (an account-level token — the same one the local CLI
+# uses), so deploys are triggered by GitHub Actions rather than depending on
+# the webhook.
+#
+# REQUIRED SECRET
+# ---------------
+# RAILWAY_API_TOKEN must be set in repo Settings → Secrets and variables →
+# Actions. This is an account token (not a project token), so we must pass
+# project/environment/service context explicitly via CLI flags — the CLI has
+# no ~/.railway/config.json in CI. IDs are non-secret (hardcoded below).
+#
+# Project:     e70c4bf9-3f82-440f-a7a0-ecb99bd2959a  (toneguard)
+# Environment: 889cd0d8-30c2-4b66-b082-372daac65688  (production)
+# Service:     8e0edd5e-1d77-4615-a177-aa03e3930626  (sync-server)
+
+name: Deploy sync-server to Railway
+
+on:
+  push:
+    branches: [main]
+    paths:
+      # sync-server source and its served PWA assets
+      - "sync-server/**"
+      # shared/ is the canonical source that generate_shared_artifacts.mjs
+      # reads to produce sync-server/pwa/generated-prompts.js and
+      # sync-server/pwa/analysis-tool.json — a change here means the build
+      # artifact for the PWA changes, so redeploy is needed
+      - "shared/**"
+      # the generator script itself
+      - "scripts/generate_shared_artifacts.mjs"
+      # changes to this workflow file should also trigger a deploy to validate
+      # the new workflow runs successfully
+      - ".github/workflows/railway-deploy.yml"
+
+# Cancel any in-flight deploy for the same ref so rapid successive pushes
+# don't queue up and race each other on Railway.
+concurrency:
+  group: railway-deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Railway CLI deploy
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Railway CLI
+        # Official installation method from docs.railway.com/guides/cli
+        run: npm install -g @railway/cli
+
+      - name: Deploy sync-server
+        # RAILWAY_API_TOKEN is an account token — the CLI reads it from the
+        # environment automatically (same env var the local CLI uses).
+        # Because CI has no ~/.railway/config.json, we pass project, environment,
+        # and service explicitly via flags so the CLI knows where to deploy.
+        # --detach returns immediately after upload; Railway builds async.
+        env:
+          RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
+        working-directory: sync-server
+        run: |
+          railway up \
+            --project e70c4bf9-3f82-440f-a7a0-ecb99bd2959a \
+            --environment 889cd0d8-30c2-4b66-b082-372daac65688 \
+            --service sync-server \
+            --detach
