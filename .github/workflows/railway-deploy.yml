@@ -6,18 +6,20 @@
 # silently stopped firing (confirmed 2026-06-18 — no Railway deployment event
 # appeared after multiple merges to main that touched sync-server source).
 # This workflow replaces it: it uses the Railway CLI directly, authenticated
-# via a RAILWAY_TOKEN repo secret (a Railway *project token* scoped to
-# toneguard-sync), so deploys are triggered by GitHub Actions rather than
-# depending on the webhook.
+# via RAILWAY_API_TOKEN (an account-level token — the same one the local CLI
+# uses), so deploys are triggered by GitHub Actions rather than depending on
+# the webhook.
 #
 # REQUIRED SECRET
 # ---------------
-# Set RAILWAY_TOKEN in the repo's Settings → Secrets and variables → Actions.
-# Generate it in the Railway dashboard: toneguard-sync project →
-# Settings → Tokens → New Token. The token is project-scoped — no account
-# credentials leak.
+# RAILWAY_API_TOKEN must be set in repo Settings → Secrets and variables →
+# Actions. This is an account token (not a project token), so we must pass
+# project/environment/service context explicitly via CLI flags — the CLI has
+# no ~/.railway/config.json in CI. IDs are non-secret (hardcoded below).
 #
-# DO NOT MERGE until RAILWAY_TOKEN is set, or the first run will fail auth.
+# Project:     e70c4bf9-3f82-440f-a7a0-ecb99bd2959a  (toneguard)
+# Environment: 889cd0d8-30c2-4b66-b082-372daac65688  (production)
+# Service:     8e0edd5e-1d77-4615-a177-aa03e3930626  (sync-server)
 
 name: Deploy sync-server to Railway
 
@@ -58,12 +60,17 @@ jobs:
         run: npm install -g @railway/cli
 
       - name: Deploy sync-server
-        # RAILWAY_TOKEN must be a Railway project token for toneguard-sync.
-        # --service names the Railway service to deploy (matches the service
-        # name in the Railway dashboard).
+        # RAILWAY_API_TOKEN is an account token — the CLI reads it from the
+        # environment automatically (same env var the local CLI uses).
+        # Because CI has no ~/.railway/config.json, we pass project, environment,
+        # and service explicitly via flags so the CLI knows where to deploy.
         # --detach returns immediately after upload; Railway builds async.
-        # The Railway CLI reads RAILWAY_TOKEN from the environment automatically.
         env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
         working-directory: sync-server
-        run: railway up --service sync-server --detach
+        run: |
+          railway up \
+            --project e70c4bf9-3f82-440f-a7a0-ecb99bd2959a \
+            --environment 889cd0d8-30c2-4b66-b082-372daac65688 \
+            --service sync-server \
+            --detach
