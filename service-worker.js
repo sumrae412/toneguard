@@ -97,9 +97,22 @@ async function loadAnalysisTool() {
   try {
     const url = chrome.runtime.getURL("prompts/analysis-tool.json");
     const response = await fetch(url);
-    analysisToolCache = JSON.parse(await response.text());
+    const raw = await response.text();
+    try {
+      analysisToolCache = JSON.parse(raw);
+    } catch (parseErr) {
+      // Surface a clear diagnostic instead of silently falling back to text
+      // mode — a malformed schema is a build artifact problem, not transient.
+      // TG_SCHEMA_001 lets us identify this in console logs immediately.
+      console.error(
+        "[ToneGuard] analysis-tool.json failed to parse (TG_SCHEMA_001):",
+        parseErr.message,
+        "— forced-tool mode disabled; analysis falls back to free-text parsing"
+      );
+      return null;
+    }
   } catch (err) {
-    console.error("ToneGuard: failed to load analysis tool schema", err);
+    console.error("[ToneGuard] failed to fetch analysis-tool.json:", err);
     return null;
   }
   return analysisToolCache;
@@ -638,7 +651,20 @@ async function handleAnalyze(text, context, site, requestedIntentMode) {
       const errBody = await response.text();
       const friendlyError = getFriendlyApiError(response.status, errBody);
       console.error("ToneGuard API error:", response.status, errBody);
-      const error = makeAnalysisError("runtime", {
+      // Map to the most specific error kind so the diagnostic code (TG_AUTH_002,
+      // TG_LIMIT_001, etc.) is accurate rather than always defaulting to
+      // TG_RUNTIME_001.  getFriendlyApiError already has the per-case logic;
+      // mirror it here for the kind selection.
+      let errorKind = "runtime";
+      if (response.status === 401) {
+        errorKind = "invalid_api_key";
+      } else if (
+        response.status === 400 &&
+        /usage.?limit|usage_limit|You have reached your specified API usage limits/i.test(errBody)
+      ) {
+        errorKind = "usage_limit";
+      }
+      const error = makeAnalysisError(errorKind, {
         message: friendlyError,
         status: response.status,
         route: "blocked_error",
@@ -962,6 +988,13 @@ function getFriendlyApiError(status, body) {
     case 429:
       return "Rate limit reached. Wait a moment and try again, or check your Anthropic usage limits.";
     case 400: {
+      // Anthropic returns 400 for several distinct causes — check message body
+      // before falling back to the generic payload-size message.
+      if (body && /usage.?limit|usage_limit|You have reached your specified API usage limits/i.test(body)) {
+        // e.g. "You have reached your specified API usage limits. You will
+        // regain access on 2026-07-01 at 00:00 UTC."
+        return "Anthropic usage limit reached. Raise your limit at console.anthropic.com or wait until it resets.";
+      }
       if (body && body.includes("credit")) {
         return "No API credits remaining. Add credits at console.anthropic.com.";
       }
