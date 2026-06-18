@@ -159,16 +159,6 @@ Respond with ONLY valid JSON in this exact format:
   "readability": 1-16 (estimated grade level of the ORIGINAL message. 9 or below is good, 10-12 is getting complex, 13+ is too hard for casual reading),
   "red_flags": ["specific phrase 1", "specific phrase 2"],
   "categories": ["adverbs", "passive voice", "wordy", "hedging", "hard to read", "tone", "grammar", "clarity", "inclusive language"] (which checks triggered, include all that apply),
-  "issues": [
-    {
-      "quote": "specific problematic phrase from the original message, or empty string if no exact quote applies",
-      "category": "tone" or "clarity" or "grammar" or "wordy" or "hedging" or "hard to read" or another allowed category,
-      "severity": "low" or "medium" or "high",
-      "explanation": "One sentence explaining why this phrase or issue matters to the reader",
-      "suggested_fix": "One sentence explaining what to change",
-      "quote_confidence": "exact" or "approximate" or "missing"
-    }
-  ] (1-3 most important issues when flagged; [] when not flagged),
   "reasoning": "Brief explanation of what was caught",
   "suggestion": "The rewritten message (best guess if questions are pending)",
   "has_questions": true or false,

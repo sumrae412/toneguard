@@ -42,21 +42,11 @@ function validateTaxonomies(schema, modes, categories, voiceStrengths) {
   const categoryIds = categories.categories.map((category) => category.id);
   const schemaModes = schema.properties.mode.enum;
   const schemaCategories = schema.properties.categories.items.enum;
-  const issueBranches = schema.properties.issues.items.anyOf || [schema.properties.issues.items];
-  const structuredIssueBranch = issueBranches.find((branch) => branch.properties?.category);
-  const schemaIssueCategories = structuredIssueBranch?.properties.category.enum;
-
   if (JSON.stringify(responseModeIds) !== JSON.stringify(schemaModes)) {
     throw new Error("shared/analysis/schema.json mode enum is stale");
   }
   if (JSON.stringify(categoryIds) !== JSON.stringify(schemaCategories)) {
     throw new Error("shared/analysis/schema.json category enum is stale");
-  }
-  if (!schemaIssueCategories) {
-    throw new Error("shared/analysis/schema.json structured issue category enum is missing");
-  }
-  if (JSON.stringify(categoryIds) !== JSON.stringify(schemaIssueCategories)) {
-    throw new Error("shared/analysis/schema.json issue category enum is stale");
   }
 
   if (!Array.isArray(voiceStrengths?.voice_strengths) || voiceStrengths.voice_strengths.length === 0) {

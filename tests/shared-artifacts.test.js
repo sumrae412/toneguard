@@ -19,12 +19,9 @@ describe("shared analysis contracts", () => {
 
     const responseModes = modes.response_modes.map((mode) => mode.id);
     const categoryIds = categories.categories.map((category) => category.id);
-    const issueBranches = schema.properties.issues.items.anyOf || [schema.properties.issues.items];
-    const structuredIssueBranch = issueBranches.find((branch) => branch.properties?.category);
 
     expect(schema.properties.mode.enum).toEqual(responseModes);
     expect(schema.properties.categories.items.enum).toEqual(categoryIds);
-    expect(structuredIssueBranch.properties.category.enum).toEqual(categoryIds);
   });
 
   it("defines the planned intent modes without changing legacy response modes", () => {
