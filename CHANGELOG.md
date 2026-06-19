@@ -2,6 +2,11 @@
 
 All notable changes to ToneGuard will be documented in this file.
 
+## [0.4.17] - 2026-06-19
+
+### Changed
+- Quota-pause now shows its in-page notice on **every** unchecked send while paused, not just the first. Previously the notice fired once and later sends went out silently, which looked identical to a clean pass - the user couldn't tell their message had skipped checking. The badge alone was too easy to miss.
+
 ## [0.4.16] - 2026-06-18
 
 ### Added
