@@ -513,6 +513,20 @@
     // Concurrency guard: don't start a new analysis while one is in-flight
     if (pendingEditor) return;
 
+    // Type guard: every caller passes a STRING (a getEditorText result). If a
+    // future caller regresses and passes a DOM node or object, chrome.runtime
+    // .sendMessage throws "Could not serialize message" and the send silently
+    // stalls — the retry-path bug fixed in #73. Recover by reading the live
+    // editor text instead of crashing the send; bail only if that's empty too.
+    if (typeof text !== "string") {
+      console.warn(
+        "[ToneGuard:diag] analyzeAndIntercept got non-string text (" +
+          typeof text + ") — recovering from editor"
+      );
+      text = (editor && currentPlatform.getEditorText(editor)) || "";
+    }
+    if (!text) return;
+
     pendingText = text;
     pendingEditor = editor;
     console.log("[ToneGuard:diag] pendingEditor set, analysis starting");
