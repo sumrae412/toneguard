@@ -2,6 +2,11 @@
 
 All notable changes to ToneGuard will be documented in this file.
 
+## [0.4.18] - 2026-06-19
+
+### Changed
+- Hardened `analyzeAndIntercept` against non-string `text`: if a caller ever passes a DOM node or object (the class of bug behind the old "Could not serialize message" retry crash, fixed in #73), it now recovers by reading the live editor text instead of crashing the send. Defense-in-depth - all current callers already pass strings.
+
 ## [0.4.17] - 2026-06-19
 
 ### Changed
