@@ -15,6 +15,7 @@
 //   window.__toneGuard.showLoading()
 //   window.__toneGuard.showResult(result)
 //   window.__toneGuard.showPassed()
+//   window.__toneGuard.showPaused(info)
 //   window.__toneGuard.showStale()
 //   window.__toneGuard.showError(error)
 //   window.__toneGuard.hide()
@@ -207,6 +208,10 @@
     showPassed() {
       ensureIframe();
       postToFrame({ type: "show_passed" });
+    },
+    showPaused(info) {
+      ensureIframe();
+      postToFrame({ type: "show_paused", info });
     },
     showStale() {
       // In a dead context the iframe can't load, so fall back to a plain-DOM

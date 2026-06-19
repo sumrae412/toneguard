@@ -597,6 +597,30 @@
         return;
       }
 
+      if (result.paused) {
+        // ToneGuard auto-paused: the API key is maxed out (credit/usage limit).
+        // Fail open so the user can keep sending — the toolbar badge and the
+        // popup/Settings "Resume" button surface the paused state. Don't show
+        // "Looks good!" (the message was NOT checked).
+        console.warn(
+          "[ToneGuard:diag] paused (API limit reached) — releasing send unchecked; reason:",
+          result.paused_reason
+        );
+        if (window.__toneGuard) {
+          // Clear in-page notice the first time it pauses; stay silent after
+          // (the toolbar badge keeps signalling the paused state).
+          if (result.just_paused) {
+            window.__toneGuard.showPaused({ reason: result.paused_reason });
+          } else {
+            window.__toneGuard.hide();
+          }
+        }
+        currentPlatform.releaseSend(editor);
+        pendingEditor = null;
+        pendingText = null;
+        return;
+      }
+
       if (result.error) {
         console.warn("ToneGuard:", formatErrorForLog(result.error));
         if (window.__toneGuard) window.__toneGuard.showError(result.error);
@@ -823,6 +847,20 @@
 
       hideCheckingIndicator();
 
+      if (result.paused) {
+        // Quota-paused (API maxed out) — advisory review can't run. Show the
+        // notice the first time; otherwise dismiss silently (badge + Settings
+        // keep surfacing the paused state).
+        if (window.__toneGuard) {
+          if (result.just_paused) {
+            window.__toneGuard.showPaused({ reason: result.paused_reason });
+          } else {
+            window.__toneGuard.hide();
+          }
+        }
+        return;
+      }
+
       if (result.error) {
         console.warn("ToneGuard:", formatErrorForLog(result.error));
         if (window.__toneGuard) window.__toneGuard.showError(result.error);
@@ -894,6 +932,20 @@
       });
 
       hideCheckingIndicator();
+
+      if (result.paused) {
+        // Quota-paused (API maxed out) — advisory review can't run. Show the
+        // notice the first time; otherwise dismiss silently (badge + Settings
+        // keep surfacing the paused state).
+        if (window.__toneGuard) {
+          if (result.just_paused) {
+            window.__toneGuard.showPaused({ reason: result.paused_reason });
+          } else {
+            window.__toneGuard.hide();
+          }
+        }
+        return;
+      }
 
       if (result.error) {
         console.warn("ToneGuard:", formatErrorForLog(result.error));

@@ -39,8 +39,66 @@ import {
   buildPatternBlock,
   PATTERN_INJECT_MAX_CHARS,
   PATTERN_INJECT_MAX_COUNT,
-  PATTERN_CATEGORIES
+  PATTERN_CATEGORIES,
+  classifyQuotaError,
+  isQuotaPauseActive,
+  QUOTA_PAUSE_COOLDOWN_MS
 } from "./lib-exports.mjs";
+
+describe("classifyQuotaError", () => {
+  it("classifies a credit-balance 400 as credit_balance", () => {
+    const v = classifyQuotaError(400, '{"error":{"message":"Your credit balance is too low to access the Anthropic API."}}');
+    expect(v).not.toBeNull();
+    expect(v.reason).toBe("credit_balance");
+    expect(v.diagnostic_code).toBe("TG_CREDIT_001");
+  });
+
+  it("classifies a usage-limit 400 as usage_limit", () => {
+    const v = classifyQuotaError(400, "You have reached your specified API usage limits.");
+    expect(v).not.toBeNull();
+    expect(v.reason).toBe("usage_limit");
+    expect(v.diagnostic_code).toBe("TG_LIMIT_001");
+  });
+
+  it("returns null for a non-quota 400 (e.g. payload too long)", () => {
+    expect(classifyQuotaError(400, "prompt is too long: 250000 tokens > max")).toBeNull();
+  });
+
+  it("returns null for non-400 statuses even with a credit-ish body", () => {
+    expect(classifyQuotaError(401, "credit")).toBeNull();
+    expect(classifyQuotaError(500, "credit")).toBeNull();
+  });
+
+  it("returns null when the body is missing or non-string", () => {
+    expect(classifyQuotaError(400, null)).toBeNull();
+    expect(classifyQuotaError(400, undefined)).toBeNull();
+    expect(classifyQuotaError(400, { error: "credit" })).toBeNull();
+  });
+});
+
+describe("isQuotaPauseActive", () => {
+  const now = 1_000_000_000_000;
+
+  it("is active immediately after pausing", () => {
+    expect(isQuotaPauseActive({ at: now, reason: "credit_balance" }, now)).toBe(true);
+  });
+
+  it("is active just inside the cooldown window", () => {
+    expect(isQuotaPauseActive({ at: now - (QUOTA_PAUSE_COOLDOWN_MS - 1) }, now)).toBe(true);
+  });
+
+  it("expires once the cooldown elapses (re-probe)", () => {
+    expect(isQuotaPauseActive({ at: now - QUOTA_PAUSE_COOLDOWN_MS }, now)).toBe(false);
+    expect(isQuotaPauseActive({ at: now - QUOTA_PAUSE_COOLDOWN_MS - 1 }, now)).toBe(false);
+  });
+
+  it("is inactive for null / malformed state", () => {
+    expect(isQuotaPauseActive(null, now)).toBe(false);
+    expect(isQuotaPauseActive(undefined, now)).toBe(false);
+    expect(isQuotaPauseActive({}, now)).toBe(false);
+    expect(isQuotaPauseActive({ at: "nope" }, now)).toBe(false);
+  });
+});
 
 describe("detectPlatform", () => {
   it("detects Slack", () => {

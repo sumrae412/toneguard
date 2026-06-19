@@ -98,6 +98,46 @@ enabledToggle.addEventListener("change", () => {
   chrome.storage.sync.set({ tg_enabled: enabledToggle.checked });
 });
 
+// Quota-pause banner: ToneGuard auto-pauses when the API key is maxed out
+// (credit/usage limit). Show the banner + a Resume button so the user can
+// re-enable after topping up. See lib.js:classifyQuotaError.
+const quotaBanner = document.getElementById("quotaBanner");
+const quotaBannerMsg = document.getElementById("quotaBannerMsg");
+const resumeBtn = document.getElementById("resumeBtn");
+
+const QUOTA_PAUSE_MESSAGES = {
+  credit_balance:
+    "No API credits remaining, so messages are sending unchecked. Add credits at console.anthropic.com, then resume.",
+  usage_limit:
+    "Your API usage limit was reached, so messages are sending unchecked. Raise it at console.anthropic.com, then resume."
+};
+
+function renderQuotaBanner() {
+  chrome.storage.local.get(["tg_quota_paused"], (result) => {
+    const paused = result.tg_quota_paused;
+    if (paused && typeof paused.at === "number") {
+      quotaBannerMsg.textContent =
+        QUOTA_PAUSE_MESSAGES[paused.reason] ||
+        "Your API limit was reached, so messages are sending unchecked.";
+      quotaBanner.style.display = "block";
+    } else {
+      quotaBanner.style.display = "none";
+    }
+  });
+}
+
+renderQuotaBanner();
+
+resumeBtn.addEventListener("click", () => {
+  resumeBtn.disabled = true;
+  chrome.runtime.sendMessage({ type: "RESUME_QUOTA" }, () => {
+    // Belt-and-suspenders: clear the badge here too in case the SW was asleep.
+    try { chrome.action.setBadgeText({ text: "" }); } catch (_e) { /* noop */ }
+    resumeBtn.disabled = false;
+    renderQuotaBanner();
+  });
+});
+
 intentModeSelect.addEventListener("change", () => {
   chrome.storage.sync.set({ tg_intent_mode_default: intentModeSelect.value });
 });

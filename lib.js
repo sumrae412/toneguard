@@ -344,6 +344,52 @@ const ANALYSIS_ERROR_MAP = {
   }
 };
 
+// Quota-class API errors (HTTP 400) that mean the KEY itself is exhausted, not
+// that the message was bad: credit balance depleted, or a configured spend/usage
+// limit hit. These are NOT content-specific — every call fails until the user
+// tops up or the limit resets — so ToneGuard auto-pauses (fails open, letting
+// sends through unchecked) rather than blocking every send with a cryptic error.
+// See service-worker.js handleAnalyze + content.js paused branch.
+const QUOTA_PAUSE_COOLDOWN_MS = 6 * 60 * 60 * 1000; // re-probe the API 6h after pausing
+
+/**
+ * Classify a 400 response as a quota-class (key-exhausted) error, or null if it
+ * isn't one. Mirrors the body-sniffing in getFriendlyApiError, but returns a
+ * structured verdict so the pause logic and tests share one source of truth.
+ */
+function classifyQuotaError(status, body) {
+  if (status !== 400 || typeof body !== "string") return null;
+  if (/usage.?limit|usage_limit|reached your specified API usage limits/i.test(body)) {
+    return {
+      reason: "usage_limit",
+      diagnostic_code: "TG_LIMIT_001",
+      message:
+        "Anthropic usage limit reached — ToneGuard paused. Your messages now send " +
+        "unchecked. Raise your limit at console.anthropic.com, then resume in ToneGuard settings."
+    };
+  }
+  if (/credit/i.test(body)) {
+    return {
+      reason: "credit_balance",
+      diagnostic_code: "TG_CREDIT_001",
+      message:
+        "No Anthropic API credits remaining — ToneGuard paused. Your messages now send " +
+        "unchecked. Add credits at console.anthropic.com, then resume in ToneGuard settings."
+    };
+  }
+  return null;
+}
+
+/**
+ * Is a stored quota-pause still in effect? Auto-expires after the cooldown so
+ * the next send re-probes the API — the user may have topped up credits without
+ * visiting Settings. `paused` is the tg_quota_paused storage object (or null).
+ */
+function isQuotaPauseActive(paused, nowMs) {
+  if (!paused || typeof paused.at !== "number") return false;
+  return nowMs - paused.at < QUOTA_PAUSE_COOLDOWN_MS;
+}
+
 const SITE_PROFILES = {
   slack: {
     label: "Slack",
@@ -1302,6 +1348,9 @@ if (typeof globalThis !== "undefined") {
     shouldAnalyze,
     precheckAnalysis,
     makeAnalysisError,
+    classifyQuotaError,
+    isQuotaPauseActive,
+    QUOTA_PAUSE_COOLDOWN_MS,
     shouldEscalateMaxTokens,
     shouldRetryDiscardedResult,
     shouldRetryEmptySuggestion,
