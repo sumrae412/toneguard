@@ -2,6 +2,14 @@
 
 All notable changes to ToneGuard will be documented in this file.
 
+## [0.4.16] - 2026-06-18
+
+### Added
+- Auto-pause when the Anthropic API key is maxed out. A credit-balance or usage-limit error (HTTP 400) now pauses ToneGuard instead of blocking every send: messages go through unchecked, a clear in-page notice appears the moment it pauses ("ToneGuard paused — this message was sent without checking…"), a "!" badge appears on the toolbar icon, and the popup/Settings show a banner with a **Resume ToneGuard** button. Subsequent sends short-circuit with no API call (and no repeated notice) until you resume, and the pause auto-expires after 6h to re-probe the API.
+
+### Fixed
+- A maxed-out API key previously surfaced as a cryptic `TG_RUNTIME_001` error and blocked the user from sending anything.
+
 ## [0.3.4] - 2026-04-27
 
 ### Added

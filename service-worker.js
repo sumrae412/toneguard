@@ -443,6 +443,39 @@ async function resolveVoiceStrength() {
   return normalizeVoiceStrength(storedStrength || "balanced");
 }
 
+// Toolbar badge reflects the quota-pause state so the user can SEE that
+// ToneGuard stopped checking (sends now go through unchecked). chrome.action
+// is always declared in the manifest, so no extra permission is needed; the
+// try/catch guards the rare context where the action API is unavailable.
+function setQuotaPausedBadge() {
+  try {
+    chrome.action.setBadgeText({ text: "!" });
+    chrome.action.setBadgeBackgroundColor({ color: "#d97706" });
+    chrome.action.setTitle({
+      title: "ToneGuard paused — API limit reached. Messages send unchecked. Open ToneGuard to resume."
+    });
+  } catch (_e) { /* action API unavailable in this context */ }
+}
+
+function clearQuotaPausedBadge() {
+  try {
+    chrome.action.setBadgeText({ text: "" });
+    chrome.action.setTitle({ title: "" });
+  } catch (_e) { /* action API unavailable in this context */ }
+}
+
+// Resume from the popup / options page: clear the pause and the badge.
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message && message.type === "RESUME_QUOTA") {
+    chrome.storage.local.remove(["tg_quota_paused"]).then(() => {
+      clearQuotaPausedBadge();
+      sendResponse({ ok: true });
+    });
+    return true; // async sendResponse
+  }
+  return false;
+});
+
 async function handleAnalyze(text, context, site, requestedIntentMode) {
   const startedAt = Date.now();
   const intentMode = await resolveIntentMode(requestedIntentMode);
@@ -471,6 +504,21 @@ async function handleAnalyze(text, context, site, requestedIntentMode) {
 
   if (enabled === false) {
     return { flagged: false, routing };
+  }
+
+  // Quota-pause: the API key is maxed out (credit/usage limit). Fail open so
+  // the user can keep sending; the toolbar badge + popup/Settings show the
+  // paused state and a Resume button. Auto-expires after the cooldown so the
+  // next send re-probes the API (the user may have topped up). See
+  // lib.js:classifyQuotaError / isQuotaPauseActive.
+  const { tg_quota_paused: quotaPaused } = await chrome.storage.local.get(["tg_quota_paused"]);
+  if (isQuotaPauseActive(quotaPaused, Date.now())) {
+    return { flagged: false, paused: true, paused_reason: quotaPaused.reason, routing };
+  }
+  if (quotaPaused) {
+    // Cooldown elapsed — clear the stale pause and re-probe with this send.
+    await chrome.storage.local.remove(["tg_quota_paused"]);
+    clearQuotaPausedBadge();
   }
 
   if (!precheck.should_call_model) {
@@ -659,8 +707,39 @@ async function handleAnalyze(text, context, site, requestedIntentMode) {
 
     if (!response.ok) {
       const errBody = await response.text();
-      const friendlyError = getFriendlyApiError(response.status, errBody);
       console.error("ToneGuard API error:", response.status, errBody);
+
+      // Quota-class 400 (credit balance / usage limit) means the KEY is maxed
+      // out — every send would fail. Auto-pause instead of blocking: record the
+      // pause, flip the toolbar badge, and fail OPEN so this send goes through.
+      // Subsequent sends short-circuit at the entry-point check above until the
+      // user resumes or the cooldown re-probes. See lib.js:classifyQuotaError.
+      const quota = classifyQuotaError(response.status, errBody);
+      if (quota) {
+        await chrome.storage.local.set({
+          tg_quota_paused: { at: Date.now(), reason: quota.reason }
+        });
+        setQuotaPausedBadge();
+        await recordTelemetry({
+          event: "analysis_failed",
+          platform: "chrome",
+          site_profile: siteProfile.id,
+          route: "blocked_error",
+          model: MODEL,
+          failure_diagnostic_code: quota.diagnostic_code,
+          latency_bucket: latencyBucket(Date.now() - startedAt),
+          outcome: "failed"
+        });
+        return {
+          flagged: false,
+          paused: true,
+          just_paused: true,
+          paused_reason: quota.reason,
+          routing
+        };
+      }
+
+      const friendlyError = getFriendlyApiError(response.status, errBody);
       // Map to the most specific error kind so the diagnostic code (TG_AUTH_002,
       // TG_LIMIT_001, etc.) is accurate rather than always defaulting to
       // TG_RUNTIME_001.  getFriendlyApiError already has the per-case logic;

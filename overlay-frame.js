@@ -532,6 +532,48 @@
     }, 8000);
   }
 
+  function showPaused(info) {
+    // One-time, non-blocking notice shown the moment ToneGuard auto-pauses
+    // because the API key is maxed out. The message WAS sent (fail-open); the
+    // user resumes from the toolbar popup, not in-page. Reuses tg-stale styling.
+    clearToast();
+    els.loading.style.display = "none";
+    els.content.style.display = "none";
+    els.empty.style.display = "none";
+
+    const reason = info && info.reason;
+    const detail = reason === "credit_balance"
+      ? "Your Anthropic API credits ran out."
+      : reason === "usage_limit"
+        ? "Your Anthropic API usage limit was reached."
+        : "Your Anthropic API limit was reached.";
+
+    const notice = el("div", { className: "tg-stale" });
+    notice.appendChild(el("div", { className: "tg-stale-icon", textContent: "⏸" }));
+    notice.appendChild(el("div", { className: "tg-stale-title", textContent: "ToneGuard paused" }));
+    notice.appendChild(el("div", {
+      className: "tg-stale-msg",
+      textContent: detail + " This message was sent without checking. Click the ToneGuard icon in your toolbar to add credits and resume."
+    }));
+    const okBtn = el("button", {
+      className: "tg-btn tg-btn-primary",
+      textContent: "Got it",
+      type: "button"
+    });
+    okBtn.addEventListener("click", () => {
+      notice.remove();
+      hide();
+    });
+    notice.appendChild(okBtn);
+    els.drawer.appendChild(notice);
+    openDrawer();
+
+    setTimeout(() => {
+      notice.remove();
+      hide();
+    }, 10000);
+  }
+
   function showError(error) {
     clearToast();
     resetState();
@@ -1000,6 +1042,7 @@
       case "show_loading":  showLoading(); break;
       case "show_result":   showResult(msg.result); break;
       case "show_passed":   showPassed(); break;
+      case "show_paused":   showPaused(msg.info); break;
       case "show_stale":    showStale(); break;
       case "show_error":    showError(msg.error); break;
       case "hide":          hide(); break;
