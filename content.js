@@ -606,14 +606,12 @@
           "[ToneGuard:diag] paused (API limit reached) — releasing send unchecked; reason:",
           result.paused_reason
         );
+        // Show the notice on EVERY paused send, not just the first. While
+        // paused, every message goes out UNCHECKED — the user needs to be told
+        // each time, not once (the badge alone is too easy to miss). See the
+        // out-of-funds feedback that prompted this.
         if (window.__toneGuard) {
-          // Clear in-page notice the first time it pauses; stay silent after
-          // (the toolbar badge keeps signalling the paused state).
-          if (result.just_paused) {
-            window.__toneGuard.showPaused({ reason: result.paused_reason });
-          } else {
-            window.__toneGuard.hide();
-          }
+          window.__toneGuard.showPaused({ reason: result.paused_reason });
         }
         currentPlatform.releaseSend(editor);
         pendingEditor = null;
@@ -848,15 +846,11 @@
       hideCheckingIndicator();
 
       if (result.paused) {
-        // Quota-paused (API maxed out) — advisory review can't run. Show the
-        // notice the first time; otherwise dismiss silently (badge + Settings
-        // keep surfacing the paused state).
+        // Quota-paused (API maxed out) — advisory review can't run. Tell the
+        // user every time (not just once) so a silent no-op never looks like a
+        // clean pass. See the out-of-funds feedback that prompted this.
         if (window.__toneGuard) {
-          if (result.just_paused) {
-            window.__toneGuard.showPaused({ reason: result.paused_reason });
-          } else {
-            window.__toneGuard.hide();
-          }
+          window.__toneGuard.showPaused({ reason: result.paused_reason });
         }
         return;
       }
@@ -934,15 +928,11 @@
       hideCheckingIndicator();
 
       if (result.paused) {
-        // Quota-paused (API maxed out) — advisory review can't run. Show the
-        // notice the first time; otherwise dismiss silently (badge + Settings
-        // keep surfacing the paused state).
+        // Quota-paused (API maxed out) — advisory review can't run. Tell the
+        // user every time (not just once) so a silent no-op never looks like a
+        // clean pass. See the out-of-funds feedback that prompted this.
         if (window.__toneGuard) {
-          if (result.just_paused) {
-            window.__toneGuard.showPaused({ reason: result.paused_reason });
-          } else {
-            window.__toneGuard.hide();
-          }
+          window.__toneGuard.showPaused({ reason: result.paused_reason });
         }
         return;
       }
