@@ -35,6 +35,13 @@
   let nextDecisionId = 0;
   const DECISION_ACK_TIMEOUT_MS = 5000;
 
+
+  // The model occasionally emits literally-escaped quotes (\") inside string
+  // fields of the tool result; render them as plain quotes instead of showing
+  // the backslashes to the user.
+  function displayText(v) {
+    return typeof v === "string" ? v.replace(/\\(["'])/g, "$1") : v;
+  }
   const els = {
     drawer: document.getElementById("tgDrawer"),
     backdrop: document.getElementById("tgBackdrop"),
@@ -248,7 +255,7 @@
 
     els.original.textContent = result.original;
     els.suggestion.textContent = result.suggestion;
-    els.reasoning.textContent = result.reasoning;
+    els.reasoning.textContent = displayText(result.reasoning);
 
     // When the model flags a message but returns no rewrite, the green box is
     // blank. Don't present an empty editable field as an acceptable
@@ -289,7 +296,7 @@
     if (result.red_flags && result.red_flags.length > 0) {
       els.redFlags.style.display = "block";
       for (const flag of result.red_flags) {
-        els.flagsList.appendChild(el("span", { className: "tg-flag-chip", textContent: flag }));
+        els.flagsList.appendChild(el("span", { className: "tg-flag-chip", textContent: displayText(flag) }));
       }
     } else {
       els.redFlags.style.display = "none";
@@ -378,12 +385,12 @@
     if (issue.quote) {
       card.appendChild(el("div", {
         className: "tg-issue-quote",
-        textContent: "\u201c" + issue.quote + "\u201d"
+        textContent: "\u201c" + displayText(issue.quote) + "\u201d"
       }));
     }
     card.appendChild(el("div", {
       className: "tg-issue-explanation",
-      textContent: issue.explanation || ""
+      textContent: displayText(issue.explanation) || ""
     }));
     if (issue.suggested_fix) {
       card.appendChild(el("div", {
