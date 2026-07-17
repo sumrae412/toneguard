@@ -539,3 +539,26 @@ html, body {
   .tg-drawer { background: #1E221F; border-left-color: #2E332E; }
   .tg-message-box.tg-suggestion { background: #1D3226; border-color: #2E5540; }
 }
+
+/* ── Dark polish layer: refined dark variant of the ink-and-paper system ── */
+@media (prefers-color-scheme: dark) {
+  .tg-drawer { background: #161917; border-left-color: #262B27; box-shadow: -12px 0 40px rgba(0,0,0,.5); color: #D6DCD5; }
+  .tg-header h2 { color: #ECEFEA; }
+  .tg-reason { background: #20241F; border-left-color: #D19A26; color: #CBD2C8; }
+  .tg-issue-card { background: #1C201D; border-color: #2A2F2B; }
+  .tg-issue-category { color: #A9B3AB; }
+  .tg-issue-explanation, .tg-issue-fix { color: #B9C1BA; }
+  .tg-flag-chip { background: #2A1E1C; color: #E2A69C; }
+  .tg-badge { background: #2A251A; color: #E0B25E; }
+  .tg-badge.tg-polish { background: #1A222A; color: #8FB8DE; }
+  .tg-category-chip { background: #211F2C; color: #B5ACE0; }
+  .tg-message-box.tg-original { background: #1C201D; border-color: #2A2F2B; color: #A9B3AB; }
+  .tg-message-box.tg-suggestion { background: #1B2A21; border-color: #2C4A38; color: #D6DCD5; }
+  .tg-question-input { background: #1C201D; border-color: #2A2F2B; color: #D6DCD5; }
+  .tg-question-input:focus { border-color: #2E8B57; box-shadow: 0 0 0 3px rgba(46,139,87,.2); }
+  .tg-section-label { color: #7C857E; }
+  .tg-confidence-bar { background: #262B27; }
+  .tg-btn-secondary { background: #1C201D; border-color: #343A35; color: #C4CCC5; }
+  .tg-btn-secondary:hover { background: #232825; }
+  .tg-btn-tertiary { color: #8A938C; }
+}

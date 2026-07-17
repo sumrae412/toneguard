@@ -15,6 +15,13 @@ const ANALYSIS_MAX_TOKENS_CEILING = 8192;
 // the API return the analysis as a parsed object instead of free-text JSON,
 // eliminating the stray-quote / control-char parse failures (TG_PARSE_001).
 let pwaAnalysisTool = null;
+// Inline mirror of overlay-frame.js:displayText (PWA can't bundle extension
+// files — keep in sync). The model occasionally emits literally-escaped
+// quotes (\") inside string fields; render them as plain quotes.
+function displayText(v) {
+  return typeof v === "string" ? v.replace(/\\(["'])/g, "$1") : v;
+}
+
 async function loadPwaAnalysisTool() {
   if (pwaAnalysisTool) return pwaAnalysisTool;
   try {
@@ -316,7 +323,7 @@ function showResult(data) {
   }
 
   // Reasoning
-  reasoning.textContent = data.reasoning || "";
+  reasoning.textContent = displayText(data.reasoning) || "";
 
   // Confidence
   const conf = data.confidence || 0;
@@ -356,7 +363,7 @@ function showResult(data) {
     for (const flag of data.red_flags) {
       const chip = document.createElement("span");
       chip.className = "flag-chip";
-      chip.textContent = flag;
+      chip.textContent = displayText(flag);
       flagsList.appendChild(chip);
     }
   } else {
@@ -472,13 +479,13 @@ function renderIssueCard(issue) {
   if (issue.quote) {
     const quote = document.createElement("div");
     quote.className = "issue-quote";
-    quote.textContent = "\u201c" + issue.quote + "\u201d";
+    quote.textContent = "\u201c" + displayText(issue.quote) + "\u201d";
     card.appendChild(quote);
   }
 
   const explanation = document.createElement("div");
   explanation.className = "issue-explanation";
-  explanation.textContent = issue.explanation || "";
+  explanation.textContent = displayText(issue.explanation || "");
   card.appendChild(explanation);
 
   if (issue.suggested_fix) {
