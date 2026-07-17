@@ -19,7 +19,17 @@ let pwaAnalysisTool = null;
 // files — keep in sync). The model occasionally emits literally-escaped
 // quotes (\") inside string fields; render them as plain quotes.
 function displayText(v) {
-  return typeof v === "string" ? v.replace(/\\(["'])/g, "$1") : v;
+  if (typeof v !== "string") return v;
+  let s = v.replace(/\\(["'])/g, "$1");
+  const quotes = (s.match(/"/g) || []).length;
+  // The model sometimes wraps reasoning in quotes or appends an unmatched
+  // trailing quote — strip wrapping pairs and solitary trailers.
+  if (s.length > 1 && s.startsWith('"') && s.endsWith('"') && quotes % 2 === 0) {
+    s = s.slice(1, -1);
+  } else if (s.endsWith('"') && quotes % 2 === 1) {
+    s = s.slice(0, -1);
+  }
+  return s;
 }
 
 async function loadPwaAnalysisTool() {

@@ -562,3 +562,20 @@ html, body {
   .tg-btn-secondary:hover { background: #232825; }
   .tg-btn-tertiary { color: #8A938C; }
 }
+
+/* ── Drawer organization layer (0.4.22): structural rhythm matching the
+   ink-and-paper system on the popup/options/welcome/PWA surfaces ── */
+.tg-drawer { padding: 20px; }
+.tg-header { margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid #E3E6E1; }
+.tg-reason { background: #F4F6F2; border-left: 2px solid #177245; color: #3A423C; font-size: 13px; }
+.tg-confidence-bar { height: 4px; border-radius: 999px; overflow: hidden; margin: 2px 0 18px; }
+.tg-confidence-fill { border-radius: 999px; }
+.tg-confidence-fill.tg-high { background: #C0503F; }
+.tg-meta-row { margin-bottom: 14px; }
+.tg-section, .tg-issues, .tg-red-flags { margin-bottom: 18px; }
+.tg-actions { margin-top: 22px; padding-top: 14px; border-top: 1px solid #E3E6E1; }
+@media (prefers-color-scheme: dark) {
+  .tg-header { border-bottom-color: #262B27; }
+  .tg-reason { background: #1C201D; border-left-color: #2E8B57; color: #C4CCC5; }
+  .tg-actions { border-top-color: #262B27; }
+}
