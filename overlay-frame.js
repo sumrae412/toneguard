@@ -899,7 +899,7 @@
     for (const input of inputs) {
       const answer = input.value.trim();
       if (!answer) {
-        input.style.borderColor = "#e53935";
+        input.style.borderColor = "#BC3F30";
         input.focus();
         return;
       }

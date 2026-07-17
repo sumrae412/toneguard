@@ -9,7 +9,7 @@
       width: 300px;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       font-size: 14px;
-      color: #1a1a1a;
+      color: #1B211D;
       padding: 16px;
     }
 
@@ -65,7 +65,7 @@
     }
 
     .toggle input:checked + .toggle-slider {
-      background: #4CAF50;
+      background: #177245;
     }
 
     .toggle input:checked + .toggle-slider::before {
@@ -80,36 +80,36 @@
       display: block;
       font-size: 12px;
       font-weight: 500;
-      color: #666;
+      color: #5A655E;
       margin-bottom: 4px;
     }
 
     .field input[type="password"] {
       width: 100%;
       padding: 8px;
-      border: 1px solid #ddd;
+      border: 1px solid #D9DED9;
       border-radius: 6px;
       font-size: 13px;
     }
 
     .field input:focus {
       outline: none;
-      border-color: #4CAF50;
+      border-color: #177245;
     }
 
     .field select {
       width: 100%;
       padding: 8px;
-      border: 1px solid #ddd;
+      border: 1px solid #D9DED9;
       border-radius: 6px;
       font-size: 13px;
       background: white;
-      color: #1a1a1a;
+      color: #1B211D;
     }
 
     .field select:focus {
       outline: none;
-      border-color: #4CAF50;
+      border-color: #177245;
     }
 
     .btn {
@@ -120,28 +120,28 @@
       font-size: 13px;
       font-weight: 500;
       cursor: pointer;
-      background: #4CAF50;
+      background: #177245;
       color: white;
     }
 
-    .btn:hover { background: #43A047; }
+    .btn:hover { background: #125C38; }
 
     .status {
       margin-top: 8px;
       font-size: 12px;
-      color: #666;
+      color: #5A655E;
       text-align: center;
     }
 
-    .status.saved { color: #4CAF50; }
-    .status.error { color: #e53935; }
+    .status.saved { color: #177245; }
+    .status.error { color: #BC3F30; }
 
     .key-status {
       display: flex;
       align-items: center;
       gap: 6px;
       font-size: 12px;
-      color: #666;
+      color: #5A655E;
       margin-bottom: 12px;
     }
 
@@ -152,12 +152,12 @@
       background: #ccc;
     }
 
-    .dot.active { background: #4CAF50; }
-    .dot.missing { background: #e53935; }
+    .dot.active { background: #177245; }
+    .dot.missing { background: #BC3F30; }
 
     .divider {
       border: none;
-      border-top: 1px solid #eee;
+      border-top: 1px solid #ECEEEA;
       margin: 16px 0;
     }
 
@@ -181,21 +181,21 @@
     }
 
     .site-list .built-in {
-      color: #999;
+      color: #96A09A;
       font-size: 11px;
     }
 
     .site-list .remove-btn {
       background: none;
       border: none;
-      color: #e53935;
+      color: #BC3F30;
       cursor: pointer;
       font-size: 16px;
       padding: 0 4px;
       line-height: 1;
     }
 
-    .site-list .remove-btn:hover { color: #b71c1c; }
+    .site-list .remove-btn:hover { color: #93261B; }
 
     .add-site {
       display: flex;
@@ -205,19 +205,19 @@
     .add-site input {
       flex: 1;
       padding: 6px 8px;
-      border: 1px solid #ddd;
+      border: 1px solid #D9DED9;
       border-radius: 6px;
       font-size: 12px;
     }
 
     .add-site input:focus {
       outline: none;
-      border-color: #4CAF50;
+      border-color: #177245;
     }
 
     .add-site button {
       padding: 6px 12px;
-      background: #4CAF50;
+      background: #177245;
       color: white;
       border: none;
       border-radius: 6px;
@@ -225,7 +225,7 @@
       cursor: pointer;
     }
 
-    .add-site button:hover { background: #43A047; }
+    .add-site button:hover { background: #125C38; }
 
     .strictness {
       margin-bottom: 12px;
@@ -235,7 +235,7 @@
       display: block;
       font-size: 12px;
       font-weight: 500;
-      color: #666;
+      color: #5A655E;
       margin-bottom: 6px;
     }
 
@@ -247,13 +247,13 @@
 
     .strictness-row input[type="range"] {
       flex: 1;
-      accent-color: #4CAF50;
+      accent-color: #177245;
     }
 
     .strictness-label {
       font-size: 12px;
       font-weight: 500;
-      color: #4CAF50;
+      color: #177245;
       min-width: 50px;
     }
 
@@ -264,7 +264,7 @@
     .site-strictness h3 {
       font-size: 11px;
       font-weight: 500;
-      color: #999;
+      color: #96A09A;
       text-transform: uppercase;
       letter-spacing: 0.5px;
       margin-bottom: 6px;
@@ -280,21 +280,40 @@
 
     .site-strict-row .site-name {
       width: 70px;
-      color: #666;
+      color: #5A655E;
       flex-shrink: 0;
     }
 
     .site-strict-row input[type="range"] {
       flex: 1;
-      accent-color: #4CAF50;
+      accent-color: #177245;
     }
 
     .site-strict-row .site-strict-label {
       font-size: 11px;
-      color: #4CAF50;
+      color: #177245;
       min-width: 50px;
       text-align: right;
     }
+  
+    /* ── Polish layer: ink-and-paper editorial system (2026-07 UI pass) ── */
+    body { background: #F7F7F4; width: 320px; -webkit-font-smoothing: antialiased; }
+    .header h1 { font-size: 15px; font-weight: 700; letter-spacing: -0.01em; }
+    .field label, .strictness label, .sites-section h2, .telemetry-section h2, .site-strictness h3 {
+      font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 10px; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.09em; color: #96A09A;
+    }
+    .field input[type="password"], .field select, .add-site input {
+      background: #fff; border-color: #D9DED9; border-radius: 8px;
+      transition: border-color .15s, box-shadow .15s;
+    }
+    .field input:focus, .field select:focus, .add-site input:focus {
+      border-color: #177245; box-shadow: 0 0 0 3px rgba(23,114,69,.12);
+    }
+    .btn, .add-site button { font-weight: 600; border-radius: 8px; }
+    .btn { box-shadow: 0 1px 2px rgba(26,33,28,.08); }
+    .strictness-label, .site-strict-row .site-strict-label { font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+    .key-status { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 11px; }
   </style>
 </head>
 <body>
@@ -313,7 +332,7 @@
     <span id="keyLabel">Checking...</span>
   </div>
 
-  <div id="quotaBanner" style="display:none; margin:8px 0; padding:10px 12px; border-radius:8px; background:#fef3c7; border:1px solid #f59e0b; color:#78350f; font-size:12px; line-height:1.4;">
+  <div id="quotaBanner" style="display:none; margin:8px 0; padding:10px 12px; border-radius:8px; background:#FAF3E3; border:1px solid #D9B45C; color:#6F5518; font-size:12px; line-height:1.4;">
     <strong>ToneGuard is paused</strong>
     <div id="quotaBannerMsg" style="margin:4px 0 8px;">Your API limit was reached, so messages are sending unchecked.</div>
     <button id="resumeBtn" class="btn" style="width:auto; padding:6px 12px; font-size:12px;">Resume ToneGuard</button>
