@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-  <meta name="theme-color" content="#4CAF50">
+  <meta name="theme-color" content="#177245">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <title>ToneGuard</title>
@@ -14,24 +14,24 @@
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --green: #4CAF50;
-      --green-hover: #43A047;
-      --bg: #fafafa;
+      --green: #177245;
+      --green-hover: #125C38;
+      --bg: #F7F7F4;
       --surface: #fff;
-      --text: #1a1a1a;
-      --text-secondary: #666;
-      --text-muted: #999;
-      --border: #e0e0e0;
-      --red: #e53935;
-      --amber: #FFB300;
-      --blue: #2196F3;
+      --text: #1B211D;
+      --text-secondary: #5A655E;
+      --text-muted: #96A09A;
+      --border: #E3E6E1;
+      --red: #BC3F30;
+      --amber: #D19A26;
+      --blue: #2B6CB0;
     }
 
     @media (prefers-color-scheme: dark) {
       :root {
-        --bg: #1a1a1a;
+        --bg: #1B211D;
         --surface: #2a2a2a;
-        --text: #e0e0e0;
+        --text: #E3E6E1;
         --text-secondary: #aaa;
         --text-muted: #777;
         --border: #444;
@@ -67,14 +67,14 @@
       font-weight: 500;
       padding: 2px 8px;
       border-radius: 10px;
-      background: #FFF3E0;
-      color: #E65100;
+      background: #F8F1E2;
+      color: #9C5D12;
       display: none;
     }
 
-    .badge.tone { background: #FFF3E0; color: #E65100; display: inline-block; }
-    .badge.polish { background: #E3F2FD; color: #1565C0; display: inline-block; }
-    .badge.both { background: #FFF3E0; color: #E65100; display: inline-block; }
+    .badge.tone { background: #F8F1E2; color: #9C5D12; display: inline-block; }
+    .badge.polish { background: #E7F0F9; color: #255E9E; display: inline-block; }
+    .badge.both { background: #F8F1E2; color: #9C5D12; display: inline-block; }
 
     /* ── Install help ── */
     .install-help { padding: 16px; margin: 16px 0; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; }
@@ -251,18 +251,18 @@
 
     /* Reasoning callout */
     .reason {
-      background: #FFF8E1;
+      background: #FAF4E1;
       border-left: 3px solid var(--amber);
       padding: 10px 12px;
       border-radius: 0 6px 6px 0;
       font-size: 13px;
-      color: #5D4037;
+      color: #6D5D2E;
       margin-bottom: 16px;
       line-height: 1.4;
     }
 
     @media (prefers-color-scheme: dark) {
-      .reason { background: #3e2f00; color: #ffe082; border-color: #ffb300; }
+      .reason { background: #3e2f00; color: #ffe082; border-color: #D19A26; }
     }
 
     /* Confidence bar */
@@ -280,7 +280,7 @@
     }
 
     .confidence-fill.low { background: var(--amber); }
-    .confidence-fill.medium { background: #FF9800; }
+    .confidence-fill.medium { background: #C77C1A; }
     .confidence-fill.high { background: var(--red); }
 
     /* Meta row */
@@ -301,16 +301,16 @@
       border-radius: 10px;
     }
 
-    .readability-chip.good { background: #E8F5E9; color: #2E7D32; }
-    .readability-chip.medium { background: #FFF3E0; color: #E65100; }
-    .readability-chip.hard { background: #FFEBEE; color: #C62828; }
+    .readability-chip.good { background: #EAF3ED; color: #14603B; }
+    .readability-chip.medium { background: #F8F1E2; color: #9C5D12; }
+    .readability-chip.hard { background: #FAEDEA; color: #A33327; }
 
     .category-chip {
       font-size: 10px;
       padding: 1px 7px;
       border-radius: 8px;
-      background: #F3E5F5;
-      color: #6A1B9A;
+      background: #EEECF6;
+      color: #5B4FA8;
     }
 
     /* Red flags */
@@ -322,8 +322,8 @@
     .flag-chip {
       display: inline-block;
       padding: 3px 10px;
-      background: #FFEBEE;
-      color: #C62828;
+      background: #FAEDEA;
+      color: #A33327;
       border-radius: 12px;
       font-size: 12px;
       line-height: 1.4;
@@ -418,7 +418,7 @@
 
     .diff-removed {
       background: #FFCDD2;
-      color: #B71C1C;
+      color: #93261B;
       text-decoration: line-through;
       border-radius: 2px;
     }
@@ -431,7 +431,7 @@
 
     @media (prefers-color-scheme: dark) {
       .diff-removed { background: #4a1c1c; color: #ef9a9a; }
-      .diff-added { background: #1b3a1b; color: #a5d6a7; }
+      .diff-added { background: #1b3a1b; color: #B9D7C6; }
     }
 
     /* Message boxes */
@@ -451,20 +451,20 @@
     }
 
     .message-box.suggestion {
-      background: #E8F5E9;
-      border: 1px solid #A5D6A7;
+      background: #EAF3ED;
+      border: 1px solid #B9D7C6;
       color: var(--text);
     }
     /* "No rewrite generated" state — model flagged but returned no suggestion. */
     .message-box.suggestion.suggestion-empty {
-      background: #f5f5f5;
-      border: 1px dashed #ddd;
+      background: #F2F3F0;
+      border: 1px dashed #D9DED9;
       color: #777;
       font-style: italic;
     }
 
     @media (prefers-color-scheme: dark) {
-      .message-box.suggestion { background: #1b3a1b; border-color: #2e7d32; }
+      .message-box.suggestion { background: #1b3a1b; border-color: #14603B; }
       .message-box.suggestion.suggestion-empty { background: #2a2a2a; border-color: #444; color: #888; }
     }
 
@@ -521,6 +521,16 @@
       color: var(--text-muted);
       text-decoration: underline;
     }
+  
+    /* ── Polish layer: ink-and-paper editorial system (2026-07 UI pass) ── */
+    body { -webkit-font-smoothing: antialiased; }
+    .header h1 { font-weight: 700; letter-spacing: -0.01em; }
+    .header .badge, .badge { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; border-radius: 6px; }
+    .section-label { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 10px; letter-spacing: 0.09em; }
+    .btn { border-radius: 10px; }
+    .key-row input:focus, .input-area textarea:focus, .mode-select:focus { box-shadow: 0 0 0 3px rgba(23,114,69,.12); }
+    .issue-card, .diff { border-radius: 10px; }
+    .issue-category, .issue-severity { font-family: ui-monospace, "SF Mono", Menlo, monospace; letter-spacing: 0.06em; }
   </style>
 </head>
 <body>

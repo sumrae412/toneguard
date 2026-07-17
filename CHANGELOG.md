@@ -2,6 +2,11 @@
 
 All notable changes to ToneGuard will be documented in this file.
 
+## [0.4.20] - 2026-07-17
+
+### Changed
+- Full UI polish pass across all five surfaces (popup, Settings, welcome, in-page overlay drawer, mobile PWA): one cohesive "ink-and-paper" light design system — Material green `#4CAF50` replaced with a deeper emerald `#177245`, warm paper backgrounds, hairline card borders with soft shadows, monospace eyebrow labels and status text, refined focus rings, and consistent radii. Dark-mode variants in the overlay and PWA restyled to match. PWA `theme_color` updated.
+
 ## [0.4.19] - 2026-07-17
 
 ### Fixed

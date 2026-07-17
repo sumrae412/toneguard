@@ -10,7 +10,7 @@ html, body {
   overflow: hidden;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   font-size: 14px;
-  color: #1a1a1a;
+  color: #1B211D;
   line-height: 1.5;
 }
 
@@ -36,7 +36,7 @@ html, body {
   top: 0; right: -400px; bottom: 0;
   width: 380px;
   max-width: 90vw;
-  background: #fafafa;
+  background: #F7F7F4;
   box-shadow: -4px 0 20px rgba(0, 0, 0, 0.15);
   overflow-y: auto;
   padding: 20px;
@@ -56,12 +56,12 @@ html, body {
   background: none;
   border: none;
   font-size: 18px;
-  color: #999;
+  color: #96A09A;
   cursor: pointer;
   padding: 4px;
   line-height: 1;
 }
-.tg-close:hover { color: #333; }
+.tg-close:hover { color: #2A322C; }
 
 .tg-header {
   display: flex;
@@ -80,16 +80,16 @@ html, body {
   font-weight: 500;
   padding: 2px 8px;
   border-radius: 10px;
-  background: #FFF3E0;
-  color: #E65100;
+  background: #F8F1E2;
+  color: #9C5D12;
 }
-.tg-badge.tg-polish { background: #E3F2FD; color: #1565C0; }
-.tg-badge.tg-both { background: #FFF3E0; color: #E65100; }
+.tg-badge.tg-polish { background: #E7F0F9; color: #255E9E; }
+.tg-badge.tg-both { background: #F8F1E2; color: #9C5D12; }
 
 .tg-confidence-bar {
   height: 3px;
   border-radius: 2px;
-  background: #e0e0e0;
+  background: #E3E6E1;
   margin-bottom: 16px;
 }
 .tg-confidence-fill {
@@ -97,17 +97,17 @@ html, body {
   border-radius: 2px;
   transition: width 0.3s;
 }
-.tg-confidence-fill.tg-low { background: #FFB300; }
-.tg-confidence-fill.tg-medium { background: #FF9800; }
-.tg-confidence-fill.tg-high { background: #e53935; }
+.tg-confidence-fill.tg-low { background: #D19A26; }
+.tg-confidence-fill.tg-medium { background: #C77C1A; }
+.tg-confidence-fill.tg-high { background: #BC3F30; }
 
 .tg-red-flags { margin-bottom: 12px; }
 .tg-flags-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
 .tg-flag-chip {
   display: inline-block;
   padding: 3px 10px;
-  background: #FFEBEE;
-  color: #C62828;
+  background: #FAEDEA;
+  color: #A33327;
   border-radius: 12px;
   font-size: 12px;
   line-height: 1.4;
@@ -124,8 +124,8 @@ html, body {
 
 .tg-issue-card {
   background: #fff;
-  border: 1px solid #e0e0e0;
-  border-left: 3px solid #FFB300;
+  border: 1px solid #E3E6E1;
+  border-left: 3px solid #D19A26;
   border-radius: 6px;
   padding: 9px 10px;
 }
@@ -145,24 +145,24 @@ html, body {
   letter-spacing: 0.3px;
 }
 
-.tg-issue-category { color: #5D4037; }
-.tg-issue-severity { color: #999; }
+.tg-issue-category { color: #6D5D2E; }
+.tg-issue-severity { color: #96A09A; }
 
 .tg-issue-quote {
   font-size: 12px;
-  color: #C62828;
+  color: #A33327;
   margin-bottom: 4px;
 }
 
 .tg-issue-explanation,
 .tg-issue-fix {
   font-size: 12px;
-  color: #333;
+  color: #2A322C;
   line-height: 1.4;
 }
 
 .tg-issue-fix {
-  color: #666;
+  color: #5A655E;
   margin-top: 4px;
 }
 
@@ -170,7 +170,7 @@ html, body {
   margin-top: 8px;
   border: none;
   background: transparent;
-  color: #2E7D32;
+  color: #14603B;
   cursor: pointer;
   font: inherit;
   font-size: 12px;
@@ -190,17 +190,17 @@ html, body {
   padding: 2px 8px;
   border-radius: 10px;
 }
-.tg-readability.tg-good { background: #E8F5E9; color: #2E7D32; }
-.tg-readability.tg-medium { background: #FFF3E0; color: #E65100; }
-.tg-readability.tg-hard { background: #FFEBEE; color: #C62828; }
+.tg-readability.tg-good { background: #EAF3ED; color: #14603B; }
+.tg-readability.tg-medium { background: #F8F1E2; color: #9C5D12; }
+.tg-readability.tg-hard { background: #FAEDEA; color: #A33327; }
 
 .tg-category-chip {
   display: inline-block;
   font-size: 10px;
   padding: 1px 7px;
   border-radius: 8px;
-  background: #F3E5F5;
-  color: #6A1B9A;
+  background: #EEECF6;
+  color: #5B4FA8;
 }
 
 .tg-loading {
@@ -208,14 +208,14 @@ html, body {
   align-items: center;
   gap: 10px;
   padding: 20px 0;
-  color: #666;
+  color: #5A655E;
   font-size: 13px;
 }
 .tg-loading-dot {
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: #4CAF50;
+  background: #177245;
   animation: tg-pulse 1.5s ease-in-out infinite;
 }
 @keyframes tg-pulse {
@@ -224,12 +224,12 @@ html, body {
 }
 
 .tg-reason {
-  background: #FFF8E1;
-  border-left: 3px solid #FFB300;
+  background: #FAF4E1;
+  border-left: 3px solid #D19A26;
   padding: 10px 12px;
   border-radius: 0 6px 6px 0;
   font-size: 13px;
-  color: #5D4037;
+  color: #6D5D2E;
   margin-bottom: 16px;
   line-height: 1.4;
 }
@@ -240,7 +240,7 @@ html, body {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  color: #999;
+  color: #96A09A;
   margin-bottom: 6px;
 }
 
@@ -254,25 +254,25 @@ html, body {
 }
 .tg-message-box.tg-original {
   background: #fff;
-  border: 1px solid #e0e0e0;
-  color: #666;
+  border: 1px solid #E3E6E1;
+  color: #5A655E;
 }
 .tg-message-box.tg-suggestion {
-  background: #E8F5E9;
-  border: 1px solid #A5D6A7;
-  color: #1a1a1a;
+  background: #EAF3ED;
+  border: 1px solid #B9D7C6;
+  color: #1B211D;
   cursor: text;
   outline: none;
   min-height: 60px;
 }
 .tg-message-box.tg-suggestion:focus {
-  border-color: #4CAF50;
-  box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.2);
+  border-color: #177245;
+  box-shadow: 0 0 0 2px rgba(23,114,69,.18);
 }
 /* "No rewrite generated" state — model flagged but returned no suggestion. */
 .tg-message-box.tg-suggestion.tg-suggestion-empty {
-  background: #f5f5f5;
-  border-color: #ddd;
+  background: #F2F3F0;
+  border-color: #D9DED9;
   border-style: dashed;
   color: #777;
   cursor: default;
@@ -283,32 +283,32 @@ html, body {
   font-weight: 400;
   text-transform: none;
   letter-spacing: 0;
-  color: #bbb;
+  color: #AEB7B0;
   font-size: 10px;
 }
 
 .tg-question-item { margin-bottom: 10px; }
 .tg-question-label {
   font-size: 13px;
-  color: #333;
+  color: #2A322C;
   margin-bottom: 4px;
   font-weight: 500;
 }
 .tg-question-input {
   width: 100%;
   padding: 8px 10px;
-  border: 1px solid #ddd;
+  border: 1px solid #D9DED9;
   border-radius: 6px;
   font-family: inherit;
   font-size: 13px;
   line-height: 1.4;
   background: #fff;
-  color: #1a1a1a;
+  color: #1B211D;
 }
 .tg-question-input:focus {
   outline: none;
-  border-color: #4CAF50;
-  box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.15);
+  border-color: #177245;
+  box-shadow: 0 0 0 2px rgba(23,114,69,.15);
 }
 
 #tgQuestionsSection .tg-btn { margin-top: 8px; }
@@ -330,20 +330,20 @@ html, body {
   transition: background 0.15s;
   font-family: inherit;
 }
-.tg-btn-primary { background: #4CAF50; color: white; }
-.tg-btn-primary:hover { background: #43A047; }
+.tg-btn-primary { background: #177245; color: white; }
+.tg-btn-primary:hover { background: #125C38; }
 .tg-btn:disabled,
 .tg-btn[aria-disabled="true"] {
   opacity: 0.5;
   cursor: not-allowed;
   pointer-events: none;
 }
-.tg-btn-secondary { background: #fff; color: #666; border: 1px solid #ddd; }
-.tg-btn-secondary:hover { background: #f5f5f5; }
+.tg-btn-secondary { background: #fff; color: #5A655E; border: 1px solid #D9DED9; }
+.tg-btn-secondary:hover { background: #F2F3F0; }
 .tg-btn-tertiary {
   flex: none;
   background: transparent;
-  color: #999;
+  color: #96A09A;
   padding: 10px 12px;
 }
 .tg-btn-tertiary:hover { color: #555; background: rgba(0,0,0,0.04); }
@@ -372,7 +372,7 @@ html, body {
 .tg-empty {
   padding: 40px 0;
   text-align: center;
-  color: #999;
+  color: #96A09A;
   font-size: 13px;
   line-height: 1.5;
 }
@@ -380,7 +380,7 @@ html, body {
 .tg-passed {
   padding: 40px 0;
   text-align: center;
-  color: #4CAF50;
+  color: #177245;
   font-size: 14px;
 }
 
@@ -395,12 +395,12 @@ html, body {
 .tg-stale-title {
   font-size: 15px;
   font-weight: 600;
-  color: #E65100;
+  color: #9C5D12;
   margin-bottom: 6px;
 }
 .tg-stale-msg {
   font-size: 13px;
-  color: #666;
+  color: #5A655E;
   margin-bottom: 16px;
   line-height: 1.4;
 }
@@ -418,7 +418,7 @@ html, body {
 }
 .tg-undo-countdown {
   font-size: 15px;
-  color: #666;
+  color: #5A655E;
   margin-bottom: 12px;
 }
 .tg-undo-toast .tg-btn {
@@ -476,40 +476,66 @@ html, body {
 
 /* Dark mode */
 @media (prefers-color-scheme: dark) {
-  body { color: #e0e0e0; }
-  .tg-drawer { background: #1e1e1e; color: #e0e0e0; }
+  body { color: #E3E6E1; }
+  .tg-drawer { background: #1e1e1e; color: #E3E6E1; }
   .tg-close { color: #777; }
   .tg-close:hover { color: #ccc; }
-  .tg-badge { background: #3d2e1a; color: #FFB300; }
+  .tg-badge { background: #3d2e1a; color: #D19A26; }
   .tg-badge.tg-polish { background: #1a2e3d; color: #64B5F6; }
-  .tg-badge.tg-both { background: #3d2e1a; color: #FFB300; }
+  .tg-badge.tg-both { background: #3d2e1a; color: #D19A26; }
   .tg-flag-chip { background: #3d1c1c; color: #EF9A9A; }
   .tg-readability.tg-good { background: #1b3a1b; color: #81C784; }
-  .tg-readability.tg-medium { background: #3d2e1a; color: #FFB74D; }
+  .tg-readability.tg-medium { background: #3d2e1a; color: #E0B25E; }
   .tg-readability.tg-hard { background: #3d1c1c; color: #EF9A9A; }
   .tg-category-chip { background: #2d1a35; color: #CE93D8; }
-  .tg-reason { background: #3d3520; border-left-color: #FFB300; color: #D7CCC8; }
+  .tg-reason { background: #3d3520; border-left-color: #D19A26; color: #D7CCC8; }
   .tg-section-label { color: #777; }
-  .tg-message-box.tg-original { background: #2d2d2d; border-color: #404040; color: #999; }
-  .tg-message-box.tg-suggestion { background: #1b3a1b; border-color: #2d5f2d; color: #e0e0e0; }
-  .tg-message-box.tg-suggestion:focus { border-color: #4CAF50; box-shadow: 0 0 0 2px rgba(76,175,80,0.3); }
+  .tg-message-box.tg-original { background: #2d2d2d; border-color: #404040; color: #96A09A; }
+  .tg-message-box.tg-suggestion { background: #1b3a1b; border-color: #2d5f2d; color: #E3E6E1; }
+  .tg-message-box.tg-suggestion:focus { border-color: #177245; box-shadow: 0 0 0 2px rgba(23,114,69,.3); }
   .tg-message-box.tg-suggestion.tg-suggestion-empty { background: #2a2a2a; border-color: #444; color: #888; }
   .tg-question-label { color: #ccc; }
-  .tg-question-input { background: #2d2d2d; border-color: #404040; color: #e0e0e0; }
-  .tg-question-input:focus { border-color: #4CAF50; }
-  .tg-btn-primary { background: #388E3C; }
-  .tg-btn-primary:hover { background: #2E7D32; }
-  .tg-btn-secondary { background: #2d2d2d; color: #999; border-color: #555; }
-  .tg-btn-secondary:hover { background: #333; }
+  .tg-question-input { background: #2d2d2d; border-color: #404040; color: #E3E6E1; }
+  .tg-question-input:focus { border-color: #177245; }
+  .tg-btn-primary { background: #1B824F; }
+  .tg-btn-primary:hover { background: #14603B; }
+  .tg-btn-secondary { background: #2d2d2d; color: #96A09A; border-color: #555; }
+  .tg-btn-secondary:hover { background: #2A322C; }
   .tg-btn-tertiary { color: #777; }
   .tg-btn-tertiary:hover { color: #ccc; background: rgba(255,255,255,0.06); }
   .tg-kbd { background: rgba(255,255,255,0.1); }
   .tg-btn-secondary .tg-kbd { background: rgba(255,255,255,0.08); }
-  .tg-loading { color: #999; }
+  .tg-loading { color: #96A09A; }
   .tg-empty { color: #777; }
-  .tg-edit-hint { color: #666; }
-  .tg-undo-countdown { color: #999; }
-  .tg-stale-title { color: #FFB74D; }
-  .tg-stale-msg { color: #999; }
+  .tg-edit-hint { color: #5A655E; }
+  .tg-undo-countdown { color: #96A09A; }
+  .tg-stale-title { color: #E0B25E; }
+  .tg-stale-msg { color: #96A09A; }
   .tg-backdrop { background: rgba(0, 0, 0, 0.5); }
+}
+
+/* ── Polish layer: ink-and-paper editorial system (2026-07 UI pass) ── */
+.tg-drawer {
+  background: #FCFCFA;
+  border-left: 1px solid #E3E6E1;
+  box-shadow: -12px 0 40px rgba(26,33,28,.16);
+  padding: 22px 20px;
+}
+.tg-header h2 { font-size: 16px; font-weight: 700; letter-spacing: -0.01em; }
+.tg-badge {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 10px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: .06em; border-radius: 6px; padding: 3px 8px;
+}
+.tg-section-label { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 10px; letter-spacing: 0.09em; }
+.tg-message-box { border-radius: 10px; }
+.tg-message-box.tg-suggestion { background: #EFF6F1; border-color: #C9DFD1; }
+.tg-issue-card { border-radius: 8px; border-left-width: 2px; }
+.tg-reason { border-radius: 0 8px 8px 0; border-left-width: 2px; }
+.tg-btn { border-radius: 8px; font-weight: 600; }
+.tg-btn-primary { box-shadow: 0 1px 2px rgba(26,33,28,.1); }
+.tg-kbd { font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+.tg-flag-chip, .tg-readability, .tg-category-chip { font-weight: 500; }
+@media (prefers-color-scheme: dark) {
+  .tg-drawer { background: #1E221F; border-left-color: #2E332E; }
+  .tg-message-box.tg-suggestion { background: #1D3226; border-color: #2E5540; }
 }
