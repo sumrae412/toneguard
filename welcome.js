@@ -32,6 +32,10 @@ saveBtn.addEventListener("click", () => {
     statusEl.textContent = "Saved! Your key syncs across Chrome devices.";
     statusEl.className = "status saved";
     showReady();
+    // Start sync now — otherwise it waits for the next browser restart
+    // (initSync only runs on onStartup). SYNC_PULL falls back to initSync
+    // when the manager isn't up yet.
+    chrome.runtime.sendMessage({ type: "SYNC_PULL" }, () => chrome.runtime.lastError);
   });
 });
 

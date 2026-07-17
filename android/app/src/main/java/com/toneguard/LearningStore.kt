@@ -18,6 +18,7 @@ class LearningStore(context: Context) {
     companion object {
         const val KEY_DECISIONS = "tg_decisions"
         const val KEY_VOICE_SAMPLES = "tg_voice_samples"
+        const val KEY_VOICE_FINGERPRINT = "tg_voice_fingerprint"
         const val KEY_RELATIONSHIPS = "tg_relationships"
         const val KEY_CUSTOM_RULES = "tg_custom_rules"
         const val KEY_STATS = "tg_stats"

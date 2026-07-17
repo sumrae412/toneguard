@@ -268,6 +268,7 @@ async function registerCustomSites() {
 
 // Listen for messages from content script
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (!message || typeof message.type !== "string") return;
   if (message.type === "ANALYZE") {
     handleAnalyze(message.text, message.context, message.site, message.intent_mode)
       .then(sendResponse)
@@ -705,53 +706,55 @@ async function handleAnalyze(text, context, site, requestedIntentMode) {
       landingPromise
     ]);
 
+    // Quota-class 400 (credit balance / usage limit) means the KEY is maxed
+    // out — every send would fail. Auto-pause instead of blocking: record the
+    // pause, flip the toolbar badge, and fail OPEN so this send goes through.
+    // Subsequent sends short-circuit at the entry-point check above until the
+    // user resumes or the cooldown re-probes. Shared by the first response AND
+    // every retry/escalation response, so a key that depletes mid-analysis
+    // still pauses instead of surfacing a blocking parse error. See
+    // lib.js:classifyQuotaError.
+    const maybeQuotaPause = async (status, errBody) => {
+      const quota = classifyQuotaError(status, errBody);
+      if (!quota) return null;
+      await chrome.storage.local.set({
+        tg_quota_paused: { at: Date.now(), reason: quota.reason }
+      });
+      setQuotaPausedBadge();
+      await recordTelemetry({
+        event: "analysis_failed",
+        platform: "chrome",
+        site_profile: siteProfile.id,
+        route: "blocked_error",
+        model: MODEL,
+        failure_diagnostic_code: quota.diagnostic_code,
+        latency_bucket: latencyBucket(Date.now() - startedAt),
+        outcome: "failed"
+      });
+      return {
+        flagged: false,
+        paused: true,
+        just_paused: true,
+        paused_reason: quota.reason,
+        routing
+      };
+    };
+
     if (!response.ok) {
       const errBody = await response.text();
       console.error("ToneGuard API error:", response.status, errBody);
 
-      // Quota-class 400 (credit balance / usage limit) means the KEY is maxed
-      // out — every send would fail. Auto-pause instead of blocking: record the
-      // pause, flip the toolbar badge, and fail OPEN so this send goes through.
-      // Subsequent sends short-circuit at the entry-point check above until the
-      // user resumes or the cooldown re-probes. See lib.js:classifyQuotaError.
-      const quota = classifyQuotaError(response.status, errBody);
-      if (quota) {
-        await chrome.storage.local.set({
-          tg_quota_paused: { at: Date.now(), reason: quota.reason }
-        });
-        setQuotaPausedBadge();
-        await recordTelemetry({
-          event: "analysis_failed",
-          platform: "chrome",
-          site_profile: siteProfile.id,
-          route: "blocked_error",
-          model: MODEL,
-          failure_diagnostic_code: quota.diagnostic_code,
-          latency_bucket: latencyBucket(Date.now() - startedAt),
-          outcome: "failed"
-        });
-        return {
-          flagged: false,
-          paused: true,
-          just_paused: true,
-          paused_reason: quota.reason,
-          routing
-        };
-      }
+      const pausedResult = await maybeQuotaPause(response.status, errBody);
+      if (pausedResult) return pausedResult;
 
       const friendlyError = getFriendlyApiError(response.status, errBody);
-      // Map to the most specific error kind so the diagnostic code (TG_AUTH_002,
-      // TG_LIMIT_001, etc.) is accurate rather than always defaulting to
-      // TG_RUNTIME_001.  getFriendlyApiError already has the per-case logic;
-      // mirror it here for the kind selection.
+      // Map to the most specific error kind so the diagnostic code (TG_AUTH_002
+      // etc.) is accurate rather than always defaulting to TG_RUNTIME_001.
+      // Quota-class 400s (usage limit / credit) never reach here —
+      // maybeQuotaPause already returned for them above.
       let errorKind = "runtime";
       if (response.status === 401) {
         errorKind = "invalid_api_key";
-      } else if (
-        response.status === 400 &&
-        /usage.?limit|usage_limit|You have reached your specified API usage limits/i.test(errBody)
-      ) {
-        errorKind = "usage_limit";
       }
       const error = makeAnalysisError(errorKind, {
         message: friendlyError,
@@ -814,6 +817,9 @@ async function handleAnalyze(text, context, site, requestedIntentMode) {
         data = await escalated.json();
         stopReason = data.stop_reason || "";
         result = extract(data);
+      } else {
+        const pausedResult = await maybeQuotaPause(escalated.status, await escalated.text());
+        if (pausedResult) return pausedResult;
       }
     }
 
@@ -833,6 +839,9 @@ async function handleAnalyze(text, context, site, requestedIntentMode) {
         data = await retried.json();
         stopReason = data.stop_reason || "";
         result = extract(data);
+      } else {
+        const pausedResult = await maybeQuotaPause(retried.status, await retried.text());
+        if (pausedResult) return pausedResult;
       }
     }
 
@@ -853,6 +862,9 @@ async function handleAnalyze(text, context, site, requestedIntentMode) {
         data = await retried.json();
         stopReason = data.stop_reason || "";
         result = extract(data) || result;
+      } else {
+        const pausedResult = await maybeQuotaPause(retried.status, await retried.text());
+        if (pausedResult) return pausedResult;
       }
     }
 
@@ -1092,9 +1104,12 @@ function getFriendlyApiError(status, body) {
     case 500:
     case 502:
     case 503:
-      return "Anthropic's API is temporarily unavailable. Your message was sent without checking.";
+      // The content script BLOCKS the send on this error (drawer with
+      // Retry / Send as is / Cancel) — the wording must not claim the
+      // message went out. See content.js result.error handling.
+      return "Anthropic's API is temporarily unavailable. Your message was NOT sent — retry, send as is, or cancel.";
     default:
-      return "API error (" + status + "). Your message was sent without checking.";
+      return "API error (" + status + "). Your message was NOT sent — retry, send as is, or cancel.";
   }
 }
 

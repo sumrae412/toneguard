@@ -86,10 +86,13 @@ class ToneGuardAccessibilityService : AccessibilityService() {
         // Check overlay permission
         if (!Settings.canDrawOverlays(this)) return
 
+        // Validate the key BEFORE flipping state — returning after
+        // `analyzing = true` would wedge the service (the onAccessibilityEvent
+        // guard never re-enters) and leave the loading overlay up.
+        val apiKey = Prefs.getApiKey(this) ?: return
+
         analyzing = true
         overlay.showLoading()
-
-        val apiKey = Prefs.getApiKey(this) ?: return
         val strictness = Prefs.getStrictness(this)
         val intentMode = Prefs.getIntentMode(this)
         val voiceStrength = Prefs.getVoiceStrength(this)

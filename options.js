@@ -100,7 +100,10 @@ function renderQuotaBanner() {
   if (!quotaBanner) return;
   chrome.storage.local.get(["tg_quota_paused"], (result) => {
     const paused = result.tg_quota_paused;
-    if (paused && typeof paused.at === "number") {
+    // Gate on the cooldown, not just the record's existence — after the pause
+    // expires the next send re-probes the API, so showing "paused" here would
+    // contradict actual behavior. See lib.js:isQuotaPauseActive.
+    if (isQuotaPauseActive(paused, Date.now())) {
       quotaBannerMsg.textContent =
         QUOTA_PAUSE_MESSAGES[paused.reason] ||
         "Your API limit was reached, so messages are sending unchecked.";

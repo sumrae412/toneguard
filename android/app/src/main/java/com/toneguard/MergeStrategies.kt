@@ -117,6 +117,19 @@ object MergeStrategies {
     }
 
     /**
+     * Merge voice fingerprints: newest updatedAt wins (LWW).
+     * Mirrors src/sync/merge.js mergeVoiceFingerprint — keep in sync.
+     */
+    fun mergeVoiceFingerprint(local: JSONObject?, remote: JSONObject?): JSONObject? {
+        if (local == null && remote == null) return null
+        if (local == null) return remote
+        if (remote == null) return local
+        val localAt = local.optString("updatedAt", "")
+        val remoteAt = remote.optString("updatedAt", "")
+        return if (remoteAt > localAt) remote else local
+    }
+
+    /**
      * Merge stats history: union by weekStart, take higher counts per week, trim to 12.
      */
     fun mergeStatsHistory(local: JSONArray?, remote: JSONArray?): JSONArray {

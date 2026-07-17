@@ -635,7 +635,18 @@
 
       if (result.error) {
         console.warn("ToneGuard:", formatErrorForLog(result.error));
-        if (window.__toneGuard) window.__toneGuard.showError(result.error);
+        if (window.__toneGuard) {
+          // Keep pendingEditor set: the error drawer's Retry / Send as is /
+          // Cancel buttons resolve it via the decision handler.
+          window.__toneGuard.showError(result.error);
+        } else {
+          // No overlay to offer those buttons — clear the concurrency guard,
+          // or the `if (pendingEditor) return` gate wedges every future send
+          // on this page until reload. The send stays blocked (nothing goes
+          // out unchecked); only the guard is released.
+          pendingEditor = null;
+          pendingText = null;
+        }
         return;
       }
 

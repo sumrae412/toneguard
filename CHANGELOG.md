@@ -2,6 +2,32 @@
 
 All notable changes to ToneGuard will be documented in this file.
 
+## [0.4.19] - 2026-07-17
+
+### Fixed
+- **PWA sync was entirely broken in production**: `index.html` loaded the four sync modules from `../src/sync/`, which is outside the Railway deploy context (Root Directory is `/sync-server`) — all four 404'd, so the PWA booted with no sync at all. The modules are now generated copies under `pwa/sync/` (emitted by `scripts/generate_shared_artifacts.mjs`; `src/sync/` stays canonical), referenced relatively, and precached by the service worker (cache bumped to v5).
+- Sync died silently after 1 hour: the JWT expires at 3600s and the client never re-authenticated, so every later pull/push 401'd until restart. The client now re-auths once on 401 and retries.
+- Realtime sync died permanently on any dropped WebSocket (network blip, server redeploy): the client now reconnects with capped exponential backoff and a fresh token.
+- The server's WS heartbeat pinged sockets but never dropped dead ones — vanished clients stayed in the fan-out set forever. It now tracks pong responses and terminates zombies.
+- Concurrent devices could silently overwrite each other's sync rows: the server trusted the client-sent version (two devices at v5 both wrote v6; a client omitting version regressed rows to v1). Versions are now computed from the stored row and returned to the client.
+- 5xx/unknown API errors told the user "Your message was sent without checking" while the extension actually blocked the send behind the error drawer. Wording now matches behavior ("NOT sent — retry, send as is, or cancel").
+- A quota 400 that appeared only on a retry/escalation call (credits depleting mid-analysis) blocked the send with a parse error instead of auto-pausing. All retry paths now run the same quota-pause classification.
+- The popup/Settings "paused" banner ignored the 6h cooldown expiry and kept showing paused after analysis had resumed.
+- If the overlay failed to inject, an analysis error left the page's send guard permanently wedged (every later send silently blocked until reload).
+- `prompts/analysis-tool.json` and `prompts/landing-tool.json` were fetched via `chrome.runtime.getURL()` but missing from `web_accessible_resources`.
+- MCP analyzer now discards tool results with leaked tool-call XML markup (port of the extension's `validateToolInput` guard).
+- Android: a maxed-out API key (quota/credit 400) was reported as "message may be too long"; now classified like the extension.
+- Android: a saved "preserve" voice strength always displayed as "balanced" in Settings (spinner index bug).
+- Android: a missing API key could wedge the accessibility service's `analyzing` flag and strand the loading overlay.
+- Android: `voice_fingerprint` was missing from the sync data types — fingerprints from other devices were silently dropped.
+
+### Changed
+- Sync data pushed to unknown `data_type` values is now rejected (allowlist of the six canonical types).
+- `/auth` requires a hex SHA-256 hash, not any 64-char string.
+- Sync starts immediately after saving an API key in the popup/welcome page (previously waited for the next browser restart).
+- `sync-server/package-lock.json` is now committed so Railway builds are reproducible (`npm ci`).
+- Dev-dependency vulnerabilities fixed (`npm audit fix`: vite high, postcss moderate → 0).
+
 ## [0.4.18] - 2026-06-19
 
 ### Changed

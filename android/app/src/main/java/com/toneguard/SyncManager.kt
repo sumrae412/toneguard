@@ -23,10 +23,13 @@ class SyncManager(private val store: LearningStore) {
         private const val DEBOUNCE_MS = 5000L
         private const val POLL_INTERVAL_MS = 5 * 60 * 1000L // 5 minutes
 
-        private val DATA_TYPES = listOf("decisions", "voice_samples", "relationships", "custom_rules", "stats_history")
+        // Keep in sync with src/sync/sync-manager.js DATA_TYPES and
+        // toneguard-mcp/sync.py — all clients carry the same six types.
+        private val DATA_TYPES = listOf("decisions", "voice_samples", "voice_fingerprint", "relationships", "custom_rules", "stats_history")
         private val STORAGE_KEYS = mapOf(
             "decisions" to LearningStore.KEY_DECISIONS,
             "voice_samples" to LearningStore.KEY_VOICE_SAMPLES,
+            "voice_fingerprint" to LearningStore.KEY_VOICE_FINGERPRINT,
             "relationships" to LearningStore.KEY_RELATIONSHIPS,
             "custom_rules" to LearningStore.KEY_CUSTOM_RULES,
             "stats_history" to LearningStore.KEY_STATS_HISTORY
@@ -219,6 +222,9 @@ class SyncManager(private val store: LearningStore) {
             )
             "voice_samples" -> MergeStrategies.mergeVoiceSamples(
                 local as? JSONArray, remote as? JSONArray
+            )
+            "voice_fingerprint" -> MergeStrategies.mergeVoiceFingerprint(
+                local as? JSONObject, remote as? JSONObject
             )
             "relationships" -> MergeStrategies.mergeRelationships(
                 local as? JSONObject, remote as? JSONObject

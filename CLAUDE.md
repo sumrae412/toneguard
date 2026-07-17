@@ -39,6 +39,7 @@ Chrome extension + MCP server for tone analysis. Analyzes messages for professio
   - `toneguard-mcp/critics/landing-tool.json` ← `landing-schema.json`
   - `toneguard-mcp/critics/landing.md` ← `shared/prompts/landing.md`
   - `android/app/src/main/res/raw/toneguard_base_prompt.txt` ← `shared/prompts/base.md`
+  - `sync-server/pwa/sync/*.js` ← `src/sync/*.js` (the PWA is served from `sync-server/pwa/`; `../src/sync/` is outside the Railway deploy context and 404s in production — see the 2026-07-17 audit)
 
   **To change any of these:** edit the canonical file under `shared/`, then run `node scripts/generate_shared_artifacts.mjs`. Verify cleanness with `node scripts/generate_shared_artifacts.mjs --check` (exits 0 = in sync). The apparent "Railway crash" reported 2026-06-18 was actually this CI check failing after two changes hand-edited generated files directly.
 - **`docs/client-parity.md` is a generated build artifact — do not hand-edit.** Header carries `<!-- Generated from ... Do not edit directly. -->`. Regen via `node scripts/parity_scan.mjs`. Same convention as the outputs of `scripts/generate_shared_artifacts.mjs`.

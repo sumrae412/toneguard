@@ -225,7 +225,12 @@ class MainActivity : AppCompatActivity() {
         )
 
         intentModeSpinner.setSelection(intentModes.indexOf(Prefs.getIntentMode(this)).coerceAtLeast(0))
-        voiceStrengthSpinner.setSelection(voiceStrengths.indexOf(Prefs.getVoiceStrength(this)).coerceAtLeast(1))
+        // Guard only the not-found (-1) case. coerceAtLeast(1) also remapped
+        // index 0 ("preserve"), so a saved "preserve" always displayed as
+        // "balanced" and could be silently overwritten on the next touch.
+        voiceStrengthSpinner.setSelection(
+            voiceStrengths.indexOf(Prefs.getVoiceStrength(this)).let { if (it < 0) 1 else it }
+        )
 
         intentModeSpinner.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: android.widget.AdapterView<*>?, view: View?, position: Int, id: Long) {

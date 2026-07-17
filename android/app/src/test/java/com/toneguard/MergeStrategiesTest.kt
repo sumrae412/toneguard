@@ -11,6 +11,31 @@ import org.junit.Test
  */
 class MergeStrategiesTest {
 
+    // --- mergeVoiceFingerprint ---
+
+    @Test
+    fun `mergeVoiceFingerprint - newest updatedAt wins`() {
+        val local = JSONObject().apply { put("updatedAt", "2026-04-01T10:00:00Z"); put("tone", "warm") }
+        val remote = JSONObject().apply { put("updatedAt", "2026-04-02T10:00:00Z"); put("tone", "direct") }
+        val result = MergeStrategies.mergeVoiceFingerprint(local, remote)
+        assertEquals("direct", result?.getString("tone"))
+    }
+
+    @Test
+    fun `mergeVoiceFingerprint - local wins on tie or newer`() {
+        val local = JSONObject().apply { put("updatedAt", "2026-04-03T10:00:00Z"); put("tone", "warm") }
+        val remote = JSONObject().apply { put("updatedAt", "2026-04-02T10:00:00Z"); put("tone", "direct") }
+        assertEquals("warm", MergeStrategies.mergeVoiceFingerprint(local, remote)?.getString("tone"))
+    }
+
+    @Test
+    fun `mergeVoiceFingerprint - null sides`() {
+        val one = JSONObject().apply { put("updatedAt", "2026-04-01T10:00:00Z") }
+        assertNull(MergeStrategies.mergeVoiceFingerprint(null, null))
+        assertEquals(one, MergeStrategies.mergeVoiceFingerprint(one, null))
+        assertEquals(one, MergeStrategies.mergeVoiceFingerprint(null, one))
+    }
+
     // --- mergeDecisions ---
 
     @Test
