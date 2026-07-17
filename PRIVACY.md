@@ -39,7 +39,7 @@ ToneGuard operates a lightweight sync server (hosted on Railway) so your learnin
 - **What never syncs:** your API key itself, and your drafts at analysis time — analysis goes only to Anthropic.
 - **How it's keyed:** records are stored under a SHA-256 hash of your API key. The server never receives the key itself and cannot identify you from the hash.
 - **Transport and access:** all sync traffic is HTTPS/TLS; data is used solely to serve your own devices and is never shared, sold, or used for any other purpose.
-- **Removal:** clearing your learning data from the options page clears it from sync as your devices push the cleared state; for complete server-side removal, open an issue at the contact link below.
+- **Removal:** clearing learning data from the options page removes it from that device, but copies already synced to the server (and to your other devices) persist and can sync back. For complete removal of your synced data from the server, open an issue at the contact link below — it will be deleted promptly.
 
 ## What Data Is NOT Collected
 
@@ -53,7 +53,7 @@ ToneGuard operates a lightweight sync server (hosted on Railway) so your learnin
 - All locally stored data can be cleared at any time from the ToneGuard options page (learning history) or by removing the extension.
 - Voice samples are automatically limited to the 30 most recent messages.
 - Weekly stats are automatically rotated, keeping only the last 12 weeks.
-- Uninstalling the extension removes all stored data.
+- Uninstalling the extension removes all locally stored data. Data previously synced to the sync service persists on the server until you request removal (see Cross-Device Sync).
 
 ## Anthropic API Data Handling
 
