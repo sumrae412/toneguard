@@ -1,6 +1,6 @@
 # ToneGuard Privacy Policy
 
-**Last updated:** April 2, 2026
+**Last updated:** July 17, 2026
 
 ## Overview
 
@@ -14,8 +14,9 @@ ToneGuard is a Chrome extension that checks your messages for tone and clarity b
 
 ## Where Data Is Sent
 
-- **Anthropic API:** Your message text (and optional conversation context) is sent to the Anthropic Claude API for analysis. This requires your own API key, which you provide in the extension settings. ToneGuard does not proxy your messages through any other server.
-- **No other third parties:** ToneGuard does not send data to any analytics service, advertising network, tracking pixel, or any server other than the Anthropic API.
+- **Anthropic API:** Your message text (and optional conversation context) is sent to the Anthropic Claude API for analysis. This requires your own API key, which you provide in the extension settings. Analysis never passes through any other server.
+- **ToneGuard sync service (optional cross-device sync):** Your learning data — decision history, voice samples, recipient relationship counts, custom rules, weekly stats, and your voice style profile — syncs to a small ToneGuard-operated server so your preferences follow you across devices. See "Cross-Device Sync" below for exactly what this includes.
+- **No other third parties:** ToneGuard does not send data to any analytics service, advertising network, or tracking pixel. The only servers contacted are the Anthropic API and the ToneGuard sync service.
 
 ## What Data Is Stored
 
@@ -30,10 +31,20 @@ All data is stored locally on your device using Chrome's built-in storage APIs:
 | Recipient relationships (@mention counts) | `chrome.storage.local` | Calibrate tone for frequent vs. infrequent contacts |
 | Weekly stats (checked/flagged counts) | `chrome.storage.local` | Show you your communication stats on the options page |
 
+## Cross-Device Sync
+
+ToneGuard operates a lightweight sync server (hosted on Railway) so your learning data follows you across devices. Honest specifics:
+
+- **What syncs:** decision history (which suggestions you accepted, dismissed, or edited — including the message text involved), voice samples (excerpts of your sent messages, truncated to 300 characters), recipient relationship counts, custom rules, weekly stats, and your voice style profile.
+- **What never syncs:** your API key itself, and your drafts at analysis time — analysis goes only to Anthropic.
+- **How it's keyed:** records are stored under a SHA-256 hash of your API key. The server never receives the key itself and cannot identify you from the hash.
+- **Transport and access:** all sync traffic is HTTPS/TLS; data is used solely to serve your own devices and is never shared, sold, or used for any other purpose.
+- **Removal:** clearing your learning data from the options page clears it from sync as your devices push the cleared state; for complete server-side removal, open an issue at the contact link below.
+
 ## What Data Is NOT Collected
 
-- ToneGuard does **not** collect, transmit, or store any personal information on external servers.
-- ToneGuard does **not** have its own backend server. All processing is done via the Anthropic API using your own API key.
+- ToneGuard does **not** collect or store any data on external servers beyond the Anthropic analysis call and the sync service described above.
+- ToneGuard has **no analytics backend** — message analysis is done via the Anthropic API using your own API key.
 - ToneGuard does **not** use cookies, fingerprinting, or tracking of any kind.
 - ToneGuard does **not** access or read any page content other than message editors and send buttons on supported sites.
 
@@ -55,7 +66,7 @@ When your message is sent to the Anthropic API for analysis, it is subject to [A
 | `storage` | Save your settings, learning history, and voice samples locally |
 | `activeTab` | Access the current tab to inject content scripts on custom sites |
 | `scripting` | Register content scripts dynamically for user-added custom sites |
-| Host permissions (Slack, Gmail, LinkedIn, TurboTenant) | Intercept send actions on these supported platforms |
+| Host permissions (Slack, Gmail, LinkedIn) | Intercept send actions on these supported platforms |
 | `https://api.anthropic.com/*` | Send messages to the Claude API for analysis |
 | Optional `https://*/*` | Only requested when you add a custom site, scoped to that domain |
 
