@@ -1,3 +1,5 @@
+// Generated from src/sync/sync-client.js. Do not edit directly.
+
 // ToneGuard sync client — talks to the Railway-hosted sync server.
 // Replaces the old Supabase client. Same surface: authenticate/pull/push/subscribeToChanges.
 

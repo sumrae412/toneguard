@@ -81,7 +81,11 @@ class ClaudeApiClient(private val apiKey: String, private val learningStore: Lea
                 val response = client.newCall(request).execute()
 
                 if (response.code == 401 || response.code == 400 || response.code == 403) {
-                    callback(analysisError("api", getFriendlyError(response.code), response.code))
+                    // 400 covers several distinct causes — a maxed-out key
+                    // (usage limit / credit balance) must not be reported as
+                    // "message too long". Mirrors lib.js:classifyQuotaError.
+                    val errBody = if (response.code == 400) response.body?.string() ?: "" else ""
+                    callback(analysisError("api", getFriendlyError(response.code, errBody), response.code))
                     return
                 }
 
@@ -246,12 +250,19 @@ class ClaudeApiClient(private val apiKey: String, private val learningStore: Lea
         }
     }
 
-    private fun getFriendlyError(status: Int): String {
+    private fun getFriendlyError(status: Int, body: String = ""): String {
         return when (status) {
             401 -> "Invalid API key. Check your key in ToneGuard settings."
             403 -> "API key doesn\u2019t have permission. Check console.anthropic.com."
             429 -> "Rate limit reached. Wait a moment and try again."
-            400 -> "Bad request. The message may be too long."
+            400 -> when {
+                Regex("usage.?limit|reached your specified API usage limits", RegexOption.IGNORE_CASE)
+                    .containsMatchIn(body) ->
+                    "Anthropic usage limit reached. Raise it at console.anthropic.com or wait until it resets."
+                body.contains("credit", ignoreCase = true) ->
+                    "No API credits remaining. Add credits at console.anthropic.com."
+                else -> "Bad request. The message may be too long."
+            }
             500, 502, 503 -> "Anthropic\u2019s API is temporarily unavailable."
             else -> "API error ($status)."
         }

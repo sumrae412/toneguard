@@ -120,6 +120,23 @@ const categories = readJson("shared/analysis/categories.json");
 const voiceStrengths = readJson("shared/analysis/voice-strengths.json");
 validateTaxonomies(schema, modes, categories, voiceStrengths);
 
+// PWA copies of the sync modules. The PWA is served from sync-server/pwa/
+// (Railway Root Directory is /sync-server), so ../src/sync/ is outside the
+// deploy context entirely — referencing it 404s in production. src/sync/
+// stays canonical (the extension imports it directly); these copies are
+// generated artifacts like everything else this script emits.
+const SYNC_MODULES = ["merge.js", "storage-adapter.js", "sync-client.js", "sync-manager.js"];
+
+function syncModuleArtifacts() {
+  return SYNC_MODULES.flatMap((name) =>
+    writeOrCheck(
+      "sync-server/pwa/sync/" + name,
+      "// Generated from src/sync/" + name + ". Do not edit directly.\n\n" +
+        readText("src/sync/" + name)
+    )
+  );
+}
+
 const basePrompt = readText("shared/prompts/base.md");
 const landingPrompt = readText("shared/prompts/landing.md");
 const analysisTool = buildAnalysisTool(schema);
@@ -135,7 +152,8 @@ const stale = [
   ...writeOrCheck("toneguard-mcp/critics/landing-tool.json", JSON.stringify(landingTool, null, 2)),
   ...writeOrCheck("toneguard-mcp/critics/landing.md", GENERATED_HEADER + landingPrompt),
   ...writeOrCheck("sync-server/pwa/generated-prompts.js", buildPwaPromptModule(basePrompt, landingPrompt)),
-  ...writeOrCheck("android/app/src/main/res/raw/toneguard_base_prompt.txt", GENERATED_HEADER + basePrompt)
+  ...writeOrCheck("android/app/src/main/res/raw/toneguard_base_prompt.txt", GENERATED_HEADER + basePrompt),
+  ...syncModuleArtifacts()
 ];
 
 if (stale.length > 0) {

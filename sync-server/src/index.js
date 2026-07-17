@@ -43,6 +43,18 @@ app.use((req, res, next) => {
 // Serve PWA static files from sync-server/pwa/ (in build context).
 app.use(express.static(PWA_DIR));
 
+// The six data types every client syncs. Keep in sync with
+// src/sync/sync-manager.js DATA_TYPES, toneguard-mcp/sync.py, and
+// android SyncManager.kt — an unknown type is a client bug, reject it.
+const SYNC_DATA_TYPES = new Set([
+  "decisions",
+  "voice_samples",
+  "voice_fingerprint",
+  "relationships",
+  "custom_rules",
+  "stats_history",
+]);
+
 // In-memory fan-out: user_hash -> Set<WebSocket>.
 // Single Railway instance, so in-process is sufficient. If scaled to multiple
 // replicas, swap for Postgres LISTEN/NOTIFY.
@@ -85,7 +97,9 @@ app.get("/healthz", (_req, res) => res.json({ ok: true }));
 
 app.post("/auth", (req, res) => {
   const { hash } = req.body ?? {};
-  if (!hash || typeof hash !== "string" || hash.length !== 64) {
+  // SHA-256 hex digest only — length alone would mint JWTs for arbitrary
+  // 64-char strings.
+  if (!hash || typeof hash !== "string" || !/^[0-9a-f]{64}$/i.test(hash)) {
     return res.status(400).json({ error: "Invalid hash" });
   }
   const token = signJwt({ user_hash: hash }, JWT_SECRET, JWT_EXPIRY_SECONDS);
@@ -118,22 +132,31 @@ app.post("/sync", wrap(async (req, res) => {
   if (!dataType || typeof dataType !== "string") {
     return res.status(400).json({ error: "data_type required" });
   }
+  if (!SYNC_DATA_TYPES.has(dataType)) {
+    return res.status(400).json({ error: "unknown data_type" });
+  }
   if (payload === undefined) {
     return res.status(400).json({ error: "payload required" });
   }
 
-  const newVersion = (typeof version === "number" ? version : 0) + 1;
   const updatedAt = new Date().toISOString();
 
-  await pool.query(
+  // Compute the new version from the STORED row, not the client's claim.
+  // Trusting the client meant two devices at version N would both write N+1
+  // (silent lost update), and a client that omitted version would regress a
+  // long-lived row back to 1. `version` stays accepted in the request body
+  // for backward compatibility but no longer drives the increment.
+  const { rows } = await pool.query(
     `INSERT INTO sync_data (user_hash, data_type, payload, version, updated_at)
-     VALUES ($1, $2, $3, $4, $5)
+     VALUES ($1, $2, $3, 1, $4)
      ON CONFLICT (user_hash, data_type) DO UPDATE SET
        payload = EXCLUDED.payload,
-       version = EXCLUDED.version,
-       updated_at = EXCLUDED.updated_at`,
-    [claims.user_hash, dataType, payload, newVersion, updatedAt]
+       version = sync_data.version + 1,
+       updated_at = EXCLUDED.updated_at
+     RETURNING version`,
+    [claims.user_hash, dataType, payload, updatedAt]
   );
+  const newVersion = rows[0].version;
 
   broadcast(claims.user_hash, {
     event: "UPDATE",
@@ -174,6 +197,8 @@ server.on("upgrade", (req, socket, head) => {
   }
   wss.handleUpgrade(req, socket, head, (ws) => {
     ws.userHash = claims.user_hash;
+    ws.isAlive = true;
+    ws.on("pong", () => { ws.isAlive = true; });
     addSubscriber(claims.user_hash, ws);
     ws.on("close", () => removeSubscriber(claims.user_hash, ws));
     ws.on("error", () => removeSubscriber(claims.user_hash, ws));
@@ -181,10 +206,19 @@ server.on("upgrade", (req, socket, head) => {
 });
 
 // Periodic WS liveness check — drop zombies, keep fan-out set accurate.
+// A socket that missed the previous ping (no pong) is terminated; terminate()
+// fires the 'close' handler, which removes it from the subscriber set. Without
+// this, clients that vanish without a close frame stay OPEN forever and the
+// fan-out set grows unbounded.
 const HEARTBEAT_MS = 30000;
 setInterval(() => {
   for (const set of subscribers.values()) {
-    for (const ws of set) {
+    for (const ws of [...set]) {
+      if (ws.isAlive === false) {
+        try { ws.terminate(); } catch { /* close handler cleans up */ }
+        continue;
+      }
+      ws.isAlive = false;
       if (ws.readyState === ws.OPEN) {
         try {
           ws.ping();

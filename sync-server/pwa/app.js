@@ -47,6 +47,46 @@ function validatePwaToolInput(input) {
   return hasToolCallXmlLeak(input) ? null : input;
 }
 
+// Inline mirror of lib.js:escapeControlCharsInStrings (PWA can't bundle
+// lib.js). Keep in sync. JSON.parse rejects literal newlines/tabs/CR inside
+// string values; Claude occasionally emits them in long rewrites.
+function escapeControlCharsInStrings(s) {
+  let result = "";
+  let inString = false;
+  let escaped = false;
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (escaped) {
+      result += ch;
+      escaped = false;
+      continue;
+    }
+    if (ch === "\\" && inString) {
+      result += ch;
+      escaped = true;
+      continue;
+    }
+    if (ch === '"') {
+      inString = !inString;
+      result += ch;
+      continue;
+    }
+    if (inString) {
+      if (ch === "\n") result += "\\n";
+      else if (ch === "\r") result += "\\r";
+      else if (ch === "\t") result += "\\t";
+      else if (ch < "\x20" || ch === "\x7F") {
+        result += "\\u" + ch.charCodeAt(0).toString(16).padStart(4, "0");
+      } else {
+        result += ch;
+      }
+    } else {
+      result += ch;
+    }
+  }
+  return result;
+}
+
 // Inline mirror of lib.js:extractToolResult (PWA can't bundle lib.js). Returns
 // the tool_use block's parsed input, or falls back to parsing a text block.
 // Validates against text-format tool-call XML leaks (`<parameter>` / `<invoke>`
@@ -68,7 +108,13 @@ function extractPwaToolResult(data, toolName) {
   try {
     return validatePwaToolInput(JSON.parse(m[0]));
   } catch {
-    return null;
+    // Mirror lib.js:parseApiResponse's repair pass — literal control chars
+    // inside string values are the common (recoverable) failure here.
+    try {
+      return validatePwaToolInput(JSON.parse(escapeControlCharsInStrings(m[0])));
+    } catch {
+      return null;
+    }
   }
 }
 

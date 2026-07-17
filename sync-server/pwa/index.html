@@ -669,10 +669,13 @@
     </div>
   </div>
 
-  <script src="../src/sync/merge.js"></script>
-  <script src="../src/sync/storage-adapter.js"></script>
-  <script src="../src/sync/sync-client.js"></script>
-  <script src="../src/sync/sync-manager.js"></script>
+  <!-- Generated copies of src/sync/ (see scripts/generate_shared_artifacts.mjs).
+       ../src/sync/ is outside the Railway deploy context (Root Directory is
+       /sync-server) and 404s in production. -->
+  <script src="sync/merge.js"></script>
+  <script src="sync/storage-adapter.js"></script>
+  <script src="sync/sync-client.js"></script>
+  <script src="sync/sync-manager.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

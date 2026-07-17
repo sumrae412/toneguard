@@ -1,3 +1,5 @@
+// Generated from src/sync/sync-manager.js. Do not edit directly.
+
 // ToneGuard SyncManager — orchestrates local-first sync with the Railway sync server.
 // Init with API key → auto-pairs via hash → pull/push/subscribe.
 

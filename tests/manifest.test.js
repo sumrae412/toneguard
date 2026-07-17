@@ -69,6 +69,10 @@ describe("manifest.json", () => {
     // worker's chrome.runtime.getURL("prompts/voice-principles.txt") would
     // silently fail and the distilled voice would never reach the prompt.
     expect(promptResource.resources).toContain("prompts/voice-principles.txt");
+    // Forced-tool schemas are fetched via getURL too — a missing entry makes
+    // the analysis silently degrade to free-text parsing (TG_PARSE_001 class).
+    expect(promptResource.resources).toContain("prompts/analysis-tool.json");
+    expect(promptResource.resources).toContain("prompts/landing-tool.json");
   });
 
   it("references files that exist", () => {

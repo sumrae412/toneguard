@@ -851,6 +851,34 @@ class TestToolUseExtraction:
         # No matching tool and no text block → empty.
         assert ToneAnalyzer._extract_tool_result(resp, "report_critique") == {}
 
+    def test_rejects_tool_input_with_leaked_tool_call_xml(self):
+        # Mirror of lib.js hasToolCallXmlLeak: markup bleeding into a string
+        # field means the payload is corrupted even though the JSON is valid.
+        corrupted = {
+            "flagged": True,
+            "rewrite": 'Sounds good.</parameter>\n<parameter name="tone">calm',
+        }
+        resp = _tool_use_response("report_critique", corrupted)
+        assert ToneAnalyzer._extract_tool_result(resp, "report_critique") == {}
+
+    def test_rejects_nested_leak_in_list_field(self):
+        corrupted = {"flagged": True, "issues": [{"note": "<invoke name=\"x\">"}]}
+        resp = _tool_use_response("report_critique", corrupted)
+        assert ToneAnalyzer._extract_tool_result(resp) == {}
+
+    def test_rejects_leak_in_text_fallback(self):
+        block = MagicMock()
+        block.type = "text"
+        block.text = '{"flagged": false, "rewrite": "ok</function_calls>"}'
+        resp = MagicMock()
+        resp.content = [block]
+        assert ToneAnalyzer._extract_tool_result(resp) == {}
+
+    def test_clean_input_passes_guard(self):
+        clean = {"flagged": True, "rewrite": "Could you send the doc today?"}
+        resp = _tool_use_response("report_critique", clean)
+        assert ToneAnalyzer._extract_tool_result(resp, "report_critique") == clean
+
     @pytest.mark.asyncio
     async def test_call_landing_uses_tool_result(self, analyzer):
         """_call_landing extracts the landing fields from a tool_use block."""

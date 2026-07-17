@@ -90,6 +90,10 @@ saveBtn.addEventListener("click", () => {
     keyDot.className = "dot active";
     keyLabel.textContent = "API key saved";
     setTimeout(() => { statusEl.textContent = ""; }, 3000);
+    // Start sync now — otherwise it waits for the next browser restart
+    // (initSync only runs on onStartup). SYNC_PULL falls back to initSync
+    // when the manager isn't up yet.
+    chrome.runtime.sendMessage({ type: "SYNC_PULL" }, () => chrome.runtime.lastError);
   });
 });
 
@@ -115,7 +119,10 @@ const QUOTA_PAUSE_MESSAGES = {
 function renderQuotaBanner() {
   chrome.storage.local.get(["tg_quota_paused"], (result) => {
     const paused = result.tg_quota_paused;
-    if (paused && typeof paused.at === "number") {
+    // Gate on the cooldown, not just the record's existence — after the pause
+    // expires the next send re-probes the API, so showing "paused" here would
+    // contradict actual behavior. See lib.js:isQuotaPauseActive.
+    if (isQuotaPauseActive(paused, Date.now())) {
       quotaBannerMsg.textContent =
         QUOTA_PAUSE_MESSAGES[paused.reason] ||
         "Your API limit was reached, so messages are sending unchecked.";

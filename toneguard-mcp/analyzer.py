@@ -11,6 +11,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 import time
 from pathlib import Path
 from typing import Any, Optional
@@ -846,12 +847,38 @@ class ToneAnalyzer:
                 and (tool_name is None or getattr(block, "name", None) == tool_name)
                 and isinstance(getattr(block, "input", None), dict)
             ):
+                if ToneAnalyzer._has_tool_call_xml_leak(block.input):
+                    logger.warning("Tool result discarded: tool-call XML leaked into input")
+                    return {}
                 return block.input
         for block in content:
             text = getattr(block, "text", None)
             if isinstance(text, str) and text.strip():
-                return ToneAnalyzer._parse_json(text)
+                parsed = ToneAnalyzer._parse_json(text)
+                if ToneAnalyzer._has_tool_call_xml_leak(parsed):
+                    logger.warning("Tool result discarded: tool-call XML leaked into parsed text")
+                    return {}
+                return parsed
         return {}
+
+    # Text-format function-call markup occasionally bleeds into tool_use.input
+    # string fields: the JSON envelope parses fine but string contents carry raw
+    # markup. Mirror of lib.js TOOL_CALL_XML_LEAK_RE / hasToolCallXmlLeak — keep
+    # the two regexes in sync.
+    _TOOL_CALL_XML_LEAK_RE = re.compile(
+        r"</?(?:function_calls|invoke|parameter\b|antml:)", re.IGNORECASE
+    )
+
+    @staticmethod
+    def _has_tool_call_xml_leak(value: Any) -> bool:
+        """Recursively detect leaked tool-call XML markup in strings."""
+        if isinstance(value, str):
+            return bool(ToneAnalyzer._TOOL_CALL_XML_LEAK_RE.search(value))
+        if isinstance(value, list):
+            return any(ToneAnalyzer._has_tool_call_xml_leak(v) for v in value)
+        if isinstance(value, dict):
+            return any(ToneAnalyzer._has_tool_call_xml_leak(v) for v in value.values())
+        return False
 
     @staticmethod
     def _parse_json(text: str) -> dict[str, Any]:
