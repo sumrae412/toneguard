@@ -8,6 +8,15 @@ dependencies = [
     "anthropic>=0.40.0",
     "openai>=1.50.0",
     "httpx>=0.27.0",
+    # Transitive only — reached via fastmcp -> authlib and mcp -> pyjwt[crypto],
+    # never imported here. Declared anyway because it is the only floor that
+    # applies on BOTH install paths. GHSA advisory (PKCS#7 EnvelopedData
+    # Bleichenbacher oracle) was remediated in PR #91 by bumping uv.lock alone,
+    # and a lock is not a constraint: the next unrelated `uv lock` can resolve
+    # back under it, and the README's `pip install -e ".[dev]"` never reads the
+    # lock at all. Remove this line only when a direct dependency declares a
+    # floor of its own at >=50.
+    "cryptography>=50.0.0",
 ]
 
 [project.optional-dependencies]
