@@ -22,10 +22,19 @@ dependencies = [
     # constraint: the next unrelated `uv lock` can resolve back under it, and
     # the README's `pip install -e ".[dev]"` never reads the lock at all.
     #
-    # Remove this line when nothing in the resolved tree requires cryptography
-    # any more — check with `uv tree`. Do NOT remove it merely because some
-    # package in the chain grows a floor of its own: uv.lock records registry
-    # edges without specifiers, so that condition is not checkable from here.
+    # Remove this line when nothing ELSE in the resolved tree requires
+    # cryptography any more. Check with `uv tree --invert --package
+    # cryptography`, which lists dependents. Today that prints three branches:
+    # authlib (under fastmcp), pyjwt[crypto] (under mcp), and a bare
+    # toneguard-mcp edge that exists only because of the line below. When the
+    # authlib and pyjwt branches are gone and that bare edge is all that
+    # remains, the floor is protecting nothing and can go. Plain `uv tree`
+    # cannot answer this — cryptography always appears there, for the same
+    # reason.
+    #
+    # Do NOT remove it merely because some package in the chain grows a floor
+    # of its own: uv.lock records registry edges without specifiers, so that
+    # condition is not checkable from here.
     "cryptography>=50.0.0",
 ]
 
