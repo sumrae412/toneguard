@@ -21,5 +21,8 @@
   "homepage": "https://github.com/sumrae412/toneguard#readme",
   "devDependencies": {
     "vitest": "^4.1.11"
+  },
+  "engines": {
+    "npm": ">=11.0.0"
   }
 }
