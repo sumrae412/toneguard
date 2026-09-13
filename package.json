@@ -22,7 +22,11 @@
   "devDependencies": {
     "vitest": "^4.1.11"
   },
-  "engines": {
-    "npm": ">=11.0.0"
+  "devEngines": {
+    "packageManager": {
+      "name": "npm",
+      "version": ">=11.0.0",
+      "onFail": "error"
+    }
   }
 }
