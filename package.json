@@ -28,5 +28,8 @@
       "version": ">=11.0.0",
       "onFail": "error"
     }
+  },
+  "engines": {
+    "npm": ">=11.0.0"
   }
 }
