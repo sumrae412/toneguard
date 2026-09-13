@@ -81,3 +81,51 @@ describe("package-lock.json platform fields", () => {
     );
   });
 });
+
+// The guard's own config is tracked and pages.yml publishes the repo root, so
+// a token written by `npm config set ... --location=project` or `npm login`
+// would be committed and served. The .npmrc comment says not to; this makes it
+// fail instead of relying on someone reading a comment first.
+describe(".npmrc hygiene", () => {
+  it("carries no registry credentials", () => {
+    const npmrcPath = path.join(__dirname, "..", ".npmrc");
+    const npmrc = fs.existsSync(npmrcPath)
+      ? fs.readFileSync(npmrcPath, "utf-8")
+      : "";
+
+    const secrets = npmrc
+      .split("\n")
+      .filter((l) => /(_auth|_authToken|_password|:_secret)/i.test(l))
+      .filter((l) => !l.trimStart().startsWith("#"));
+
+    expect(
+      secrets,
+      "Registry credentials in a tracked .npmrc. Move them to ~/.npmrc — this " +
+        "file is committed and pages.yml publishes the repo root.",
+    ).toEqual([]);
+  });
+});
+
+// package-lock.json mirrors the root package.json's `engines` into
+// packages[""]. It does NOT mirror `devEngines`. An earlier commit on this
+// branch dropped `engines` from package.json while the lockfile still carried
+// it, producing a lockfile no npm run could have generated — caught in review,
+// by reading, with nothing asserting it. Four lines close that.
+describe("package-lock.json mirrors package.json", () => {
+  const pkg = JSON.parse(
+    fs.readFileSync(path.join(__dirname, "..", "package.json"), "utf-8"),
+  );
+  const root = lock.packages?.[""] ?? {};
+
+  it("agrees with package.json on engines", () => {
+    expect(
+      root.engines,
+      "Lockfile root `engines` disagrees with package.json. Re-run npm install " +
+        "with npm 11 so the lockfile is one npm could actually have produced.",
+    ).toEqual(pkg.engines);
+  });
+
+  it("agrees with package.json on devDependencies", () => {
+    expect(root.devDependencies).toEqual(pkg.devDependencies);
+  });
+});

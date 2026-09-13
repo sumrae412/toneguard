@@ -17,14 +17,19 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
-      # node 20 bundles npm 10, and package.json declares
-      # devEngines.packageManager npm >=11 with onFail error, so `npm ci` below
-      # refuses without this step. The floor exists because npm 10 silently
-      # strips the "libc" platform fields npm 11 writes into package-lock.json —
-      # that already landed on main once (952e9fd, 2026-04-03, -10 entries).
-      # Bumping node-version instead would also clear it; this keeps the runtime
-      # version CI actually tests against unchanged.
-      - name: Use npm 11 (matches the devEngines floor)
+      # node 20 bundles npm 10.8.2, and `npm ci` below refuses without this step.
+      # On THIS runtime the refusal comes from engine-strict in .npmrc plus
+      # engines.npm — NOT from devEngines, which npm below 10.9 ignores entirely
+      # (measured: 10.8.2 ignored it and stripped all 10 libc fields while
+      # reporting success). Both declarations exist and neither is redundant;
+      # see .npmrc for which one fires where.
+      #
+      # The floor exists because npm 10 silently strips the "libc" platform
+      # fields npm 11 writes into package-lock.json — that already landed on
+      # main once (952e9fd, 2026-04-03, -10 entries). Bumping node-version
+      # instead would also clear it; this keeps the runtime CI tests on
+      # unchanged.
+      - name: Use npm 11 (required by the engines floor)
         run: npm install -g npm@11
       - name: Install JS deps
         run: npm ci
