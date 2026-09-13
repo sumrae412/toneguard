@@ -188,7 +188,7 @@ Full policy: [PRIVACY.md](PRIVACY.md).
 - Chrome (Manifest v3)
 - A Claude API key from [Anthropic Console](https://console.anthropic.com)
 - For Android: Android 8.0+, Accessibility + overlay permissions
-- For dev work: Node 18+
+- For dev work: **Node `^20.19.0 || ^22.12.0 || >=24.0.0`, and npm 11+** (`npm install -g npm@11`). That range is the intersection of what the toolchain declares, not any single package's: `vite` and `rolldown` require `^20.19.0 || >=22.12.0`, and `vitest` requires `^20.0.0 || ^22.0.0 || >=24.0.0`, which excludes all of 23.x. The Node floor is not new — `vite` and `rolldown` have required `^20.19.0 || >=22.12.0` for some time, so the previous "Node 18+" here was already wrong. The npm floor is enforced, not advisory: npm 10 silently strips the `libc` platform fields from `package-lock.json`, so npm below 11 refuses to install rather than quietly degrading it. Two declarations do that between them — `engine-strict` in `.npmrc` and `devEngines` in `package.json` — because they cover different npm ranges; `.npmrc` says which fires where, and neither is redundant.
 
 ## License
 
