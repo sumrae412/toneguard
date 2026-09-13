@@ -110,6 +110,14 @@ describe(".npmrc hygiene", () => {
       "devEngines.packageManager is gone from package.json. It is what refuses " +
         "on npm >=10.9, where arborist skips the root engines check entirely.",
     ).toBe("npm");
+    // Presence is not enough: onFail "warn" keeps the declaration and silently
+    // restores the advisory posture this whole guard exists to escape — a
+    // warning is what let the April strip through.
+    expect(
+      packageJson.devEngines?.packageManager?.onFail,
+      "devEngines.packageManager.onFail is not 'error', so npm >=10.9 warns " +
+        "instead of refusing. That is the posture that produced the April strip.",
+    ).toBe("error");
     expect(
       packageJson.engines?.npm,
       "engines.npm is gone from package.json",
