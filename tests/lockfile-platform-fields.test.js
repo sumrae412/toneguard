@@ -87,8 +87,36 @@ describe("package-lock.json platform fields", () => {
 // would be committed and served. The .npmrc comment says not to; this makes it
 // fail instead of relying on someone reading a comment first.
 describe(".npmrc hygiene", () => {
+  const npmrcPath = path.join(__dirname, "..", ".npmrc");
+
+  // The tests below tolerate a missing .npmrc, and the mirror check passes when
+  // `engines` is absent from BOTH sides — so a cleanup that deletes either one
+  // would leave the whole suite green while removing the prevention layer.
+  // .npmrc says "KEEP BOTH, deleting either opens a version range"; this is what
+  // makes that a failing test rather than a comment someone can disagree with.
+  it("still declares both halves of the npm floor", () => {
+    expect(
+      fs.existsSync(npmrcPath) &&
+        /^engine-strict\s*=\s*true$/m.test(fs.readFileSync(npmrcPath, "utf-8")),
+      "engine-strict is gone from .npmrc. It is the ONLY guard on npm <=10.8, " +
+        "which is what node 20 LTS bundles and what strips the lockfile.",
+    ).toBe(true);
+
+    const packageJson = JSON.parse(
+      fs.readFileSync(path.join(__dirname, "..", "package.json"), "utf-8"),
+    );
+    expect(
+      packageJson.devEngines?.packageManager?.name,
+      "devEngines.packageManager is gone from package.json. It is what refuses " +
+        "on npm >=10.9, where arborist skips the root engines check entirely.",
+    ).toBe("npm");
+    expect(
+      packageJson.engines?.npm,
+      "engines.npm is gone from package.json",
+    ).toBeTruthy();
+  });
+
   it("carries no registry credentials", () => {
-    const npmrcPath = path.join(__dirname, "..", ".npmrc");
     const npmrc = fs.existsSync(npmrcPath)
       ? fs.readFileSync(npmrcPath, "utf-8")
       : "";
